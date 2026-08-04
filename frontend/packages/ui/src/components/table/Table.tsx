@@ -140,7 +140,7 @@ export const TableHead = React.forwardRef<HTMLTableCellElement, TableHeadProps>(
       aria-sort={sort === 'none' ? 'none' : sort}
       className={cn(
         'h-row p-cell text-start align-middle',
-        'text-2xs font-semibold tracking-[0.04em] text-ink-muted uppercase whitespace-nowrap',
+        'text-2xs font-semibold text-ink-muted uppercase whitespace-nowrap',
         numeric && 'text-end tabular-nums',
         className,
       )}

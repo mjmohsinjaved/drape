@@ -4,8 +4,8 @@ import { Sidebar } from '@/components/layout/Sidebar';
 import { SkipLink, MAIN_CONTENT_ID } from '@/components/layout/SkipLink';
 import { Topbar } from '@/components/layout/Topbar';
 
-import type { ReactNode } from 'react';
 import type { Locale } from '@/i18n/config';
+import type { ReactNode } from 'react';
 
 export interface AdminShellProps {
   locale: Locale;

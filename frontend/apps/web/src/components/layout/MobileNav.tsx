@@ -2,8 +2,8 @@
 
 import { useTranslations } from 'next-intl';
 
-import { NavLink } from '@/components/layout/NavLink';
 import { consumerPrimaryNav } from '@/components/layout/nav-items';
+import { NavLink } from '@/components/layout/NavLink';
 
 import type { Locale } from '@/i18n/config';
 

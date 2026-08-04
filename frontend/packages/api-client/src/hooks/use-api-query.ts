@@ -17,7 +17,8 @@ import {
 } from '@tanstack/react-query';
 
 import { apiClient } from '../axios-instance';
-import { type ApiError, type Paginated } from '../types/envelope';
+
+import type { ApiError, Paginated } from '../types/envelope';
 
 export interface ApiQueryOptions<TData>
   extends Omit<UseQueryOptions<TData, ApiError, TData, readonly unknown[]>, 'queryFn'> {

@@ -6,7 +6,7 @@
  * makes the garment unpublishable until a fresh test render is approved (A-11).
  */
 
-import { type IsoDateTime, type QualityCheckResult, type Uuid } from './common';
+import type { IsoDateTime, QualityCheckResult, Uuid } from './common';
 
 /** One row of `GET /admin/garments/:garmentId/images` (ADMIN), in gallery order. */
 export interface GarmentImage {

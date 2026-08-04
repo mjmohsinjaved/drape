@@ -1,7 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { type ConsentStatus } from '@repo/api-client';
-
 import {
   type ConsentState,
   selectCanSubmitConsent,
@@ -13,6 +11,9 @@ import {
   selectIsConsentSubmitting,
   useConsentStore,
 } from './consent.store';
+
+import type { ConsentStatus } from '@repo/api-client';
+
 
 const V1 = '2026.08.1';
 const V2 = '2026.09.1';

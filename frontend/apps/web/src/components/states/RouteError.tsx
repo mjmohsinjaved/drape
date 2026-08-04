@@ -1,8 +1,8 @@
 'use client';
 
-import { Button, ErrorState } from '@repo/ui';
 import { useTranslations } from 'next-intl';
-import { RotateCcw } from 'lucide-react';
+
+import { ErrorState } from '@repo/ui';
 
 import type { RouteErrorProps } from '@/lib/route-params';
 
@@ -22,7 +22,8 @@ export interface RouteErrorViewProps extends RouteErrorProps {
  * exists at a route boundary.
  *
  * `error.digest` is shown as a plain reference the user can quote to us. It is not a status
- * code and not a stack trace — no screen shows either (§8.1).
+ * code and not a stack trace — no screen shows either (§8.1). `ErrorState` owns both the retry
+ * button (`onRetry`) and the reference line (`reference`), so neither is rebuilt here.
  */
 export function RouteError({ error, reset, scope }: RouteErrorViewProps) {
   const t = useTranslations('errors');
@@ -35,13 +36,9 @@ export function RouteError({ error, reset, scope }: RouteErrorViewProps) {
     <ErrorState
       title={scope ? t(`scoped.${scope}.title`) : t('generic.title')}
       description={hasMessage ? error.message : t('generic.body')}
-      action={
-        <Button type="button" variant="primary" onClick={reset}>
-          <RotateCcw aria-hidden="true" className="size-4" />
-          {t('generic.action')}
-        </Button>
-      }
-      footnote={error.digest ? t('reference', { id: error.digest }) : undefined}
+      onRetry={reset}
+      retryLabel={t('generic.action')}
+      reference={error.digest ? t('reference', { id: error.digest }) : undefined}
     />
   );
 }

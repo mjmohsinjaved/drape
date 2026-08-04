@@ -1,12 +1,14 @@
 'use client';
 
-import { Button, Sheet, SheetContent, SheetTitle, SheetTrigger } from '@repo/ui';
-import { useTranslations } from 'next-intl';
-import { Menu } from 'lucide-react';
 import { useState } from 'react';
 
+import { Menu } from 'lucide-react';
+import { useTranslations } from 'next-intl';
+
+import { Button, Sheet, SheetContent, SheetTitle, SheetTrigger } from '@repo/ui';
+
+
 import { Sidebar } from '@/components/layout/Sidebar';
-import { useIsRtl } from '@/hooks/use-direction';
 
 import type { Locale } from '@/i18n/config';
 
@@ -19,12 +21,14 @@ export interface AdminMobileMenuProps {
  * approvals on a small screen, so the same rail is available from a drawer rather than being
  * dropped.
  *
- * The drawer opens from the start edge in both writing directions.
+ * The drawer opens from the start edge in both writing directions. `SheetSide` is logical, so
+ * `start` is the left edge in `en` and the right edge in `ur` with no conditional here — a
+ * physical `left`/`right` would need a `[dir]` branch the codebase deliberately does not have
+ * (C-41, §6.7).
  */
 export function AdminMobileMenu({ locale }: AdminMobileMenuProps) {
   const t = useTranslations('admin.nav');
   const [isOpen, setIsOpen] = useState(false);
-  const isRtl = useIsRtl();
 
   return (
     <Sheet open={isOpen} onOpenChange={setIsOpen}>
@@ -39,7 +43,7 @@ export function AdminMobileMenu({ locale }: AdminMobileMenuProps) {
           <Menu aria-hidden="true" className="size-5" />
         </Button>
       </SheetTrigger>
-      <SheetContent side={isRtl ? 'right' : 'left'} className="w-72 p-0">
+      <SheetContent side="start" className="w-72 p-0">
         <SheetTitle className="sr-only">{t('label')}</SheetTitle>
         <Sidebar locale={locale} variant="sheet" onNavigate={() => setIsOpen(false)} />
       </SheetContent>

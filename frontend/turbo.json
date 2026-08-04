@@ -14,7 +14,14 @@
     "NEXT_PUBLIC_API_BASE_URL",
     "NEXT_PUBLIC_SITE_URL",
     "NEXT_PUBLIC_DEFAULT_LOCALE",
-    "NEXT_PUBLIC_*"
+    "NEXT_PUBLIC_*",
+
+    // Server-only (§7). `API_INTERNAL_URL` is the container-network base the middleware and
+    // Server Components call instead of the public origin; `SKIP_ENV_VALIDATION` lets a
+    // Docker build run without the runtime secrets. Neither carries NEXT_PUBLIC_, so neither
+    // reaches the browser (E-2) — but both change build output, so turbo must key on them.
+    "API_INTERNAL_URL",
+    "SKIP_ENV_VALIDATION"
   ],
   "tasks": {
     "build": {

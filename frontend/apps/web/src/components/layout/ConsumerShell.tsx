@@ -1,6 +1,8 @@
-import { Button } from '@repo/ui';
-import { useTranslations } from 'next-intl';
 import Link from 'next/link';
+
+import { useTranslations } from 'next-intl';
+
+import { Button } from '@repo/ui';
 
 import { ConsumerTopNav } from '@/components/layout/ConsumerTopNav';
 import { LocaleSwitcher } from '@/components/layout/LocaleSwitcher';
@@ -11,8 +13,8 @@ import { UserMenu } from '@/components/layout/UserMenu';
 import { APP_NAME } from '@/lib/constants';
 import { routes } from '@/lib/routes';
 
-import type { ReactNode } from 'react';
 import type { Locale } from '@/i18n/config';
+import type { ReactNode } from 'react';
 
 export interface ConsumerShellProps {
   locale: Locale;

@@ -18,7 +18,8 @@ import {
 } from '@tanstack/react-query';
 
 import { apiClient } from '../axios-instance';
-import { type ApiError } from '../types/envelope';
+
+import type { ApiError } from '../types/envelope';
 
 export type MutationMethod = 'post' | 'put' | 'patch' | 'delete';
 

@@ -9,9 +9,9 @@ export interface LocaleParams {
   params: Promise<{ locale: Locale }>;
 }
 
-export type LocaleParamsWith<TExtra extends Record<string, string>> = {
+export interface LocaleParamsWith<TExtra extends Record<string, string>> {
   params: Promise<{ locale: Locale } & TExtra>;
-};
+}
 
 export interface LayoutProps {
   children: React.ReactNode;

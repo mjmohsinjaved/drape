@@ -1,9 +1,10 @@
 'use client';
 
+import { Check, Monitor, Moon, Sun } from 'lucide-react';
+import { useTranslations } from 'next-intl';
+
 import { useUiStore } from '@repo/store';
 import { Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@repo/ui';
-import { useTranslations } from 'next-intl';
-import { Check, Monitor, Moon, Sun } from 'lucide-react';
 
 const MODES = ['light', 'dark', 'system'] as const;
 

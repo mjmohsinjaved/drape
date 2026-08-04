@@ -25,7 +25,7 @@ import {
 } from '../types/envelope';
 import { SESSION_ENDED_ERROR_CODES } from '../types/error-codes';
 
-import { type DrapeRequestConfig } from './request.interceptor';
+import type { DrapeRequestConfig } from './request.interceptor';
 
 /** The envelope fields that are not the payload, kept on the response for callers that need them. */
 export interface EnvelopeMeta {

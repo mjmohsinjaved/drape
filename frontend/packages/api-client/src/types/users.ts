@@ -6,21 +6,21 @@
  * through `enquiry_items` (§4.24) and are typed on {@link AdminConsumerRender}.
  */
 
-import {
-  type IsoDate,
-  type IsoDateTime,
-  type LedgerPeriod,
-  type PaginationQuery,
-  type SearchablePaginationQuery,
-  type SignedFileUrl,
-  type Uuid,
+import type {
+  IsoDate,
+  IsoDateTime,
+  LedgerPeriod,
+  PaginationQuery,
+  SearchablePaginationQuery,
+  SignedFileUrl,
+  Uuid,
 } from './common';
-import {
-  type BudgetBand,
-  type EventType,
-  type Locale,
-  type Role,
-  type UserStatus,
+import type {
+  BudgetBand,
+  EventType,
+  Locale,
+  Role,
+  UserStatus,
 } from './enums';
 
 /** §4.4 `consumer_profiles.notificationPreferences`, C-7. */

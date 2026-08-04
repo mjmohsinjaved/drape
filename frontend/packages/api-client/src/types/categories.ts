@@ -5,7 +5,7 @@
  * itself be a parent, enforced server-side as `CATEGORY_DEPTH_EXCEEDED`.
  */
 
-import { type IsoDateTime, type Uuid } from './common';
+import type { IsoDateTime, Uuid } from './common';
 
 /** A node of the PUBLIC tree from `GET /categories` — published, non-archived, in `position` order (A-6). */
 export interface CategoryNode {

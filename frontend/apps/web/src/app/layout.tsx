@@ -1,5 +1,6 @@
-import { Toaster } from '@repo/ui';
 import { getLocale, getTranslations } from 'next-intl/server';
+
+import { Toaster } from '@repo/ui';
 
 import { AppProviders } from '@/components/providers/AppProviders';
 import { BrandThemeProvider } from '@/components/providers/BrandThemeProvider';

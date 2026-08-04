@@ -1,7 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { type SessionUser } from '@repo/api-client';
-
 import {
   type AuthState,
   selectAuthDisplayName,
@@ -16,6 +14,9 @@ import {
   selectIsSuspended,
   useAuthStore,
 } from './auth.store';
+
+import type { SessionUser } from '@repo/api-client';
+
 
 const CONSUMER: SessionUser = {
   id: 'user-1',

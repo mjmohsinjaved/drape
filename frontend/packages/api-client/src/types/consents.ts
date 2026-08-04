@@ -6,9 +6,9 @@
  * version) — steps 4 and 5, before any spend (C-11, C-12).
  */
 
-import { type IsoDateTime, type Uuid } from './common';
-import { type ConsentStatus, type Locale } from './enums';
-import { type PolicyRetention } from './settings';
+import type { IsoDateTime, Uuid } from './common';
+import type { ConsentStatus, Locale } from './enums';
+import type { PolicyRetention } from './settings';
 
 /**
  * `GET /consents/policy` (PUBLIC) — the current policy version and body in the requested locale

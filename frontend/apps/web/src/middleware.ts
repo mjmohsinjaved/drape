@@ -1,11 +1,11 @@
+import { NextResponse ,type  NextRequest } from 'next/server';
+
 import createIntlMiddleware from 'next-intl/middleware';
-import { NextResponse } from 'next/server';
 
 import { routing } from '@/i18n/routing';
 import { RETURN_TO_PARAM, Role } from '@/lib/constants';
 import { apiPaths, isAuthOnlyPath, isProtectedPath, routes } from '@/lib/routes';
 
-import type { NextRequest } from 'next/server';
 import type { Locale } from '@/i18n/config';
 
 /* ═══════════════════════════════════════════════════════════════════════════════════════

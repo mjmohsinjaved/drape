@@ -25,11 +25,10 @@ import {
   User,
   UserCog,
   Users,
-} from 'lucide-react';
+type  LucideIcon } from 'lucide-react';
 
 import { routes } from '@/lib/routes';
 
-import type { LucideIcon } from 'lucide-react';
 import type { Locale } from '@/i18n/config';
 
 /**

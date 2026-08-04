@@ -6,9 +6,10 @@ import { Check, ChevronDown, X } from 'lucide-react';
 
 import { cn } from '../../lib/cn';
 import { Badge } from '../badge/Badge';
-import type { ComboboxOption } from '../combobox/Combobox';
 import { Popover, PopoverAnchor, PopoverContent } from '../popover/Popover';
 import { VisuallyHidden } from '../visually-hidden/VisuallyHidden';
+
+import type { ComboboxOption } from '../combobox/Combobox';
 
 export type MultiSelectOption = ComboboxOption;
 

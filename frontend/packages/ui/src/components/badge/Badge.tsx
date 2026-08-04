@@ -26,7 +26,7 @@ export const badgeVariants = cva(
       },
       size: {
         /* --text-2xs is admin only and never carries anything a consumer must read (§6.1). */
-        sm: 'px-2 py-0.5 text-2xs tracking-[0.04em]',
+        sm: 'px-2 py-0.5 text-2xs',
         md: 'px-2.5 py-1 text-xs',
       },
     },

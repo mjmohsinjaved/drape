@@ -7,13 +7,13 @@
  * snapshot for the A-33 burn-rate chart, never an authority.
  */
 
-import {
-  type IsoDateTime,
-  type LedgerPeriod,
-  type PaginationQuery,
-  type Uuid,
+import type {
+  IsoDateTime,
+  LedgerPeriod,
+  PaginationQuery,
+  Uuid,
 } from './common';
-import { type QuotaReason, type UsageReason } from './enums';
+import type { QuotaReason, UsageReason } from './enums';
 
 /** `GET /quota/me` (CONSUMER) — the persistent counter of C-5. `staleTime: 0`; it changes on every generation. */
 export interface MyQuota {

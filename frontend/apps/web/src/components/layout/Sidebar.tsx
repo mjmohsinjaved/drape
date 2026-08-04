@@ -1,14 +1,15 @@
 'use client';
 
+import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { useTranslations } from 'next-intl';
+
 import { useUiStore } from '@repo/store';
 import { Button, ScrollArea, Separator, Tooltip, TooltipContent, TooltipTrigger } from '@repo/ui';
 import { cn } from '@repo/utils';
-import { useTranslations } from 'next-intl';
-import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 
 import { DirectionalIcon } from '@/components/DirectionalIcon';
-import { NavLink } from '@/components/layout/NavLink';
 import { adminNavGroups } from '@/components/layout/nav-items';
+import { NavLink } from '@/components/layout/NavLink';
 import { useIsRtl } from '@/hooks/use-direction';
 import { useHasFinePointer } from '@/hooks/use-media-query';
 
@@ -54,7 +55,7 @@ export function Sidebar({ locale, variant = 'fixed', onNavigate }: SidebarProps)
           {adminNavGroups.map((group) => (
             <div key={group.key} className="flex flex-col gap-1">
               {!isCollapsed && (
-                <h2 className="px-3 pb-1 text-2xs font-semibold uppercase tracking-wide text-ink-subtle">
+                <h2 className="px-3 pb-1 text-2xs font-semibold uppercase text-ink-subtle">
                   {t(`groups.${group.labelKey}`)}
                 </h2>
               )}

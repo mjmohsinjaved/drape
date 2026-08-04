@@ -5,6 +5,7 @@ import * as React from 'react';
 import { AlertTriangle } from 'lucide-react';
 
 import { Button } from '../button/Button';
+
 import { StateShell, type StateShellProps } from './StateShell';
 
 export interface ErrorStateProps extends Omit<StateShellProps, 'title' | 'action' | 'tone'> {

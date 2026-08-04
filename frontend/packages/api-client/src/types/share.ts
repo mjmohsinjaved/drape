@@ -7,8 +7,8 @@
  * (C-33). There is no snapshot table — revoking the link is the control.
  */
 
-import { type IsoDateTime, type SignedFileUrl, type Uuid } from './common';
-import { type Reaction } from './enums';
+import type { IsoDateTime, SignedFileUrl, Uuid } from './common';
+import type { Reaction } from './enums';
 
 /** One row of `GET /share-links` (CONSUMER) — her links with view counts and expiry (C-34). */
 export interface ShareLink {

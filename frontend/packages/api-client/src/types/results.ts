@@ -10,13 +10,13 @@
  * read-only projection, not a column.
  */
 
-import {
-  type IsoDateTime,
-  type PaginationQuery,
-  type SignedFileUrl,
-  type Uuid,
+import type {
+  IsoDateTime,
+  PaginationQuery,
+  SignedFileUrl,
+  Uuid,
 } from './common';
-import { type RejectReason, type Verdict } from './enums';
+import type { RejectReason, Verdict } from './enums';
 
 /** One row of `GET /results` (CONSUMER) — history, newest first. **Thumbnails only** (C-24, §9.1). */
 export interface ResultListItem {

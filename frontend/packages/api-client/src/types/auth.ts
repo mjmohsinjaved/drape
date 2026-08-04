@@ -6,8 +6,8 @@
  * file returns a session token, and nothing in this file is ever written to `localStorage`.
  */
 
-import { type IsoDateTime, type Uuid } from './common';
-import { type Locale, type Role, type UserStatus } from './enums';
+import type { IsoDateTime, Uuid } from './common';
+import type { Locale, Role, UserStatus } from './enums';
 
 /**
  * The caller's identity as `GET /auth/me` returns it — the single role-resolution call used by the

@@ -1,7 +1,8 @@
 'use client';
 
-import { useUiStore } from '@repo/store';
 import { useEffect } from 'react';
+
+import { useUiStore } from '@repo/store';
 
 /**
  * Keyboard shortcuts for the admin console — D-19.

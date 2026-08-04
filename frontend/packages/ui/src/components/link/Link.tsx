@@ -80,6 +80,11 @@ export const Link = React.forwardRef<HTMLAnchorElement, LinkProps>(function Link
           {children}
           {external ? (
             <>
+              {/* eslint-disable-next-line no-restricted-syntax --
+                  D-1 bans arbitrary values so that sizes come from the token scale. `1em` is
+                  not a size off that scale: it is "whatever the surrounding text is", so the
+                  glyph tracks the link it sits in at every one of the ten type steps. A token
+                  would pin it to one of them and break it at the other nine. */}
               <ExternalLink aria-hidden="true" className="size-[1em] shrink-0" />
               <VisuallyHidden>{` (${externalLabel})`}</VisuallyHidden>
             </>

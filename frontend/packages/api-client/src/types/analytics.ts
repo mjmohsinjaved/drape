@@ -5,8 +5,8 @@
  * on `garments`. Those counters exist for sorting and catalog health only.
  */
 
-import { type DateRangeQuery, type IsoDateTime, type LedgerPeriod, type Uuid } from './common';
-import { type RejectReason } from './enums';
+import type { DateRangeQuery, IsoDateTime, LedgerPeriod, Uuid } from './common';
+import type { RejectReason } from './enums';
 
 /** The shared range selector for every analytics endpoint. */
 export interface AnalyticsRangeQuery extends DateRangeQuery {

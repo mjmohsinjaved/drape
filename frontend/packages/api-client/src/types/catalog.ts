@@ -7,8 +7,8 @@
  *   is why `price` is `number | null` rather than `number`.
  */
 
-import { type IsoDateTime, type PaginationQuery, type Uuid } from './common';
-import { type EmbellishmentWeight, type GarmentMode } from './enums';
+import type { IsoDateTime, PaginationQuery, Uuid } from './common';
+import type { EmbellishmentWeight, GarmentMode } from './enums';
 
 /** One card in the browse grid — `GET /catalog/garments` (PUBLIC), C-1/C-17. */
 export interface CatalogGarmentCard {

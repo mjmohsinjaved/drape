@@ -10,7 +10,7 @@
  * else (§3.3).
  */
 
-import { type IsoDateTime } from './common';
+import type { IsoDateTime } from './common';
 
 /**
  * §3.5 upload purposes. The purpose is authorised against the caller's role before a ticket is

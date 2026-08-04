@@ -17,7 +17,6 @@ import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
 import { useShallow } from 'zustand/react/shallow';
 
-import { type JobStatus, type TryOnStage } from '@repo/api-client';
 
 import { devtoolsOptions } from '../middleware/devtools.middleware';
 import {
@@ -25,6 +24,8 @@ import {
   createPersistOptions,
   sessionJsonStorage,
 } from '../middleware/persist.middleware';
+
+import type { JobStatus, TryOnStage } from '@repo/api-client';
 
 /** One row of the tray. */
 export interface TrayJob {

@@ -5,8 +5,8 @@
  * produce `role = ADMIN` (S-4), so this module is the only way a second admin comes into being.
  */
 
-import { type IsoDateTime, type SearchablePaginationQuery, type Uuid } from './common';
-import { type Role } from './enums';
+import type { IsoDateTime, SearchablePaginationQuery, Uuid } from './common';
+import type { Role } from './enums';
 
 /** One row of `GET /invites` (ADMIN) — pending and consumed invites. */
 export interface InviteListItem {

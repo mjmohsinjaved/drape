@@ -1,5 +1,6 @@
-import { useTranslations } from 'next-intl';
 import Link from 'next/link';
+
+import { useTranslations } from 'next-intl';
 
 import { AdminMobileMenu } from '@/components/layout/AdminMobileMenu';
 import { AdminSearchTrigger } from '@/components/layout/AdminSearchTrigger';

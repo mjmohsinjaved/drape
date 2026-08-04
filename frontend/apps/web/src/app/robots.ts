@@ -1,5 +1,5 @@
-import { NOINDEX_SEGMENTS } from '@/lib/routes';
 import { env } from '@/lib/env';
+import { NOINDEX_SEGMENTS } from '@/lib/routes';
 
 import type { MetadataRoute } from 'next';
 

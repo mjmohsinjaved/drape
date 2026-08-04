@@ -61,6 +61,12 @@ export function ColorSwatchPicker({
   };
 
   return (
+    /* eslint-disable-next-line jsx-a11y/interactive-supports-focus --
+       The rule wants a `tabIndex` on any element carrying a key handler. That would be wrong
+       here: this is the roving-tabindex pattern the WAI-ARIA radiogroup practice prescribes —
+       exactly one swatch is in the tab order at a time (see `tabIndex` on the buttons below)
+       and the arrow keys move both the selection and the focus. Making the container focusable
+       would add a second, silent tab stop in front of every colour filter. */
     <div
       role="radiogroup"
       aria-label={label}

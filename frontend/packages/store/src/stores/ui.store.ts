@@ -12,7 +12,6 @@ import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
 import { useShallow } from 'zustand/react/shallow';
 
-import { type Locale } from '@repo/api-client';
 import { type Direction, getDirection } from '@repo/utils';
 
 import { devtoolsOptions } from '../middleware/devtools.middleware';
@@ -21,6 +20,8 @@ import {
   createPersistOptions,
   localJsonStorage,
 } from '../middleware/persist.middleware';
+
+import type { Locale } from '@repo/api-client';
 
 export type ThemeMode = 'light' | 'dark' | 'system';
 

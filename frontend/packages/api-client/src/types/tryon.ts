@@ -6,8 +6,8 @@
  * no job to attach to. Failed jobs never consume quota or budget (PRD §8.3).
  */
 
-import { type IsoDateTime, type PaginationQuery, type SignedFileUrl, type Uuid } from './common';
-import { type JobOrigin, type JobStatus, type TryOnStage } from './enums';
+import type { IsoDateTime, PaginationQuery, SignedFileUrl, Uuid } from './common';
+import type { JobOrigin, JobStatus, TryOnStage } from './enums';
 
 /**
  * `POST /tryon` (CONSUMER).

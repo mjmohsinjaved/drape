@@ -1,8 +1,10 @@
 'use client';
 
-import { Breadcrumbs as BreadcrumbsRoot, BreadcrumbItem, BreadcrumbLink, BreadcrumbPage } from '@repo/ui';
-import { useTranslations } from 'next-intl';
 import { usePathname } from 'next/navigation';
+
+import { useTranslations } from 'next-intl';
+
+import { Breadcrumbs as BreadcrumbsRoot, BreadcrumbItem, BreadcrumbLink, BreadcrumbPage } from '@repo/ui';
 
 import { routes, stripLocale } from '@/lib/routes';
 

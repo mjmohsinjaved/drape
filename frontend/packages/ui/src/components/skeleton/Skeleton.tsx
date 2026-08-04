@@ -52,6 +52,12 @@ export const Skeleton = React.forwardRef<HTMLDivElement, SkeletonProps>(function
             key={index}
             className={cn(
               base,
+              /* eslint-disable-next-line no-restricted-syntax --
+                 D-1 bans arbitrary values so that sizes come from the token scale. `1em` is
+                 not a size off that scale: a text skeleton has to be exactly as tall as the
+                 line it stands in for, whatever type step the caller renders it at, or the
+                 content jumps when the real text lands (D-8). Any fixed token would be right
+                 at one step and wrong at the other nine. */
               'block h-[1em] w-full rounded-xs',
               index === lines - 1 && lines > 1 ? 'w-3/5' : '',
             )}

@@ -9,10 +9,11 @@
  * session is the httpOnly `drape.sid` cookie carried by `withCredentials` (B-6).
  */
 
-import type { AxiosInstance, InternalAxiosRequestConfig } from 'axios';
 
 import { CSRF_HEADER, REQUEST_ID_HEADER, SAFE_METHODS, generateRequestId } from '../config';
 import { getCsrfToken } from '../csrf';
+
+import type { AxiosInstance, InternalAxiosRequestConfig } from 'axios';
 
 /** Extra per-request fields this package sets. Declared here rather than by module augmentation. */
 export interface DrapeRequestConfig extends InternalAxiosRequestConfig {

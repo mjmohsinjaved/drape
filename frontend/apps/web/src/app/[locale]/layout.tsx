@@ -1,11 +1,11 @@
-import { NextIntlClientProvider } from 'next-intl';
-import { getMessages, setRequestLocale } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 
-import { isLocale, locales, timeZone } from '@/i18n/config';
+import { NextIntlClientProvider } from 'next-intl';
+import { getMessages, setRequestLocale } from 'next-intl/server';
+
+import { isLocale, locales, timeZone ,type  Locale } from '@/i18n/config';
 
 import type { ReactNode } from 'react';
-import type { Locale } from '@/i18n/config';
 
 interface LocaleLayoutProps {
   children: ReactNode;

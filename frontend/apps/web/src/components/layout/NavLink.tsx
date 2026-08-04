@@ -1,8 +1,9 @@
 'use client';
 
-import { cn } from '@repo/utils';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+
+import { cn } from '@repo/utils';
 
 import type { ReactNode } from 'react';
 

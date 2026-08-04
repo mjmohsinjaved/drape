@@ -5,8 +5,8 @@
  * mirrors it exactly, so a typo in the web app is a compile error rather than a 400.
  */
 
-import { type IsoDateTime, type Uuid } from './common';
-import { type Locale, type SettingsValueType } from './enums';
+import type { IsoDateTime, Uuid } from './common';
+import type { Locale, SettingsValueType } from './enums';
 
 /** §4.28 — the complete settings key registry. */
 export const SETTINGS_KEYS = [

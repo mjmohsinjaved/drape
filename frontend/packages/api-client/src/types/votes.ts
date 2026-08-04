@@ -6,8 +6,8 @@
  * `POST /share/:token/votes` is throttled hard (10 / 60 s per IP, §5.22).
  */
 
-import { type IsoDateTime, type Uuid } from './common';
-import { type Reaction } from './enums';
+import type { IsoDateTime, Uuid } from './common';
+import type { Reaction } from './enums';
 
 /**
  * `GET /share/:token` (PUBLIC) — the recipient view. An unknown, revoked or expired token is

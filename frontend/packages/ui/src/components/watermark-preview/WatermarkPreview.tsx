@@ -40,7 +40,7 @@ export const WatermarkPreview = React.forwardRef<HTMLDivElement, WatermarkPrevie
               {Array.from({ length: columns }, (_, column) => (
                 <span
                   key={column}
-                  className="text-xs font-semibold tracking-[0.04em] whitespace-nowrap text-canvas uppercase mix-blend-difference"
+                  className="text-xs font-semibold tracking-2xs whitespace-nowrap text-canvas uppercase mix-blend-difference"
                   style={{ rotate: '-24deg' }}
                 >
                   {text}

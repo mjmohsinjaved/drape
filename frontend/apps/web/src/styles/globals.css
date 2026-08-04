@@ -1,20 +1,20 @@
 /*
  * Drape — global stylesheet.
  *
- * Token declarations do NOT live here. They live once in `@repo/ui`
- * (`packages/ui/src/tokens/tokens.css`) and are imported below. This file only wires
- * Tailwind up and states the handful of document-level rules that have nowhere else to go.
+ * Tailwind v4 is CSS-first: there is no `tailwind.config.ts` in this app and no JS preset to
+ * import. `@repo/ui/styles/globals.css` is the single entry point — it pulls in `tokens.css`
+ * (the one place a raw value may appear, D-1), then `@repo/config-tailwind`, which itself
+ * imports `tailwindcss` and maps the §6.1 tokens onto the theme. Order is load-bearing and is
+ * owned there, so nothing below may re-import Tailwind or the tokens.
  *
- * No screen — including this one — contains a raw hex value, a raw px spacing value or a
- * font stack (D-1, ARCHITECTURE §6.1).
+ * This file adds only what is specific to `apps/web`: the document rules the design system
+ * cannot know about, and the handful of app-level utilities.
+ *
+ * No screen — including this one — contains a raw hex value or a font stack
+ * (D-1, ARCHITECTURE §6.1).
  */
 
-@import 'tailwindcss';
-
-/* The single source of truth for colour, type, spacing, radii, shadows and motion. */
-@import '@repo/ui/tokens.css';
-
-@config '../../tailwind.config.ts';
+@import '@repo/ui/styles/globals.css';
 
 /* The design-system atoms are consumed from source, so Tailwind has to scan them. */
 @source '../../../../packages/ui/src';
@@ -23,19 +23,13 @@
   html {
     /* Keep the anchor targets clear of the sticky bars in both shells. */
     scroll-padding-block-start: var(--space-20);
-    -webkit-text-size-adjust: 100%;
   }
 
   body {
-    background-color: var(--color-canvas);
-    color: var(--color-ink);
-    font-family: var(--font-body);
-    font-size: var(--text-base);
     /* Never below 360 px (D-9): content reflows, it does not scroll sideways. */
     min-inline-size: 100%;
     overflow-x: hidden;
     text-rendering: optimizeLegibility;
-    -webkit-font-smoothing: antialiased;
   }
 
   /*
@@ -46,116 +40,40 @@
   [lang='ur'] body {
     line-height: calc(var(--leading-multiplier, 1.85));
   }
-
-  /* D-20: the focus ring is visible and is never removed. */
-  :focus-visible {
-    outline: var(--border-focus) solid var(--color-focus);
-    outline-offset: var(--space-px);
-  }
-
-  /* Headings inherit the display face from the token layer; nothing is restated here. */
-  h1,
-  h2,
-  h3,
-  h4 {
-    font-family: var(--font-display);
-    text-wrap: balance;
-  }
-
-  p {
-    text-wrap: pretty;
-  }
-
-  /* An image that has not loaded still holds its space — CLS below 0.1 (D-8). */
-  img,
-  video {
-    max-inline-size: 100%;
-    block-size: auto;
-  }
-}
-
-@layer utilities {
-  /*
-   * The consumer card ratio (§6.2). A named utility rather than an arbitrary Tailwind value,
-   * because arbitrary values are banned in `apps/web` by the D-1 lint rule.
-   */
-  .aspect-card {
-    aspect-ratio: 3 / 4;
-  }
-
-  /* The render viewer: square-ish frame that never visibly crops a result. */
-  .aspect-render {
-    aspect-ratio: 4 / 5;
-  }
-
-  /* Keeps the consumer tab bar clear of the iOS home indicator. */
-  .safe-bottom {
-    padding-block-end: env(safe-area-inset-bottom, 0px);
-  }
-
-  /* Reserves room for the fixed tab bar so the last card is never trapped underneath it. */
-  .pb-tabbar {
-    padding-block-end: calc(3.5rem + env(safe-area-inset-bottom, 0px));
-  }
-
-  /*
-   * The two containers from §6.2. Named utilities that read the tokens — no measurement is
-   * restated here, so changing the token changes both shells.
-   */
-  .max-w-consumer {
-    max-inline-size: var(--container-consumer);
-  }
-
-  .max-w-admin {
-    max-inline-size: var(--container-admin);
-  }
-
-  /* The admin rail: 264 px expanded, 72 px collapsed (§6.2). */
-  .w-sidenav {
-    inline-size: var(--sidenav-width);
-  }
-
-  .w-sidenav-collapsed {
-    inline-size: var(--sidenav-width-collapsed);
-  }
-
-  /* Fills the viewport below the 56 px admin top bar without an arbitrary Tailwind value. */
-  .h-below-topbar {
-    block-size: calc(100dvh - 3.5rem);
-  }
-
-  /*
-   * D-10: the 44 x 44 px touch-target floor, applied without changing visual size — the hit
-   * area grows around the control rather than the control growing.
-   */
-  .touch-target {
-    position: relative;
-  }
-
-  .touch-target::after {
-    content: '';
-    position: absolute;
-    inset-inline-start: 50%;
-    inset-block-start: 50%;
-    min-inline-size: 44px;
-    min-block-size: 44px;
-    inline-size: 100%;
-    block-size: 100%;
-    transform: translate(-50%, -50%);
-  }
 }
 
 /*
- * D-11: motion is purposeful and short, and `prefers-reduced-motion` is respected throughout.
- * This is the backstop — individual components must not re-enable animation past it.
+ * App-level utilities, written as `@utility` so they compose with variants the way every
+ * utility from the preset does. Anything shared with the design system belongs in
+ * `@repo/config-tailwind/utilities.css` instead — `touch-target`, `touch-target-pseudo`,
+ * `w-sidenav`, `h-topbar-admin`, `h-tabbar` and the `max-w-consumer` / `max-w-admin`
+ * containers all come from there and are deliberately not restated here.
  */
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 1ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 1ms !important;
-    scroll-behavior: auto !important;
-  }
+
+/*
+ * The consumer card ratio (§6.2). A named utility rather than an arbitrary Tailwind value,
+ * because arbitrary values are banned in `apps/web` by the D-1 lint rule.
+ */
+@utility aspect-card {
+  aspect-ratio: 3 / 4;
+}
+
+/* The render viewer: square-ish frame that never visibly crops a result. */
+@utility aspect-render {
+  aspect-ratio: 4 / 5;
+}
+
+/* Keeps the consumer tab bar clear of the iOS home indicator. */
+@utility safe-bottom {
+  padding-block-end: env(safe-area-inset-bottom, 0px);
+}
+
+/* Reserves room for the fixed tab bar so the last card is never trapped underneath it. */
+@utility pb-tabbar {
+  padding-block-end: calc(var(--tabbar-height) + env(safe-area-inset-bottom, 0px));
+}
+
+/* Fills the viewport below the admin top bar without an arbitrary Tailwind value. */
+@utility h-below-topbar {
+  block-size: calc(100dvh - var(--topbar-height-admin));
 }

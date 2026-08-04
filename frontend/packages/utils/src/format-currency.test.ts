@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { formatCurrency, getCurrencySymbol } from './format-currency';
 
 /** Intl inserts U+00A0 / U+202F between symbol and number depending on locale and ICU build. */
-const normalise = (value: string): string => value.replace(/[   ]/g, ' ');
+const normalise = (value: string): string => value.replace(/[\u00A0\u202F\u2009]/g, ' ');
 
 describe('formatCurrency', () => {
   it('defaults to PKR with two fraction digits', () => {

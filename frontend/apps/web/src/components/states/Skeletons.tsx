@@ -1,5 +1,6 @@
-import { Skeleton } from '@repo/ui';
 import { useTranslations } from 'next-intl';
+
+import { Skeleton } from '@repo/ui';
 
 /**
  * Loading states — D-5, D-8.

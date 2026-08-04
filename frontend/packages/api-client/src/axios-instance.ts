@@ -13,7 +13,8 @@ import { BROWSER_TIMEOUT_MS, getApiBaseUrl } from './config';
 import { ensureCsrf, setCsrfFetcher } from './csrf';
 import { setupRequestInterceptor } from './interceptors/request.interceptor';
 import { setupResponseInterceptor } from './interceptors/response.interceptor';
-import { type CsrfTokenResponse } from './types/auth';
+
+import type { CsrfTokenResponse } from './types/auth';
 
 /**
  * The single browser instance. Feature hooks live in `apps/web/src/features/<name>/hooks/` and call

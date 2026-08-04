@@ -5,7 +5,7 @@
  * the E-13 snapshot the admin usage screens read.
  */
 
-import { type IsoDateTime } from './common';
+import type { IsoDateTime } from './common';
 
 export const HEALTH_STATUSES = ['OK', 'DEGRADED', 'DOWN'] as const;
 export type HealthStatus = (typeof HEALTH_STATUSES)[number];

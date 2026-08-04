@@ -44,6 +44,10 @@ export const Slider = React.forwardRef<
       </SliderPrimitive.Track>
       {values.map((value, index) => (
         <SliderPrimitive.Thumb
+          /* eslint-disable-next-line react/no-array-index-key --
+             The index *is* the identity: thumb 0 is the lower bound and thumb 1 the upper, for
+             the life of the slider. `values` changes value but never length or order, so the
+             reordering hazard the rule guards against cannot occur. */
           key={index}
           aria-label={thumbLabels?.[index]}
           aria-valuetext={formatValue ? formatValue(value) : undefined}

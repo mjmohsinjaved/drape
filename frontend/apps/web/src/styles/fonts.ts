@@ -13,7 +13,10 @@ import { Fraunces, IBM_Plex_Mono, Manrope, Noto_Nastaliq_Urdu } from 'next/font/
 /** Display — headings, product names, the result-reveal caption heading. Used with restraint. */
 export const fraunces = Fraunces({
   subsets: ['latin'],
-  weight: ['400', '600'],
+  // `next/font` rejects `axes` alongside a static weight list: naming an axis means loading the
+  // variable file, which carries the whole 100–900 range in one download rather than two static
+  // cuts. 400 and 600 — the only two §6.1 uses — come out of that range.
+  weight: 'variable',
   axes: ['SOFT', 'WONK', 'opsz'],
   display: 'swap',
   variable: '--next-font-fraunces',

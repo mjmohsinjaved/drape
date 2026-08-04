@@ -3,7 +3,7 @@
  * Anything used by exactly one module lives in that module's file instead.
  */
 
-import { type SortOrder } from './envelope';
+import type { SortOrder } from './envelope';
 
 /**
  * §2.8 `PaginationQueryDto`. Every list endpoint accepts these four. Defaults are applied by the

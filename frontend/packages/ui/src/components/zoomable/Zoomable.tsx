@@ -68,9 +68,19 @@ export function Zoomable({
 
   return (
     <div className={cn('relative flex flex-col gap-2', className)} {...props}>
+      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions --
+          The rule reads `role="group"` as non-interactive and objects to the key handler. Here
+          the handler is the accessibility feature, not a violation: the zoom region is a
+          canvas-like surface whose pinch and Ctrl+wheel gestures no keyboard can reach, so it
+          answers `+` / `-` / `0` instead (D-20). It is deliberately not a `button` — it is a
+          viewport that pans, not a control that fires once — and the visible IconButtons below
+          duplicate every action for anyone who would rather click. */}
       <div
         role="group"
         aria-label={label}
+        /* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex --
+           The tab stop is what makes the key handler above reachable at all; without it the
+           keyboard path would only work when focus happened to land inside the region. */
         tabIndex={0}
         className={cn(
           'relative overflow-hidden rounded-xs bg-surface-sunken',

@@ -20,9 +20,10 @@
 import { create } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 
-import { type ConsentStatus } from '@repo/api-client';
-
 import { withDevtools } from '../middleware/devtools.middleware';
+
+import type { ConsentStatus } from '@repo/api-client';
+
 
 export interface ConsentState {
   /** Mirrors `GET /consents/me`. Hydrated from the query; never fetched here (§6.5). */

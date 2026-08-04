@@ -8,15 +8,15 @@
  * shapes below, not by a flag.
  */
 
-import {
-  type DateRangeQuery,
-  type IsoDate,
-  type IsoDateTime,
-  type SearchablePaginationQuery,
-  type SignedFileUrl,
-  type Uuid,
+import type {
+  DateRangeQuery,
+  IsoDate,
+  IsoDateTime,
+  SearchablePaginationQuery,
+  SignedFileUrl,
+  Uuid,
 } from './common';
-import { type BudgetBand, type EnquiryStatus, type EventType } from './enums';
+import type { BudgetBand, EnquiryStatus, EventType } from './enums';
 
 /* ------------------------------------------------------------------- consumer */
 

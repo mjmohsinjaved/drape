@@ -8,14 +8,14 @@
  * speculatively.
  */
 
-import {
-  type IsoDateTime,
-  type PaginationQuery,
-  type SearchablePaginationQuery,
-  type SignedFileUrl,
-  type Uuid,
+import type {
+  IsoDateTime,
+  PaginationQuery,
+  SearchablePaginationQuery,
+  SignedFileUrl,
+  Uuid,
 } from './common';
-import { type ModerationSource, type ModerationState } from './enums';
+import type { ModerationSource, ModerationState } from './enums';
 
 /** One row of `GET /admin/moderation` (ADMIN) — the queue of A-34. */
 export interface ModerationItem {

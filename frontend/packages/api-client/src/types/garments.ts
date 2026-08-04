@@ -5,20 +5,20 @@
  * Nothing in this file is ever rendered on a consumer route.
  */
 
-import {
-  type BulkOperationResult,
-  type IsoDateTime,
-  type QualityCheckResult,
-  type SearchablePaginationQuery,
-  type Uuid,
+import type {
+  BulkOperationResult,
+  IsoDateTime,
+  QualityCheckResult,
+  SearchablePaginationQuery,
+  Uuid,
 } from './common';
-import {
-  type EmbellishmentWeight,
-  type GarmentMode,
-  type PublishState,
-  type TestRenderState,
+import type {
+  EmbellishmentWeight,
+  GarmentMode,
+  PublishState,
+  TestRenderState,
 } from './enums';
-import { type GarmentImage } from './garment-images';
+import type { GarmentImage } from './garment-images';
 
 /** One row of `GET /admin/garments` (ADMIN) — the catalog list of A-14. */
 export interface AdminGarmentListItem {

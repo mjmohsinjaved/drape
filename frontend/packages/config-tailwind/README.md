@@ -31,6 +31,7 @@ If you need the preset on its own (a Storybook, a docs site), the order is fixed
 | ----------------- | ------------------ | ------------------------------------------------------ |
 | Colour            | `--color-*`        | `bg-canvas`, `text-ink-muted`, `border-line-strong`     |
 | Type scale        | `--text-*`         | `text-sm`, `text-3xl` (size + leading + tracking)       |
+| Tracking          | `--tracking-*`     | `tracking-2xs` — only when tracking must leave the size |
 | Spacing (4px)     | `--space-*`        | `p-4`, `gap-6`, `mb-8`                                  |
 | Radii             | `--radius-*`       | `rounded-md`, `rounded-xl`                              |
 | Shadows           | `--shadow-*`       | `shadow-sm`, `shadow-focus`                             |
@@ -48,8 +49,9 @@ Variants: `dark:`, `compact:`, `comfortable:`, `urdu:`, plus `xs:` at 360px (D-9
 ## Two rules that are not negotiable
 
 **1. Tailwind's stock palette and type scale are deleted.** The preset opens with
-`--color-*: initial`, `--text-*: initial`, `--radius-*: initial`, `--shadow-*: initial`,
-`--font-*: initial`, `--ease-*: initial`. `bg-red-500` and `text-2xl`-from-Tailwind do not
+`--color-*: initial`, `--text-*: initial`, `--tracking-*: initial`, `--radius-*: initial`,
+`--shadow-*: initial`, `--ease-*: initial`. `bg-red-500`, `tracking-wide` and
+`text-2xl`-from-Tailwind do not
 compile. If a colour you need is missing, it is missing from the token set — add it to
 `ARCHITECTURE.md §6.1` and `@repo/ui/src/styles/tokens.css`, in that order. Do not reach for
 an arbitrary value. (PRD **D-1**.)

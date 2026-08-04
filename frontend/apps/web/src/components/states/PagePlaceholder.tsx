@@ -1,5 +1,6 @@
-import { Badge, Card, CardContent, CardHeader, CardTitle } from '@repo/ui';
 import { useTranslations } from 'next-intl';
+
+import { Badge, Card, CardContent, CardHeader, CardTitle } from '@repo/ui';
 
 import type { ReactNode } from 'react';
 

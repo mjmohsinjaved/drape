@@ -1,6 +1,8 @@
-import { Button, EmptyState } from '@repo/ui';
-import { getLocale, getTranslations } from 'next-intl/server';
 import Link from 'next/link';
+
+import { getLocale, getTranslations } from 'next-intl/server';
+
+import { Button, EmptyState } from '@repo/ui';
 
 import { toLocale } from '@/i18n/config';
 import { routes } from '@/lib/routes';

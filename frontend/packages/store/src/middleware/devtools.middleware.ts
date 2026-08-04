@@ -7,8 +7,9 @@
  * gated. When disabled it is a pass-through with no listener and no serialisation cost.
  */
 
-import { type StateCreator } from 'zustand';
 import { type DevtoolsOptions, devtools } from 'zustand/middleware';
+
+import type { StateCreator } from 'zustand';
 
 /** Namespace so all five Drape stores group together in the DevTools store picker. */
 export const DEVTOOLS_NAMESPACE = 'drape';

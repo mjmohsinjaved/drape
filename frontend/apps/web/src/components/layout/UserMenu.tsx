@@ -1,9 +1,18 @@
 'use client';
 
+import { useState } from 'react';
+
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+
+import { LogOut } from 'lucide-react';
+import { useTranslations } from 'next-intl';
+
 import { apiClient } from '@repo/api-client';
 import { useAuthStore } from '@repo/store';
 import {
   Avatar,
+  AvatarFallback,
   Button,
   DropdownMenu,
   DropdownMenuContent,
@@ -12,11 +21,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@repo/ui';
-import { useTranslations } from 'next-intl';
-import { LogOut } from 'lucide-react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+
+
 
 import { accountMenuNav } from '@/components/layout/nav-items';
 import { routes } from '@/lib/routes';
@@ -29,7 +35,7 @@ export interface UserMenuProps {
   email: string;
   initials: string;
   /** Extra entries the admin shell adds above the account block. */
-  extraItems?: readonly { key: string; label: string; href: string }[];
+  extraItems?: ReadonlyArray<{ key: string; label: string; href: string }>;
 }
 
 /**
@@ -70,7 +76,15 @@ export function UserMenu({ locale, name, email, initials, extraItems }: UserMenu
           aria-label={t('userMenu.label')}
           className="min-h-11 min-w-11"
         >
-          <Avatar initials={initials} alt="" />
+          {/*
+            `Avatar` is the frame; the initials are its fallback child. There is no photo to
+            load here, so the fallback is all that ever renders. It carries no alternative
+            text of its own — the trigger's `aria-label` already names the control, and a
+            screen reader repeating "SA" after it would only add noise (D-20).
+          */}
+          <Avatar size="sm" aria-hidden="true">
+            <AvatarFallback>{initials}</AvatarFallback>
+          </Avatar>
         </Button>
       </DropdownMenuTrigger>
 

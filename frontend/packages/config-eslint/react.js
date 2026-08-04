@@ -21,12 +21,18 @@ import { baseConfig } from './base.js';
  * The Tailwind selectors deliberately match arbitrary *values* (`w-[13px]`, `text-[#fff]`)
  * and not arbitrary *variants* (`data-[state=open]:`, `has-[:checked]:`), which are ordinary
  * Radix/Tailwind usage and must keep working.
+ *
+ * The `(?![a-z])` guards on `border-l`, `border-r`, `rounded-l` and `rounded-r` are what stop
+ * the rule firing on `border-line` (the §6.1 line-colour token) and `rounded-lg` (the radius
+ * scale). Both are the *prescribed* utilities, so matching them was a false positive that
+ * flagged around forty compliant call sites and hid the real ones. A physical side is always
+ * followed by end-of-token or `-` (`border-l`, `border-l-2`, `rounded-r-md`), never a letter.
  */
 export const designSystemRestrictions = [
   'error',
   {
     selector:
-      "JSXAttribute[name.name='className'] Literal[value=/(^|\\s)-?(ml-|mr-|pl-|pr-|left-|right-|border-l|border-r|rounded-l|rounded-r|text-left|text-right|float-left|float-right)/]",
+      "JSXAttribute[name.name='className'] Literal[value=/(^|\\s)-?(ml-|mr-|pl-|pr-|left-|right-|border-l(?![a-z])|border-r(?![a-z])|rounded-l(?![a-z])|rounded-r(?![a-z])|text-left|text-right|float-left|float-right)/]",
     message:
       'Use logical properties (ms/me, ps/pe, start/end, text-start/text-end, border-s/border-e) — Drape renders an RTL (ur) locale and physical sides do not mirror.',
   },

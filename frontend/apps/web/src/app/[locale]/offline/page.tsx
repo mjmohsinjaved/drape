@@ -1,12 +1,14 @@
-import { Button, EmptyState } from '@repo/ui';
-import { getTranslations, setRequestLocale } from 'next-intl/server';
 import Link from 'next/link';
+
+import { getTranslations, setRequestLocale } from 'next-intl/server';
+
+import { Button, EmptyState } from '@repo/ui';
 
 import { buildMetadata } from '@/lib/metadata';
 import { routes } from '@/lib/routes';
 
-import type { Metadata } from 'next';
 import type { LocaleParams } from '@/lib/route-params';
+import type { Metadata } from 'next';
 
 export async function generateMetadata({ params }: LocaleParams): Promise<Metadata> {
   const { locale } = await params;

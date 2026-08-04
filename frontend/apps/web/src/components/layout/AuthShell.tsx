@@ -1,13 +1,14 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@repo/ui';
 import Link from 'next/link';
+
+import { Card, CardContent, CardDescription, CardHeader } from '@repo/ui';
 
 import { LocaleSwitcher } from '@/components/layout/LocaleSwitcher';
 import { SkipLink, MAIN_CONTENT_ID } from '@/components/layout/SkipLink';
 import { APP_NAME } from '@/lib/constants';
 import { routes } from '@/lib/routes';
 
-import type { ReactNode } from 'react';
 import type { Locale } from '@/i18n/config';
+import type { ReactNode } from 'react';
 
 export interface AuthShellProps {
   locale: Locale;
@@ -50,9 +51,14 @@ export function AuthShell({ locale, title, description, children, footer }: Auth
       >
         <Card className="w-full max-w-md">
           <CardHeader>
-            <CardTitle asChild>
-              <h1 className="text-2xl">{title}</h1>
-            </CardTitle>
+            {/*
+              The page's only <h1>, so it is written as one rather than composed from
+              `CardTitle` — that atom's `as` is deliberately h2–h4, because a card title is
+              normally a section heading inside a page that already has its <h1> (D-20). Here
+              the card *is* the page, so the heading is authored directly with the same
+              display-face treatment.
+            */}
+            <h1 className="font-display text-2xl font-semibold text-balance text-ink">{title}</h1>
             <CardDescription>{description}</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-6">

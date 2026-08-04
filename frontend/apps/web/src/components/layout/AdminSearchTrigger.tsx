@@ -1,9 +1,10 @@
 'use client';
 
+import { Search } from 'lucide-react';
+import { useTranslations } from 'next-intl';
+
 import { useUiStore } from '@repo/store';
 import { Button, Kbd } from '@repo/ui';
-import { useTranslations } from 'next-intl';
-import { Search } from 'lucide-react';
 
 /**
  * The admin search entry point. Shows the `/` hint so the shortcut is discoverable rather than

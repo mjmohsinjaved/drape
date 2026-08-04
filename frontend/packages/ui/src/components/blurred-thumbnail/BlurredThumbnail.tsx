@@ -5,9 +5,10 @@ import * as React from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 
 import { cn } from '../../lib/cn';
-import { type AspectRatioName } from '../aspect-ratio/AspectRatio';
 import { ImageWithFallback } from '../image/Image';
 import { VisuallyHidden } from '../visually-hidden/VisuallyHidden';
+
+import type { AspectRatioName } from '../aspect-ratio/AspectRatio';
 
 export interface BlurredThumbnailProps extends React.HTMLAttributes<HTMLDivElement> {
   src: string;

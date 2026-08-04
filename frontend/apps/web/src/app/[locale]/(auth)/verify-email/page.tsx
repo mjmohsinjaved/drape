@@ -1,13 +1,15 @@
-import { Callout } from '@repo/ui';
-import { getTranslations, setRequestLocale } from 'next-intl/server';
 import Link from 'next/link';
+
+import { getTranslations, setRequestLocale } from 'next-intl/server';
+
+import { Callout } from '@repo/ui';
 
 import { AuthShell } from '@/components/layout/AuthShell';
 import { buildMetadata } from '@/lib/metadata';
 import { routes } from '@/lib/routes';
 
-import type { Metadata } from 'next';
 import type { LocaleParams } from '@/lib/route-params';
+import type { Metadata } from 'next';
 
 type Props = LocaleParams;
 
@@ -46,7 +48,7 @@ export default async function AuthVerifyEmailPage({ params }: Props) {
         keep every control at least 44 x 44 px, and never distinguish an unknown email from a
         wrong password (S-6).
       */}
-      <Callout variant="info" title={t('todoTitle')}>
+      <Callout tone="info" title={t('todoTitle')}>
         {t('todoBody')}
       </Callout>
     </AuthShell>

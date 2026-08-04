@@ -1,7 +1,8 @@
 'use client';
 
-import NextImage, { type ImageProps as NextImageProps } from 'next/image';
 import * as React from 'react';
+
+import NextImage, { type ImageProps as NextImageProps } from 'next/image';
 
 import { ImageOff } from 'lucide-react';
 

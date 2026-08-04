@@ -1,9 +1,10 @@
 import * as React from 'react';
 
 import { cn } from '../../lib/cn';
-import { type AspectRatioName } from '../aspect-ratio/AspectRatio';
 import { Skeleton } from '../skeleton/Skeleton';
 import { VisuallyHidden } from '../visually-hidden/VisuallyHidden';
+
+import type { AspectRatioName } from '../aspect-ratio/AspectRatio';
 
 export interface LoadingStateProps extends React.HTMLAttributes<HTMLDivElement> {
   /**

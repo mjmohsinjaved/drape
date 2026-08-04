@@ -4,8 +4,8 @@ import { PagePlaceholder } from '@/components/states';
 import { buildMetadata } from '@/lib/metadata';
 import { routes } from '@/lib/routes';
 
-import type { Metadata } from 'next';
 import type { LocaleParamsWith } from '@/lib/route-params';
+import type { Metadata } from 'next';
 
 type Props = LocaleParamsWith<{ garmentId: string }>;
 

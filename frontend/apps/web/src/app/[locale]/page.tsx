@@ -1,7 +1,10 @@
-import { Button, Card, CardContent } from '@repo/ui';
-import { getTranslations, setRequestLocale } from 'next-intl/server';
-import { ArrowRight } from 'lucide-react';
 import Link from 'next/link';
+
+import { ArrowRight } from 'lucide-react';
+import { getTranslations, setRequestLocale } from 'next-intl/server';
+
+import { Button, Card, CardContent } from '@repo/ui';
+
 
 import { DirectionalIcon } from '@/components/DirectionalIcon';
 import { PublicShell } from '@/components/layout/PublicShell';
@@ -10,8 +13,8 @@ import { buildMetadata } from '@/lib/metadata';
 import { routes } from '@/lib/routes';
 import { getCurrentUser, toShellUser } from '@/lib/session';
 
-import type { Metadata } from 'next';
 import type { LocaleParams } from '@/lib/route-params';
+import type { Metadata } from 'next';
 
 export async function generateMetadata({ params }: LocaleParams): Promise<Metadata> {
   const { locale } = await params;

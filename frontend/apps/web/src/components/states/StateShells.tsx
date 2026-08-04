@@ -1,6 +1,7 @@
-import { Callout, EmptyState } from '@repo/ui';
-import { useTranslations } from 'next-intl';
 import { CheckCircle2, WifiOff } from 'lucide-react';
+import { useTranslations } from 'next-intl';
+
+import { Callout, EmptyState } from '@repo/ui';
 
 import type { ReactNode } from 'react';
 
@@ -47,7 +48,7 @@ export interface SuccessNoticeProps {
 /** Success — D-5, D-13. Announced politely so it is heard, not only seen (D-20). */
 export function SuccessNotice({ title, description, action }: SuccessNoticeProps) {
   return (
-    <Callout variant="success" role="status" aria-live="polite" title={title}>
+    <Callout tone="success" role="status" aria-live="polite" title={title}>
       {description}
       {action}
     </Callout>
@@ -66,7 +67,7 @@ export function OfflineNotice({ onRetry }: OfflineNoticeProps) {
   const t = useTranslations('errors.offline');
 
   return (
-    <Callout variant="warning" role="status" aria-live="polite" title={t('title')}>
+    <Callout tone="warning" role="status" aria-live="polite" title={t('title')}>
       <span className="inline-flex items-center gap-2">
         <WifiOff aria-hidden="true" className="size-4" />
         {t('body')}

@@ -32,6 +32,7 @@
      - `--breakpoint-*`, which carries no colour or spacing decision. */
   --color-*: initial;
   --text-*: initial;
+  --tracking-*: initial;
   --radius-*: initial;
   --shadow-*: initial;
   --inset-shadow-*: initial;
@@ -137,6 +138,27 @@
   --text-5xl: var(--text-5xl);
   --text-5xl--line-height: var(--leading-5xl);
   --text-5xl--letter-spacing: var(--tracking-5xl);
+
+  /* ---------------------------------------------------------------- *
+   * Tracking, as its own namespace.  §6.1
+   * The same ten tokens the type scale rides on, exposed as `tracking-*`
+   * utilities. `text-2xs` already applies `--tracking-2xs`, so this is only
+   * for the rare case where tracking must be set apart from size — the
+   * watermark caption wants the wide track at `text-xs`. Without it the only
+   * way to write that was an arbitrary `tracking-[0.04em]`, which D-1 bans.
+   * Tailwind's stock tracking scale is reset above for the same reason as the
+   * rest of D-1, so `tracking-wide` and `tracking-tighter` do not compile.
+   * ---------------------------------------------------------------- */
+  --tracking-2xs: var(--tracking-2xs);
+  --tracking-xs: var(--tracking-xs);
+  --tracking-sm: var(--tracking-sm);
+  --tracking-base: var(--tracking-base);
+  --tracking-lg: var(--tracking-lg);
+  --tracking-xl: var(--tracking-xl);
+  --tracking-2xl: var(--tracking-2xl);
+  --tracking-3xl: var(--tracking-3xl);
+  --tracking-4xl: var(--tracking-4xl);
+  --tracking-5xl: var(--tracking-5xl);
 
   /* ---------------------------------------------------------------- *
    * Spacing — 4px base.  §6.1

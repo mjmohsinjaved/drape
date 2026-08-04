@@ -1,13 +1,18 @@
 'use client';
 
-import { useLocaleStore } from '@repo/store';
-import { Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@repo/ui';
-import { useLocale, useTranslations } from 'next-intl';
-import { Check, Languages } from 'lucide-react';
-import { usePathname, useRouter } from 'next/navigation';
 import { useTransition } from 'react';
 
-import { locales, localeLabels, toLocale, type Locale } from '@/i18n/config';
+import { usePathname, useRouter } from 'next/navigation';
+
+import { Check, Languages } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
+
+import { useUiActions } from '@repo/store';
+import { Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@repo/ui';
+
+
+
+import { apiLocale, locales, localeLabels, toLocale, type Locale } from '@/i18n/config';
 
 export interface LocaleSwitcherProps {
   /** `icon` in the dense admin top bar, `full` where there is room for the label. */
@@ -18,21 +23,26 @@ export interface LocaleSwitcherProps {
  * Language switch — C-41.
  *
  * Each language is written in its own script, so a reader who cannot read the current
- * interface can still find their own. Switching writes the `NEXT_LOCALE` cookie through
- * `useLocaleStore` (the server needs it, so it is a cookie and not `localStorage`, §6.5) and
- * then swaps the `[locale]` segment in place — she stays on the page she was reading.
+ * interface can still find their own. Switching swaps the `[locale]` segment in place — she
+ * stays on the page she was reading — and the next-intl middleware writes the `NEXT_LOCALE`
+ * cookie on that navigation, because the server needs it and `localStorage` is not readable
+ * there (§6.5, §6.7).
+ *
+ * Locale and direction live on `useUiStore`, not on a store of their own, and its `setLocale`
+ * only mirrors what has been negotiated: a store never touches the document or the router. The
+ * mirror is what keeps `useDirection()` / `useIsRtl()` correct for the rest of the tree.
  */
 export function LocaleSwitcher({ variant = 'full' }: LocaleSwitcherProps) {
   const t = useTranslations('common.locale');
   const active = toLocale(useLocale());
   const pathname = usePathname();
   const router = useRouter();
-  const setLocale = useLocaleStore((state) => state.setLocale);
+  const { setLocale } = useUiActions();
   const [isPending, startTransition] = useTransition();
 
   function switchTo(next: Locale) {
     if (next === active) return;
-    setLocale(next);
+    setLocale(apiLocale[next]);
     // `[locale]` is a root segment, so the swap is a single replacement at the front.
     const nextPath = pathname.replace(/^\/[a-z]{2}(?=\/|$)/, `/${next}`);
     startTransition(() => {

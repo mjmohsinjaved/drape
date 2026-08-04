@@ -3,8 +3,9 @@
 import * as React from 'react';
 
 import { cn } from '../../lib/cn';
-import { type AspectRatioName } from '../aspect-ratio/AspectRatio';
 import { ImageWithFallback } from '../image/Image';
+
+import type { AspectRatioName } from '../aspect-ratio/AspectRatio';
 
 export interface GalleryImage {
   id: string;

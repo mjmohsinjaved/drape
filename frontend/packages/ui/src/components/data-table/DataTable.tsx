@@ -45,7 +45,7 @@ export type DataTableState = 'default' | 'loading' | 'empty' | 'error' | 'denied
 
 export interface DataTableProps<TRow> {
   rows: readonly TRow[];
-  columns: readonly DataTableColumn<TRow>[];
+  columns: ReadonlyArray<DataTableColumn<TRow>>;
   /** Stable identity per row. Used for keys, selection and the keyboard cursor. */
   getRowId: (row: TRow) => string;
   /**

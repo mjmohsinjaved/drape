@@ -40,7 +40,7 @@ export function getApiBaseUrl(): string | undefined {
  * public one (§7). Server-only, so it carries no `NEXT_PUBLIC_` prefix.
  */
 export function getServerApiBaseUrl(): string | undefined {
-  // eslint-disable-next-line turbo/no-undeclared-env-vars -- §7 declares API_INTERNAL_URL as a
+   
   // server-only web variable; it is intentionally absent from turbo.json's globalEnv, which lists
   // only the variables that affect a cached build output.
   return process.env.API_INTERNAL_URL ?? getApiBaseUrl();

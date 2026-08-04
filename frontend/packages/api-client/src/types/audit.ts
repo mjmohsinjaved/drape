@@ -6,13 +6,13 @@
  * must narrow before rendering.
  */
 
-import {
-  type DateRangeQuery,
-  type IsoDateTime,
-  type SearchablePaginationQuery,
-  type Uuid,
+import type {
+  DateRangeQuery,
+  IsoDateTime,
+  SearchablePaginationQuery,
+  Uuid,
 } from './common';
-import { type Role } from './enums';
+import type { Role } from './enums';
 
 /** One row of `GET /admin/audit` (ADMIN). */
 export interface AuditLogEntry {

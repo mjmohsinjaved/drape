@@ -1,7 +1,8 @@
 import 'server-only';
 
-import { redirect } from 'next/navigation';
 import { cache } from 'react';
+
+import { redirect } from 'next/navigation';
 
 import { Role, RETURN_TO_PARAM } from '@/lib/constants';
 import { apiPaths, routes } from '@/lib/routes';

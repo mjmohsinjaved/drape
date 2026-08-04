@@ -9,22 +9,22 @@
  * prefix matching for free.
  */
 
-import { type AnalyticsRangeQuery } from './types/analytics';
-import { type AuditLogQuery } from './types/audit';
-import { type CatalogFilters } from './types/catalog';
-import { type LedgerPeriod, type Uuid } from './types/common';
-import { type AdminEnquiryListQuery, type MyEnquiryListQuery } from './types/enquiries';
-import { type Locale } from './types/enums';
-import { type AdminGarmentListQuery } from './types/garments';
-import { type InviteListQuery } from './types/invites';
-import { type AbuseListQuery, type ModerationListQuery } from './types/moderation';
-import { type QuotaLedgerQuery, type UsageLedgerQuery } from './types/quota';
-import { type HistoryFilters } from './types/results';
-import { type TryOnJobListQuery } from './types/tryon';
-import {
-  type AdminConsumerListQuery,
-  type AdminUserListQuery,
-  type NotificationListQuery,
+import type { AnalyticsRangeQuery } from './types/analytics';
+import type { AuditLogQuery } from './types/audit';
+import type { CatalogFilters } from './types/catalog';
+import type { LedgerPeriod, Uuid } from './types/common';
+import type { AdminEnquiryListQuery, MyEnquiryListQuery } from './types/enquiries';
+import type { Locale } from './types/enums';
+import type { AdminGarmentListQuery } from './types/garments';
+import type { InviteListQuery } from './types/invites';
+import type { AbuseListQuery, ModerationListQuery } from './types/moderation';
+import type { QuotaLedgerQuery, UsageLedgerQuery } from './types/quota';
+import type { HistoryFilters } from './types/results';
+import type { TryOnJobListQuery } from './types/tryon';
+import type {
+  AdminConsumerListQuery,
+  AdminUserListQuery,
+  NotificationListQuery,
 } from './types/users';
 
 export const queryKeys = {

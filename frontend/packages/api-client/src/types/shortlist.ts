@@ -6,8 +6,8 @@
  * excluded from enquiries.
  */
 
-import { type IsoDateTime, type SignedFileUrl, type Uuid } from './common';
-import { type BudgetBand, type Verdict } from './enums';
+import type { IsoDateTime, SignedFileUrl, Uuid } from './common';
+import type { BudgetBand, Verdict } from './enums';
 
 /** One row of `GET /shortlist` (CONSUMER), in rank order (C-32). */
 export interface ShortlistItem {

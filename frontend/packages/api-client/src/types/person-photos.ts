@@ -8,8 +8,8 @@
  * keeps `personPhotoLabelSnapshot` so history and C-30 grouping still read correctly.
  */
 
-import { type IsoDateTime, type SignedFileUrl, type Uuid } from './common';
-import { type PhotoModerationState } from './enums';
+import type { IsoDateTime, SignedFileUrl, Uuid } from './common';
+import type { PhotoModerationState } from './enums';
 
 /** One row of `GET /person-photos` (CONSUMER) — C-16. */
 export interface PersonPhoto {

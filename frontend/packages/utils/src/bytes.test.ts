@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { formatBytes } from './bytes';
 
 /** The helper joins with a non-breaking space; assertions read better against a plain one. */
-const plain = (value: string): string => value.replace(/ /g, ' ');
+const plain = (value: string): string => value.replace(/\u00A0/g, ' ');
 
 describe('formatBytes', () => {
   it('formats zero and sub-byte values', () => {

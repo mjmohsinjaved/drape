@@ -1,7 +1,10 @@
-import { Button, EmptyState } from '@repo/ui';
-import { useTranslations } from 'next-intl';
-import { ArrowRight } from 'lucide-react';
 import Link from 'next/link';
+
+import { ArrowRight } from 'lucide-react';
+import { useTranslations } from 'next-intl';
+
+import { Button, EmptyState } from '@repo/ui';
+
 
 import { DirectionalIcon } from '@/components/DirectionalIcon';
 import { routes } from '@/lib/routes';

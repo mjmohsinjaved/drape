@@ -21,9 +21,10 @@
 import { create } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 
-import { type Role, type SessionUser, type UserStatus } from '@repo/api-client';
-
 import { withDevtools } from '../middleware/devtools.middleware';
+
+import type { Role, SessionUser, UserStatus } from '@repo/api-client';
+
 
 export interface AuthState {
   user: SessionUser | null;
