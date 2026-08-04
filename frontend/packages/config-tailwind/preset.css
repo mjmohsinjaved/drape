@@ -1,0 +1,40 @@
+/*
+ * @repo/config-tailwind — the Drape Tailwind v4 preset.
+ * ------------------------------------------------------------------
+ * Tailwind v4 is CSS-first: this file *is* the preset. There is no
+ * tailwind.config.ts anywhere in the frontend.
+ *
+ * An app consumes it with a single import in its own stylesheet, after the
+ * token declarations:
+ *
+ *   @import '@repo/ui/styles/tokens.css';
+ *   @import '@repo/config-tailwind';
+ *   @source '../../../packages/ui/src';
+ *
+ * `@repo/ui/styles/globals.css` already does all of the above, so an app that
+ * imports the design system's globals.css needs nothing else.
+ *
+ * Ordering matters: tokens.css declares the §6.1 custom properties *unlayered*,
+ * so they outrank anything Tailwind emits into `@layer theme`, whatever order
+ * the bundler settles on.
+ */
+
+@import 'tailwindcss';
+
+/* Dark mode is opt-in via class="dark" on <html>, resolved from
+   prefers-color-scheme plus the stored preference (§6.1). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Density variants so a component can style itself per admin density without a
+   media query: `compact:py-1`, `comfortable:py-3`. */
+@custom-variant compact (&:where([data-density='compact'], [data-density='compact'] *));
+@custom-variant comfortable (&:where([data-density='comfortable'], [data-density='comfortable'] *));
+
+/* Urdu — Nastaliq needs vertical room, and Fraunces has no Arabic-script
+   coverage, so `urdu:` lets a component opt into a different treatment
+   without a [dir='rtl'] selector. */
+@custom-variant urdu (&:where([lang='ur'], [lang='ur'] *));
+
+@import './theme.css';
+@import './density.css';
+@import './utilities.css';

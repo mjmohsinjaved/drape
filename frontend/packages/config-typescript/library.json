@@ -1,0 +1,6 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "display": "Drape library (alias of react-library.json)",
+  "//": "ARCHITECTURE.md §1.2 names this file `library.json`; the canonical content lives in react-library.json. Kept as a one-line alias so either name resolves. Prefer `react-library.json` in new packages.",
+  "extends": "./react-library.json"
+}

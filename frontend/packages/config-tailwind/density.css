@@ -1,0 +1,44 @@
+/*
+ * @repo/config-tailwind — admin density scale (D-4).  ARCHITECTURE §6.1/§6.2
+ * ------------------------------------------------------------------
+ * Set `data-density="comfortable" | "compact"` on the admin shell; the value is
+ * persisted in the UI store. `comfortable` is the default and is also what an
+ * un-annotated subtree gets.
+ *
+ * `compact` is only honoured on a fine pointer. On touch the media query fails
+ * and the comfortable values stand, so the 44 x 44 px target floor (D-10) can
+ * never be violated by a stale preference carried onto a phone.
+ */
+
+:root,
+[data-density='comfortable'] {
+  --density-row-height: 44px;
+  --density-cell-px: var(--space-4);
+  --density-cell-py: var(--space-3);
+  --density-control-height: 36px;
+  --density-font-size: var(--text-sm);
+  --density-stack-gap: var(--space-4);
+  --density-section-gap: var(--space-8);
+}
+
+@media (pointer: fine) {
+  [data-density='compact'] {
+    --density-row-height: 32px;
+    --density-cell-px: var(--space-3);
+    --density-cell-py: var(--space-1);
+    --density-control-height: 28px;
+    --density-font-size: var(--text-xs);
+    --density-stack-gap: var(--space-2);
+    --density-section-gap: var(--space-5);
+  }
+}
+
+/* Shell metrics — §6.2. Physical-side free: the sidenav is placed with
+   inset-inline-start by the app shell, never with `left`. */
+:root {
+  --sidenav-width: 264px;
+  --sidenav-width-collapsed: 72px;
+  --topbar-height-consumer: 64px;
+  --topbar-height-admin: 56px;
+  --tabbar-height: 56px;
+}

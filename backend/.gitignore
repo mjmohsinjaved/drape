@@ -1,0 +1,45 @@
+# ── Dependencies ─────────────────────────────────────────────────────────────
+node_modules/
+
+# ── Build output ─────────────────────────────────────────────────────────────
+dist/
+build/
+*.tsbuildinfo
+
+# ── Test / coverage ──────────────────────────────────────────────────────────
+coverage/
+.nyc_output/
+
+# ── Environment ──────────────────────────────────────────────────────────────
+# No secret ever has a fallback default; .env is never committed.
+.env
+.env.*
+.env.*.local
+!.env.example
+
+# ── Logs ─────────────────────────────────────────────────────────────────────
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ── Generated artefacts ──────────────────────────────────────────────────────
+openapi.json
+
+# ── Editor / OS ──────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# ── Uploaded media ───────────────────────────────────────────────────────────
+# Uploaded media NEVER lives in this repository. Every image — garments, person
+# photos, renders, thumbnails — is written under STORAGE_ROOT (default
+# D:/drape-storage), which sits outside this tree and is never symlinked into it.
+# The database stores only the relative storage key. If you find an uploads/,
+# storage/ or media/ directory here, something is wrong — fix the code, do not
+# add it to this file.
+uploads/
+storage-root/

@@ -1,0 +1,48 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "lib": ["ES2022"],
+
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+
+    "strict": true,
+    "strictNullChecks": true,
+    "noImplicitAny": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "forceConsistentCasingInFileNames": true,
+
+    // TypeORM entities and DTOs declare columns/fields without an initialiser and rely on
+    // definite assignment by the ORM / ValidationPipe. This is the one strict flag we opt out of.
+    "strictPropertyInitialization": false,
+
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+
+    "sourceMap": true,
+    "declaration": false,
+    "removeComments": true,
+    "incremental": true,
+    "outDir": "./dist",
+    "baseUrl": "./",
+    "paths": {
+      "@library/common": ["libs/common/src"],
+      "@library/common/*": ["libs/common/src/*"],
+      "@library/database": ["libs/database/src"],
+      "@library/database/*": ["libs/database/src/*"],
+      "@library/storage": ["libs/storage/src"],
+      "@library/storage/*": ["libs/storage/src/*"],
+      "@library/notifications": ["libs/notifications/src"],
+      "@library/notifications/*": ["libs/notifications/src/*"],
+      "@api/*": ["apps/api/src/*"]
+    }
+  },
+  "exclude": ["node_modules", "dist", "coverage"]
+}

@@ -1,0 +1,14 @@
+{
+  "publicView": {
+    "title": "A shortlist shared with you",
+    "description": "Have a look and tell her what you think.",
+    "next1": "The shared view, read-only, with voting as a client island.",
+    "next2": "No account needed to vote, and nothing about her account is shown."
+  },
+  "mine": {
+    "title": "Shared links",
+    "description": "The shortlists you've shared, and what people said.",
+    "next1": "Each link with its votes, its expiry and a way to revoke it.",
+    "next2": "Creating a link, copying it, and turning it off again."
+  }
+}

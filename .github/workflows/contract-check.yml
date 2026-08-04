@@ -1,0 +1,52 @@
+name: Contract check
+
+# The Web and API services deploy independently (PRD E-1). The OpenAPI contract
+# in B-4 is the only thing keeping them compatible, so an undeclared change to
+# it must fail the build rather than production.
+
+on:
+  pull_request:
+    paths:
+      - 'backend/openapi.json'
+      - 'backend/apps/api/src/**'
+      - 'frontend/packages/api-client/**'
+
+jobs:
+  contract:
+    name: API contract is declared and consumed consistently
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Detect a contract change
+        id: diff
+        run: |
+          if git diff --quiet origin/${{ github.base_ref }}...HEAD -- backend/openapi.json; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git diff --stat origin/${{ github.base_ref }}...HEAD -- backend/openapi.json
+          fi
+
+      - name: A contract change must be accompanied by a client change
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          if git diff --quiet origin/${{ github.base_ref }}...HEAD -- frontend/packages/api-client; then
+            echo "::error::backend/openapi.json changed but frontend/packages/api-client did not."
+            echo "::error::Regenerate or hand-update the typed client so the contract stays consumable (PRD B-4)."
+            exit 1
+          fi
+          echo "Contract change is mirrored in the typed client."
+
+      - name: Every route declares a role guard (PRD B-5)
+        working-directory: backend
+        run: |
+          npm ci
+          npm run check:guards

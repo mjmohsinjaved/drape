@@ -1,0 +1,35 @@
+{
+  "name": "drape-frontend",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Drape virtual fitting room — Turborepo workspace (npm workspaces; pnpm is not available on the build machine).",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "packageManager": "npm@9.9.4",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "start": "turbo run start",
+    "lint": "turbo run lint",
+    "lint:fix": "turbo run lint:fix",
+    "typecheck": "turbo run typecheck",
+    "type-check": "npm run typecheck",
+    "test": "turbo run test",
+    "test:watch": "turbo run test:watch",
+    "format": "prettier --write \"**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs,json,md,css}\" --ignore-path .gitignore",
+    "format:check": "prettier --check \"**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs,json,md,css}\" --ignore-path .gitignore",
+    "clean": "turbo run clean"
+  },
+  "devDependencies": {
+    "@repo/config-typescript": "*",
+    "@types/node": "^22.15.3",
+    "prettier": "^3.5.3",
+    "turbo": "^2.5.3",
+    "typescript": "^5.8.3"
+  }
+}

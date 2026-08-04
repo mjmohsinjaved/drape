@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "//": "Thin root config for editor/IDE support only. Nothing is built from here — every app and package owns a tsconfig that extends @repo/config-typescript.",
+  "extends": "@repo/config-typescript/base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false
+  },
+  "exclude": [
+    "node_modules",
+    "**/node_modules",
+    "**/dist",
+    "**/.next",
+    "**/.turbo",
+    "**/coverage"
+  ]
+}

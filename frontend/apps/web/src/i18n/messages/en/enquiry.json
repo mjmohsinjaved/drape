@@ -1,0 +1,14 @@
+{
+  "list": {
+    "title": "Your enquiries",
+    "description": "What you've asked about, and where each one stands.",
+    "next1": "The list with a plain status on each, in her words rather than ours.",
+    "next2": "Opening one shows the pieces, the studio’s reply and what happens next."
+  },
+  "new": {
+    "title": "Send an enquiry",
+    "description": "Tell the studio which pieces you'd like to see, and when you're visiting.",
+    "next1": "The form, prefilled from the shortlist, with the pieces removable.",
+    "next2": "Phone confirmation happens here if it has not happened already."
+  }
+}

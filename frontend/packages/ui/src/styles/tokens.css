@@ -1,0 +1,276 @@
+/*
+ * Drape design tokens — ARCHITECTURE.md §6.1
+ * ==================================================================
+ * THIS FILE IS THE ONLY PLACE IN THE ENTIRE FRONTEND WHERE A RAW COLOUR VALUE
+ * MAY APPEAR (PRD D-1). No app, no feature, no atom declares a hex, an rgb(),
+ * an oklch() or an arbitrary Tailwind colour. If a colour is missing here, it is
+ * missing from the token set: add it to ARCHITECTURE §6.1 first, then here.
+ *
+ * The declarations are deliberately UNLAYERED. Tailwind emits its theme into
+ * `@layer theme`, and unlayered rules outrank every cascade layer, so these
+ * values win no matter what order the bundler resolves imports in.
+ *
+ * Light is "Daylight", dark is "Lamplight". Dark mode is opt-in via
+ * class="dark" on <html>, resolved from prefers-color-scheme plus the stored
+ * preference. Contrast ratios in the comments are the documented floors from
+ * §6.1 and are asserted by contrast.spec.ts — changing a value without moving
+ * the assertion is a defect (D-20).
+ */
+
+:root {
+  /* ---------------------------------------------------------------- *
+   * Keywords. Present so `bg-transparent` and `text-current` survive the
+   * `--color-*: initial` reset in @repo/config-tailwind.
+   * ---------------------------------------------------------------- */
+  --color-transparent: transparent;
+  --color-current: currentColor;
+  --color-inherit: inherit;
+
+  /* ---------------------------------------------------------------- *
+   * Colour — Daylight (light).  §6.1
+   * ---------------------------------------------------------------- */
+  --color-canvas: #fbf8f3; /* Page background */
+  --color-surface: #ffffff; /* Cards, sheets, table body */
+  --color-surface-raised: #fffdfa; /* Popovers, dropdowns, sticky headers */
+  --color-surface-sunken: #f3ede4; /* Wells, image placeholders, skeleton base */
+
+  --color-ink: #1f1a16; /* Primary text — 16.6:1 on canvas */
+  --color-ink-muted: #6b5f55; /* Secondary text — 5.9:1 */
+  --color-ink-subtle: #7c6f63; /* Tertiary text, placeholders — 4.6:1 */
+
+  --color-line: #e4dacb; /* Hairline borders, table rules */
+  --color-line-strong: #cfc0ab; /* Input borders, dividers that must read */
+
+  --color-brand: #71202f; /* Lac red — 10.2:1. Runtime-overridable (A-27) */
+  --color-brand-hover: #591626; /* Runtime-overridable (A-27) */
+  --color-brand-active: #45101d; /* Runtime-overridable (A-27) */
+  --color-brand-fg: #fff7f2; /* Text on a brand fill — 10.4:1 */
+  --color-brand-tint: #f6e8e9; /* Selected rows, quiet brand washes */
+
+  --color-gold: #a67c2e; /* Antique gold — 3.6:1, NON-TEXT / large text only */
+  --color-gold-text: #6f4f14; /* The gold family when text is required — 7.2:1 */
+  --color-gold-tint: #f5ead5;
+
+  --color-success: #2f6b4f; /* 5.9:1 */
+  --color-success-tint: #e4f0e9;
+  --color-warning: #8a5209; /* 5.1:1 */
+  --color-warning-tint: #fbeedc;
+  --color-danger: #a32a22; /* 6.8:1 */
+  --color-danger-tint: #f9e5e2;
+  --color-info: #2c5a73; /* 7.1:1 */
+  --color-info-tint: #e2edf2;
+
+  --color-focus: #71202f; /* 2px ring + 2px offset, never removed (D-10, D-20) */
+  --color-overlay: rgb(31 26 22 / 0.55); /* Modal scrim */
+  --color-skeleton: #efe7db;
+
+  /* ---------------------------------------------------------------- *
+   * Typefaces (D-2).  §6.1
+   * The --next-font-* variables are produced by next/font in
+   * @repo/ui/src/lib/fonts.ts and attached to <html> by the app.
+   * ---------------------------------------------------------------- */
+  --font-display: var(--next-font-fraunces), Georgia, 'Times New Roman', serif;
+  --font-body: var(--next-font-manrope), system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-urdu: var(--next-font-noto-nastaliq-urdu), 'Jameel Noori Nastaleeq', serif;
+  --font-mono: var(--next-font-ibm-plex-mono), ui-monospace, monospace;
+
+  /* Multiplier applied to line height. 1 in Latin, raised for Nastaliq below. */
+  --leading-multiplier: 1;
+
+  /* ---------------------------------------------------------------- *
+   * Type scale — fixed (D-2).  §6.1
+   * --text-2xs is ADMIN ONLY and is never used for anything a consumer
+   * must read.  --text-4xl / --text-5xl clamp down one step below 640px.
+   * ---------------------------------------------------------------- */
+  --text-2xs: 0.6875rem; /* 11px — admin table meta, badges, timestamps */
+  --leading-2xs: calc(1rem * var(--leading-multiplier));
+  --tracking-2xs: 0.04em;
+
+  --text-xs: 0.75rem; /* 12px — captions, helper text, admin dense cells */
+  --leading-xs: calc(1.125rem * var(--leading-multiplier));
+  --tracking-xs: 0.02em;
+
+  --text-sm: 0.875rem; /* 14px — admin default, form labels, secondary copy */
+  --leading-sm: calc(1.375rem * var(--leading-multiplier));
+  --tracking-sm: 0em;
+
+  --text-base: 1rem; /* 16px — consumer default body */
+  --leading-base: calc(1.625rem * var(--leading-multiplier));
+  --tracking-base: 0em;
+
+  --text-lg: 1.125rem; /* 18px — lead paragraphs, consent body copy */
+  --leading-lg: calc(1.75rem * var(--leading-multiplier));
+  --tracking-lg: 0em;
+
+  --text-xl: 1.375rem; /* 22px — card titles, product names in the grid */
+  --leading-xl: calc(1.875rem * var(--leading-multiplier));
+  --tracking-xl: -0.005em;
+
+  --text-2xl: 1.75rem; /* 28px — section headings, admin page titles */
+  --leading-2xl: calc(2.125rem * var(--leading-multiplier));
+  --tracking-2xl: -0.01em;
+
+  --text-3xl: 2.25rem; /* 36px — page headings, garment detail title */
+  --leading-3xl: calc(2.5rem * var(--leading-multiplier));
+  --tracking-3xl: -0.015em;
+
+  --text-4xl: 3rem; /* 48px — consumer hero, result reveal */
+  --leading-4xl: calc(3.25rem * var(--leading-multiplier));
+  --tracking-4xl: -0.02em;
+
+  --text-5xl: 4rem; /* 64px — landing hero, desktop only */
+  --leading-5xl: calc(4.25rem * var(--leading-multiplier));
+  --tracking-5xl: -0.025em;
+
+  /* ---------------------------------------------------------------- *
+   * Spacing — 4px base.  §6.1
+   * ---------------------------------------------------------------- */
+  --space-0: 0;
+  --space-px: 1px;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+  --space-20: 5rem;
+  --space-24: 6rem;
+  --space-32: 8rem;
+
+  /* ---------------------------------------------------------------- *
+   * Radii.  §6.1
+   * Consumer surfaces use lg/xl; admin uses sm/md. Consumer grid images
+   * use lg; render viewers use xs so nothing visibly crops the result.
+   * ---------------------------------------------------------------- */
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 20px;
+  --radius-2xl: 28px;
+  --radius-full: 9999px;
+
+  /* ---------------------------------------------------------------- *
+   * Borders.  §6.1
+   * Default border colour --color-line; interactive controls
+   * --color-line-strong.
+   * ---------------------------------------------------------------- */
+  --border-hairline: 1px;
+  --border-medium: 1.5px;
+  --border-heavy: 2px;
+  --border-focus: 2px;
+
+  /* ---------------------------------------------------------------- *
+   * Shadows — warm-tinted, never pure black.  §6.1
+   * ---------------------------------------------------------------- */
+  --shadow-xs: 0 1px 2px rgb(60 42 28 / 0.06);
+  --shadow-sm:
+    0 2px 4px rgb(60 42 28 / 0.07), 0 1px 2px rgb(60 42 28 / 0.05);
+  --shadow-md:
+    0 6px 14px rgb(60 42 28 / 0.09), 0 2px 4px rgb(60 42 28 / 0.05);
+  --shadow-lg:
+    0 16px 32px rgb(60 42 28 / 0.12), 0 4px 8px rgb(60 42 28 / 0.06);
+  --shadow-xl: 0 28px 56px rgb(60 42 28 / 0.16);
+  --shadow-focus: 0 0 0 2px var(--color-canvas), 0 0 0 4px var(--color-focus);
+
+  /* ---------------------------------------------------------------- *
+   * Motion (D-11).  §6.1
+   * ---------------------------------------------------------------- */
+  --duration-instant: 80ms;
+  --duration-fast: 140ms;
+  --duration-base: 220ms;
+  --duration-slow: 380ms;
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --ease-in-out: cubic-bezier(0.5, 0, 0.2, 1);
+
+  /* ---------------------------------------------------------------- *
+   * Containers — the two layout languages (D-4).  §6.2
+   * ---------------------------------------------------------------- */
+  --container-consumer: 1200px;
+  --container-admin: 1680px;
+  --container-prose: 68ch;
+}
+
+/* ================================================================== *
+ * Colour — Lamplight (dark).  §6.1
+ * Only the mode-dependent tokens are redeclared. Type, spacing, radii,
+ * borders and motion are identical in both modes.
+ * ================================================================== */
+.dark {
+  --color-canvas: #14100d;
+  --color-surface: #1c1714;
+  --color-surface-raised: #241e19;
+  --color-surface-sunken: #0f0c0a;
+
+  --color-ink: #f4ede4;
+  --color-ink-muted: #b4a697; /* 8.1:1 */
+  --color-ink-subtle: #8a7d70; /* 4.8:1 */
+
+  --color-line: #2e2721;
+  --color-line-strong: #443a31;
+
+  --color-brand: #c96a78; /* 5.4:1. Runtime-overridable (A-27) */
+  --color-brand-hover: #d9808c;
+  --color-brand-active: #e695a0;
+  --color-brand-fg: #1a0f11;
+  --color-brand-tint: #3a1d24;
+
+  --color-gold: #d6ac63;
+  --color-gold-text: #e4c489;
+  --color-gold-tint: #3a2e18;
+
+  --color-success: #63b389;
+  --color-success-tint: #16301f;
+  --color-warning: #e0a44a;
+  --color-warning-tint: #332412;
+  --color-danger: #e8776c;
+  --color-danger-tint: #361714;
+  --color-info: #7fb4ce;
+  --color-info-tint: #12242d;
+
+  --color-focus: #d6ac63;
+  --color-overlay: rgb(8 6 5 / 0.68);
+  --color-skeleton: #241e19;
+
+  /* "In dark mode the tints become rgb(0 0 0 / …) at roughly double the
+     alpha." — §6.1 */
+  --shadow-xs: 0 1px 2px rgb(0 0 0 / 0.12);
+  --shadow-sm:
+    0 2px 4px rgb(0 0 0 / 0.14), 0 1px 2px rgb(0 0 0 / 0.1);
+  --shadow-md:
+    0 6px 14px rgb(0 0 0 / 0.18), 0 2px 4px rgb(0 0 0 / 0.1);
+  --shadow-lg:
+    0 16px 32px rgb(0 0 0 / 0.24), 0 4px 8px rgb(0 0 0 / 0.12);
+  --shadow-xl: 0 28px 56px rgb(0 0 0 / 0.32);
+}
+
+/* ================================================================== *
+ * Urdu.  §6.1 / §6.7
+ * Fraunces has no Arabic-script coverage, so the display face gives way to
+ * the Nastaliq face, and Nastaliq needs the extra vertical room. There is
+ * no [dir='rtl'] selector here on purpose: direction is handled entirely by
+ * logical properties, and this block keys on language, not direction.
+ * ================================================================== */
+:root:lang(ur),
+[lang='ur'] {
+  --font-display: var(--font-urdu);
+  --font-body: var(--font-urdu);
+  --leading-multiplier: 1.85;
+}
+
+/* ================================================================== *
+ * Type scale — clamp the two largest steps down one step below 640px.
+ * §6.1: "--text-4xl and --text-5xl clamp down one step below 640px."
+ * ================================================================== */
+@media (width < 640px) {
+  :root {
+    --text-4xl: 2.25rem; /* -> --text-3xl */
+    --leading-4xl: calc(2.5rem * var(--leading-multiplier));
+    --text-5xl: 3rem; /* -> --text-4xl */
+    --leading-5xl: calc(3.25rem * var(--leading-multiplier));
+  }
+}

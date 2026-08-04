@@ -1,0 +1,50 @@
+{
+  "rootDir": "../../..",
+  "preset": "ts-jest",
+  "testEnvironment": "node",
+
+  "testRegex": ".*\\.e2e-spec\\.ts$",
+  "roots": ["<rootDir>/apps/api/test"],
+  "moduleFileExtensions": ["js", "json", "ts", "node"],
+
+  "transform": {
+    "^.+\\.ts$": ["ts-jest", { "tsconfig": "<rootDir>/tsconfig.json", "isolatedModules": false }]
+  },
+
+  "moduleNameMapper": {
+    "^@library/common$": "<rootDir>/libs/common/src",
+    "^@library/common/(.*)$": "<rootDir>/libs/common/src/$1",
+    "^@library/database$": "<rootDir>/libs/database/src",
+    "^@library/database/(.*)$": "<rootDir>/libs/database/src/$1",
+    "^@library/storage$": "<rootDir>/libs/storage/src",
+    "^@library/storage/(.*)$": "<rootDir>/libs/storage/src/$1",
+    "^@library/notifications$": "<rootDir>/libs/notifications/src",
+    "^@library/notifications/(.*)$": "<rootDir>/libs/notifications/src/$1",
+    "^@api/(.*)$": "<rootDir>/apps/api/src/$1"
+  },
+
+  "setupFilesAfterEnv": ["<rootDir>/apps/api/test/setup/jest.setup.ts"],
+
+  "testPathIgnorePatterns": ["/node_modules/", "/dist/", "/coverage/"],
+  "modulePathIgnorePatterns": ["<rootDir>/dist/"],
+
+  "maxWorkers": 1,
+  "testTimeout": 30000,
+  "detectOpenHandles": true,
+  "forceExit": false,
+
+  "clearMocks": true,
+  "restoreMocks": true,
+
+  "coverageDirectory": "<rootDir>/coverage-e2e",
+  "coverageReporters": ["text-summary", "lcov"],
+  "collectCoverageFrom": [
+    "apps/api/src/**/*.ts",
+    "!**/*.module.ts",
+    "!**/*.entity.ts",
+    "!**/main.ts",
+    "!**/seeders/**",
+    "!**/*.spec.ts",
+    "!**/*.d.ts"
+  ]
+}

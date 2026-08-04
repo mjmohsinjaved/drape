@@ -1,0 +1,31 @@
+{
+  "browse": {
+    "title": "Browse the collection",
+    "description": "Filter by category, colour, price and how heavy the work is.",
+    "next1": "The catalog grid, server-rendered, with the filter bar as a client island.",
+    "next2": "Filters mirrored to the query string, so a filtered view can be shared."
+  },
+  "category": {
+    "title": "In this category",
+    "description": "Everything in this part of the collection, filtered the way you left it.",
+    "next1": "Category-scoped grid with the same filters and the same sharing behaviour.",
+    "next2": "Breadcrumb into the parent category, and sibling categories alongside."
+  },
+  "garment": {
+    "title": "The piece in detail",
+    "description": "Sizes, price and fabric, with the option to try it on.",
+    "next1": "Server-rendered detail with generateMetadata and JSON-LD for search.",
+    "next2": "The try-on action, gated on consent and a saved photo — never on browsing."
+  },
+  "landing": {
+    "metaTitle": "Bridal and formal wear you can try on",
+    "metaDescription": "Browse the collection and try pieces on to build a shortlist before you visit the studio.",
+    "heroTitle": "Narrow it down before you visit",
+    "heroBody": "Browse the collection, try pieces on, and keep the ones worth seeing in person.",
+    "heroAction": "Browse the collection",
+    "heroSecondary": "Create an account",
+    "heroNote": "A try-on is an approximate guide for shortlisting. Fabric fall, embroidery detail and length will differ in person.",
+    "categoriesTitle": "Start with a category",
+    "newArrivalsTitle": "New this week"
+  }
+}

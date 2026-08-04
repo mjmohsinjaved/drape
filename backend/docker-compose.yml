@@ -1,0 +1,56 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# LOCAL DEVELOPMENT ONLY.
+#
+# This file exists so a developer can get PostgreSQL 16 up with one command.
+# It is not a deployment artefact: it is never used in staging or production,
+# it holds no secrets, and it has no fallback credentials. Every value comes
+# from backend/.env (see .env.example) and the stack refuses to start if a
+# required variable is missing.
+#
+#   cd backend && docker compose up -d
+#
+# Uploaded media is NOT mounted here. Images live under STORAGE_ROOT on the
+# host (default D:/drape-storage), outside the repository, written by the API
+# process directly — see README.md "Storage".
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: drape-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in backend/.env}
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in backend/.env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in backend/.env — there is no default}
+      # Deterministic collation so index ordering matches across machines.
+      POSTGRES_INITDB_ARGS: '--encoding=UTF8 --locale=C'
+      TZ: UTC
+      PGTZ: UTC
+    ports:
+      - '${POSTGRES_PORT:-5432}:5432'
+    volumes:
+      - drape-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  adminer:
+    image: adminer:latest
+    container_name: drape-adminer
+    restart: unless-stopped
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+      ADMINER_DESIGN: dracula
+    ports:
+      - '${ADMINER_PORT:-8080}:8080'
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  drape-postgres-data:
+    name: drape-postgres-data

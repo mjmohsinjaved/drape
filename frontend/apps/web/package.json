@@ -1,0 +1,43 @@
+{
+  "name": "web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Drape — the one Next.js app that serves both the admin console and the consumer fitting room (PRD S-2).",
+  "license": "UNLICENSED",
+  "scripts": {
+    "dev": "next dev --port 3000",
+    "build": "next build",
+    "start": "next start --port 3000",
+    "lint": "eslint . --max-warnings 0",
+    "lint:fix": "eslint . --fix",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "clean": "node -e \"const f=require('fs');for(const d of ['.next','.turbo','coverage'])f.rmSync(d,{recursive:true,force:true})\""
+  },
+  "dependencies": {
+    "@repo/api-client": "*",
+    "@repo/store": "*",
+    "@repo/ui": "*",
+    "@repo/utils": "*",
+    "@t3-oss/env-nextjs": "^0.13.4",
+    "lucide-react": "^0.507.0",
+    "next": "^15.3.1",
+    "next-intl": "^4.1.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "server-only": "^0.0.1",
+    "zod": "^3.24.4"
+  },
+  "devDependencies": {
+    "@repo/config-eslint": "*",
+    "@repo/config-tailwind": "*",
+    "@repo/config-typescript": "*",
+    "@tailwindcss/postcss": "^4.1.5",
+    "@types/node": "^22.15.3",
+    "@types/react": "^19.1.2",
+    "@types/react-dom": "^19.1.2",
+    "eslint": "^9.26.0",
+    "tailwindcss": "^4.1.5",
+    "typescript": "^5.8.3"
+  }
+}

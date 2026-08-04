@@ -1,0 +1,38 @@
+{
+  "name": "@repo/utils",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Pure, framework-free helpers shared across the Drape frontend. Source-first: consumers transpile it via next.config transpilePackages.",
+  "license": "UNLICENSED",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "lint": "eslint . --max-warnings 0",
+    "lint:fix": "eslint . --fix",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "node -e \"const f=require('fs');for(const d of ['.turbo','coverage'])f.rmSync(d,{recursive:true,force:true})\""
+  },
+  "dependencies": {
+    "clsx": "^2.1.1",
+    "date-fns": "^4.1.0",
+    "tailwind-merge": "^3.3.0"
+  },
+  "devDependencies": {
+    "@repo/config-eslint": "*",
+    "@repo/config-typescript": "*",
+    "eslint": "^9.26.0",
+    "typescript": "^5.8.3",
+    "vitest": "^3.1.2"
+  }
+}

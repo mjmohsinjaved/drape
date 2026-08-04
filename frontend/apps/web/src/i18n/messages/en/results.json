@@ -1,0 +1,14 @@
+{
+  "list": {
+    "title": "Your try-ons",
+    "description": "Every piece you've tried on, newest first.",
+    "next1": "The history list, grouped by photo, with filters as a client island.",
+    "next2": "Each entry keeps its verdict, and a piece no longer listed is labelled as such."
+  },
+  "detail": {
+    "title": "Your try-on",
+    "description": "Compare it with the studio photo, look closer, and say what you think.",
+    "next1": "Compare and zoom, with the shortlisting caption always present.",
+    "next2": "The verdict controls, and the shortlist action beside them."
+  }
+}

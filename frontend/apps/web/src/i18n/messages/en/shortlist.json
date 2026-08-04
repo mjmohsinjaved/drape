@@ -1,0 +1,8 @@
+{
+  "list": {
+    "title": "Your shortlist",
+    "description": "The pieces worth seeing in person. Drag to put them in order.",
+    "next1": "The list with drag-to-rank, and the order held optimistically during a drag.",
+    "next2": "The empty state shows how to start, and the enquiry action sits at the end."
+  }
+}

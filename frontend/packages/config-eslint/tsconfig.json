@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "//": "This package ships ESM JavaScript only. The config exists for editor support and so the workspace rule 'every package has a tsconfig extending the shared base' holds uniformly.",
+  "extends": "@repo/config-typescript/base.json",
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false
+  },
+  "include": ["*.js"],
+  "exclude": ["node_modules"]
+}

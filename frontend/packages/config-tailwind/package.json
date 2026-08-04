@@ -1,0 +1,34 @@
+{
+  "name": "@repo/config-tailwind",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared Tailwind v4 preset for Drape. Maps the ARCHITECTURE §6.1 design tokens onto Tailwind's theme and adds the §6.1/§6.2 admin density scale. CSS-first: there is no JS config.",
+  "license": "UNLICENSED",
+  "sideEffects": [
+    "*.css"
+  ],
+  "exports": {
+    ".": "./preset.css",
+    "./preset.css": "./preset.css",
+    "./theme.css": "./theme.css",
+    "./density.css": "./density.css",
+    "./utilities.css": "./utilities.css"
+  },
+  "files": [
+    "preset.css",
+    "theme.css",
+    "density.css",
+    "utilities.css",
+    "README.md"
+  ],
+  "scripts": {
+    "lint": "echo \"@repo/config-tailwind is CSS-only; nothing to lint\"",
+    "lint:fix": "echo \"@repo/config-tailwind is CSS-only; nothing to lint\"",
+    "typecheck": "echo \"@repo/config-tailwind is CSS-only; nothing to typecheck\"",
+    "clean": "node -e \"require('fs').rmSync('.turbo',{recursive:true,force:true})\""
+  },
+  "peerDependencies": {
+    "tailwindcss": "^4.1.0"
+  }
+}

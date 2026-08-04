@@ -1,0 +1,226 @@
+/*
+ * Drape design system — global stylesheet.
+ * ==================================================================
+ * An app's own globals.css is one line plus its @source globs:
+ *
+ *   @import '@repo/ui/styles/globals.css';
+ *   @source '../../../../packages/ui/src';
+ *
+ * Order is load-bearing: tokens are declared unlayered before the preset, so
+ * they outrank anything Tailwind emits into `@layer theme`.
+ */
+
+@import './tokens.css';
+@import '@repo/config-tailwind';
+
+/* The design system's own sources, so class names used only inside @repo/ui
+   survive Tailwind's scan when an app imports this file directly. */
+@source '../';
+
+@layer base {
+  /* ---------------------------------------------------------------- *
+   * Document
+   * ---------------------------------------------------------------- */
+  html {
+    /* No scroll anchoring surprises while a result streams in (D-8). */
+    overflow-anchor: auto;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    color-scheme: light;
+  }
+
+  html.dark {
+    color-scheme: dark;
+  }
+
+  body {
+    background-color: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-body);
+    font-size: var(--text-base);
+    line-height: var(--leading-base);
+    /* Nastaliq is unreadable when the browser synthesises weights. */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    /* RTL-safe default: never `text-align: left`. */
+    text-align: start;
+  }
+
+  /* ---------------------------------------------------------------- *
+   * Headings use the display face. §6.1 keeps it for headings, product
+   * names and the result-reveal caption heading only — never body copy.
+   * ---------------------------------------------------------------- */
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    text-wrap: balance;
+  }
+
+  h5,
+  h6 {
+    font-family: var(--font-body);
+    font-weight: 600;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  /* SKUs, ids and audit metadata. Admin only. */
+  code,
+  kbd,
+  samp,
+  pre {
+    font-family: var(--font-mono);
+  }
+
+  /* ---------------------------------------------------------------- *
+   * Focus (D-10, D-20).
+   * A visible ring on EVERY interactive element, drawn with --shadow-focus
+   * so it reads on canvas, surface and brand fills alike. Components may
+   * re-draw it; nothing may remove it.
+   * ---------------------------------------------------------------- */
+  :where(
+      a[href],
+      area[href],
+      button,
+      input,
+      select,
+      textarea,
+      summary,
+      [tabindex]:not([tabindex='-1']),
+      [contenteditable='true'],
+      [role='button'],
+      [role='link'],
+      [role='checkbox'],
+      [role='radio'],
+      [role='switch'],
+      [role='tab'],
+      [role='menuitem'],
+      [role='menuitemcheckbox'],
+      [role='menuitemradio'],
+      [role='option'],
+      [role='slider'],
+      [role='spinbutton'],
+      [role='treeitem']
+    ):focus-visible {
+    outline: none;
+    box-shadow: var(--shadow-focus);
+    /* Keep the ring visible when the element is clipped by a scroll container. */
+    z-index: 1;
+    position: relative;
+  }
+
+  /* Mouse users do not get the ring; keyboard users always do. The
+     :focus-visible rule above is the only source of truth. */
+  :where(button, [role='button']):focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  /* ---------------------------------------------------------------- *
+   * Selection and placeholders
+   * ---------------------------------------------------------------- */
+  ::selection {
+    background-color: var(--color-brand-tint);
+    color: var(--color-ink);
+  }
+
+  ::placeholder {
+    color: var(--color-ink-subtle);
+    opacity: 1;
+  }
+
+  /* ---------------------------------------------------------------- *
+   * Borders and rules default to the token, never to Tailwind's stock grey.
+   * ---------------------------------------------------------------- */
+  *,
+  ::before,
+  ::after {
+    border-color: var(--color-line);
+  }
+
+  hr {
+    border-block-start-width: var(--border-hairline);
+    border-color: var(--color-line);
+  }
+
+  /* ---------------------------------------------------------------- *
+   * Media. Images never overflow their container and never carry an
+   * intrinsic layout shift (D-8).
+   * ---------------------------------------------------------------- */
+  img,
+  svg,
+  video,
+  canvas,
+  picture {
+    display: block;
+    max-inline-size: 100%;
+    block-size: auto;
+  }
+
+  /* ---------------------------------------------------------------- *
+   * RTL-safe defaults (§6.7).
+   * There is not one [dir='rtl'] selector in this codebase. Everything below
+   * is either direction-neutral or logical.
+   * ---------------------------------------------------------------- */
+  th {
+    text-align: start;
+    font-weight: 600;
+  }
+
+  caption {
+    text-align: start;
+  }
+
+  ol,
+  ul {
+    padding-inline-start: 0;
+  }
+
+  /* Numerals stay Latin in both locales — admin tables and prices depend on
+     it (§6.7). */
+  [lang='ur'] {
+    font-variant-numeric: lining-nums tabular-nums;
+  }
+
+  /* Tabular figures wherever numbers must line up in a column. */
+  table,
+  [data-numeric] {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---------------------------------------------------------------- *
+   * Scrollbars, styled without hiding them — a hidden scrollbar is a
+   * keyboard and low-vision trap.
+   * ---------------------------------------------------------------- */
+  * {
+    scrollbar-color: var(--color-line-strong) transparent;
+    scrollbar-width: thin;
+  }
+}
+
+@layer components {
+  /* Nothing here yet. Atoms live in @repo/ui/src/components and style
+     themselves with utilities; this layer exists so an app can add a
+     composite without fighting utility specificity. */
+}
+
+/* ================================================================== *
+ * prefers-reduced-motion (D-11).
+ * Verbatim from §6.1. Deliberately outside @layer so it outranks every
+ * animation an atom or an app declares — including inline styles' layer
+ * ordering. Motion is purposeful and short, and it is always optional.
+ * ================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "consent": {
+    "title": "Before you upload a photo",
+    "description": "What happens to your photo, how long we keep it, and how to remove it.",
+    "next1": "The policy body, server-rendered from the current published version.",
+    "next2": "The accept action, with nothing pre-checked and no visual pressure."
+  },
+  "photos": {
+    "title": "Your photos",
+    "description": "The photos you've saved for trying pieces on. Remove any of them whenever you like.",
+    "next1": "The saved list with a clear delete on each, and what deleting affects.",
+    "next2": "The empty state points at adding the first photo, not at the absence of one."
+  },
+  "photoNew": {
+    "title": "Add a photo",
+    "description": "A clear, front-facing photo in even light gives the closest guide.",
+    "next1": "Drawn guidance illustrations — never photographs of a person.",
+    "next2": "The client-side validator and the upload, with per-file progress."
+  },
+  "profile": {
+    "title": "Profile",
+    "description": "Your name, phone number and the language you prefer.",
+    "next1": "The profile form, and the event details that shape suggestions.",
+    "next2": "Phone confirmation, which is only needed before sending an enquiry."
+  },
+  "security": {
+    "title": "Sign-in and security",
+    "description": "Your password, two-factor authentication, and where you're signed in.",
+    "next1": "Password change, which signs out every other device.",
+    "next2": "The active session list, each one revocable on its own."
+  },
+  "notifications": {
+    "title": "Notifications",
+    "description": "Choose what we email or text you about.",
+    "next1": "Per-channel preferences, saved as you change them.",
+    "next2": "A plain description of what each notification actually says."
+  },
+  "data": {
+    "title": "Your data",
+    "description": "Everything stored about you, an export you can download, and deletion.",
+    "next1": "The full picture: profile, photos, try-ons, shortlist, enquiries and consent date.",
+    "next2": "Export and delete, with deletion confirmed by typing, and finished within a day."
+  }
+}

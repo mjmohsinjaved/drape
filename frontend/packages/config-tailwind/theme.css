@@ -1,0 +1,188 @@
+/*
+ * @repo/config-tailwind — theme mapping
+ * ------------------------------------------------------------------
+ * ARCHITECTURE §6.1 tokens -> Tailwind v4 theme namespaces.
+ *
+ * NOTHING IN THIS FILE HOLDS A VALUE. Every entry points at a custom property
+ * declared by `@repo/ui/styles/tokens.css`, which is the single place in the
+ * frontend where a raw colour may appear (PRD D-1).
+ *
+ * `@theme inline` is deliberate: the declared value is copied into the generated
+ * utility, so `bg-brand` compiles to `background-color: var(--color-brand)` and
+ * therefore re-resolves whenever the token changes scope — `.dark` on <html>, or
+ * the runtime brand override the backend supplies (PRD A-27). A non-inline theme
+ * would freeze the value at build time and A-27 would stop working.
+ *
+ * The `*: initial` resets remove Tailwind's stock palette, type scale, radii,
+ * shadows and easings, so `bg-red-500`, `text-2xl` &c. simply do not exist. D-1
+ * is then enforced by the compiler, not only by review.
+ */
+
+@theme {
+  /* Tailwind's stock palette, type scale, radii and shadows are deleted, so
+     `bg-red-500`, `text-9xl` and `rounded-4xl` do not compile and D-1 is enforced
+     by the build rather than by review.
+
+     Three namespaces are deliberately NOT reset:
+     - `--font-*`, because the reset would take `--font-weight-*` with it and
+       `font-medium` / `font-semibold` are used everywhere. The three stock
+       families are overridden by name below instead.
+     - `--container-*`, because `max-w-sm|md|lg|3xl` read from it and the dialogs
+       and sheets are sized with those.
+     - `--breakpoint-*`, which carries no colour or spacing decision. */
+  --color-*: initial;
+  --text-*: initial;
+  --radius-*: initial;
+  --shadow-*: initial;
+  --inset-shadow-*: initial;
+  --ease-*: initial;
+}
+
+@theme inline {
+  /* ---------------------------------------------------------------- *
+   * Colour — "Daylight" (light) / "Lamplight" (dark).  §6.1
+   * Both modes are declared in tokens.css; the utilities below follow
+   * whichever is in scope.
+   * ---------------------------------------------------------------- */
+  --color-transparent: var(--color-transparent);
+  --color-current: var(--color-current);
+  --color-inherit: var(--color-inherit);
+
+  --color-canvas: var(--color-canvas);
+  --color-surface: var(--color-surface);
+  --color-surface-raised: var(--color-surface-raised);
+  --color-surface-sunken: var(--color-surface-sunken);
+
+  --color-ink: var(--color-ink);
+  --color-ink-muted: var(--color-ink-muted);
+  --color-ink-subtle: var(--color-ink-subtle);
+
+  --color-line: var(--color-line);
+  --color-line-strong: var(--color-line-strong);
+
+  --color-brand: var(--color-brand);
+  --color-brand-hover: var(--color-brand-hover);
+  --color-brand-active: var(--color-brand-active);
+  --color-brand-fg: var(--color-brand-fg);
+  --color-brand-tint: var(--color-brand-tint);
+
+  --color-gold: var(--color-gold);
+  --color-gold-text: var(--color-gold-text);
+  --color-gold-tint: var(--color-gold-tint);
+
+  --color-success: var(--color-success);
+  --color-success-tint: var(--color-success-tint);
+  --color-warning: var(--color-warning);
+  --color-warning-tint: var(--color-warning-tint);
+  --color-danger: var(--color-danger);
+  --color-danger-tint: var(--color-danger-tint);
+  --color-info: var(--color-info);
+  --color-info-tint: var(--color-info-tint);
+
+  --color-focus: var(--color-focus);
+  --color-overlay: var(--color-overlay);
+  --color-skeleton: var(--color-skeleton);
+
+  /* ---------------------------------------------------------------- *
+   * Typefaces (D-2).  §6.1
+   * ---------------------------------------------------------------- */
+  --font-display: var(--font-display);
+  --font-body: var(--font-body);
+  --font-urdu: var(--font-urdu);
+  --font-mono: var(--font-mono);
+  /* Tailwind's preflight reads --font-sans for the document default. */
+  --font-sans: var(--font-body);
+
+  /* ---------------------------------------------------------------- *
+   * Type scale — fixed (D-2).  §6.1
+   * Line height and tracking ride along on the Tailwind `--text-*--*`
+   * sub-keys, so `text-sm` sets all three in one utility.
+   * ---------------------------------------------------------------- */
+  --text-2xs: var(--text-2xs);
+  --text-2xs--line-height: var(--leading-2xs);
+  --text-2xs--letter-spacing: var(--tracking-2xs);
+
+  --text-xs: var(--text-xs);
+  --text-xs--line-height: var(--leading-xs);
+  --text-xs--letter-spacing: var(--tracking-xs);
+
+  --text-sm: var(--text-sm);
+  --text-sm--line-height: var(--leading-sm);
+  --text-sm--letter-spacing: var(--tracking-sm);
+
+  --text-base: var(--text-base);
+  --text-base--line-height: var(--leading-base);
+  --text-base--letter-spacing: var(--tracking-base);
+
+  --text-lg: var(--text-lg);
+  --text-lg--line-height: var(--leading-lg);
+  --text-lg--letter-spacing: var(--tracking-lg);
+
+  --text-xl: var(--text-xl);
+  --text-xl--line-height: var(--leading-xl);
+  --text-xl--letter-spacing: var(--tracking-xl);
+
+  --text-2xl: var(--text-2xl);
+  --text-2xl--line-height: var(--leading-2xl);
+  --text-2xl--letter-spacing: var(--tracking-2xl);
+
+  --text-3xl: var(--text-3xl);
+  --text-3xl--line-height: var(--leading-3xl);
+  --text-3xl--letter-spacing: var(--tracking-3xl);
+
+  --text-4xl: var(--text-4xl);
+  --text-4xl--line-height: var(--leading-4xl);
+  --text-4xl--letter-spacing: var(--tracking-4xl);
+
+  --text-5xl: var(--text-5xl);
+  --text-5xl--line-height: var(--leading-5xl);
+  --text-5xl--letter-spacing: var(--tracking-5xl);
+
+  /* ---------------------------------------------------------------- *
+   * Spacing — 4px base.  §6.1
+   * `--spacing` is Tailwind v4's multiplier: p-4 === 4 * 0.25rem === --space-4.
+   * The named --space-* tokens stay available for hand-written CSS.
+   * ---------------------------------------------------------------- */
+  --spacing: var(--space-1);
+
+  /* ---------------------------------------------------------------- *
+   * Radii.  §6.1  Consumer surfaces use lg/xl; admin uses sm/md.
+   * ---------------------------------------------------------------- */
+  --radius-xs: var(--radius-xs);
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+  --radius-2xl: var(--radius-2xl);
+  --radius-full: var(--radius-full);
+
+  /* ---------------------------------------------------------------- *
+   * Shadows — warm-tinted, never pure black.  §6.1
+   * ---------------------------------------------------------------- */
+  --shadow-xs: var(--shadow-xs);
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+  --shadow-xl: var(--shadow-xl);
+  --shadow-focus: var(--shadow-focus);
+
+  /* ---------------------------------------------------------------- *
+   * Motion (D-11).  §6.1
+   * Tailwind v4 has no --duration-* namespace, so the durations are exposed
+   * as utilities in utilities.css. The easings map natively.
+   * ---------------------------------------------------------------- */
+  --ease-out: var(--ease-out);
+  --ease-in-out: var(--ease-in-out);
+
+  /* ---------------------------------------------------------------- *
+   * Containers and shell metrics.  §6.2
+   * ---------------------------------------------------------------- */
+  --container-consumer: var(--container-consumer);
+  --container-admin: var(--container-admin);
+  --container-prose: var(--container-prose);
+
+  /* ---------------------------------------------------------------- *
+   * Breakpoints — layouts hold from 360px (D-9).
+   * ---------------------------------------------------------------- */
+  --breakpoint-xs: 360px;
+}

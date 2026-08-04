@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "//": "This package ships JSON only. The config exists so the workspace rule 'every package has a tsconfig extending the shared base' holds uniformly.",
+  "extends": "./base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false
+  },
+  "include": [],
+  "exclude": ["node_modules"]
+}

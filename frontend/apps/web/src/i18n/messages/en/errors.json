@@ -1,0 +1,39 @@
+{
+  "reference": "Reference: {id}",
+  "generic": {
+    "title": "This screen didn't load",
+    "body": "Something went wrong on our side. Try again — nothing you saved has been lost.",
+    "action": "Try again"
+  },
+  "scoped": {
+    "catalog": {
+      "title": "The collection didn't load"
+    },
+    "admin": {
+      "title": "This part of the console didn't load"
+    }
+  },
+  "notFound": {
+    "title": "We can't find that page",
+    "body": "The link may have changed, or the piece may no longer be listed. The collection is still here.",
+    "action": "Browse the collection"
+  },
+  "noAccess": {
+    "title": "This part isn't open to your account",
+    "body": "Nothing is wrong with your account — this area belongs to the studio team. Your fitting room is where you left it.",
+    "action": "Back to the fitting room"
+  },
+  "offline": {
+    "title": "You're offline",
+    "body": "We'll pick up where you left off as soon as you're back. Your shortlist is saved.",
+    "action": "Browse the collection"
+  },
+  "network": {
+    "title": "You appear to be offline",
+    "body": "We'll retry when you're back."
+  },
+  "timeout": {
+    "title": "That took too long",
+    "body": "Try again."
+  }
+}

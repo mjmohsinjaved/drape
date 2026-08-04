@@ -1,0 +1,175 @@
+/*
+ * @repo/config-tailwind — utilities
+ * ------------------------------------------------------------------
+ * Everything Tailwind v4 has no theme namespace for: motion durations, the
+ * density scale, the two gutter rhythms, the focus ring and the 44px target
+ * floor. All of them are written with logical properties only (§6.7) — a
+ * physical `left`/`right`/`margin-left` must never appear here or in a
+ * component, because there are no `[dir='rtl']` overrides anywhere in the
+ * codebase to repair them.
+ */
+
+/* ---------------------------------------------------------------- *
+ * Motion (D-11) — §6.1
+ * ---------------------------------------------------------------- */
+@utility duration-instant {
+  transition-duration: var(--duration-instant);
+  animation-duration: var(--duration-instant);
+}
+@utility duration-fast {
+  transition-duration: var(--duration-fast);
+  animation-duration: var(--duration-fast);
+}
+@utility duration-base {
+  transition-duration: var(--duration-base);
+  animation-duration: var(--duration-base);
+}
+@utility duration-slow {
+  transition-duration: var(--duration-slow);
+  animation-duration: var(--duration-slow);
+}
+
+/* ---------------------------------------------------------------- *
+ * Focus (D-10, D-20) — the ring is never removed, only re-drawn.
+ * ---------------------------------------------------------------- */
+@utility focus-ring {
+  &:focus-visible {
+    outline: none;
+    box-shadow: var(--shadow-focus);
+  }
+}
+
+/* The same ring for a control whose child receives focus (inputs inside a
+   composed field, table cells, dropzones). */
+@utility focus-ring-within {
+  &:has(:focus-visible) {
+    outline: none;
+    box-shadow: var(--shadow-focus);
+  }
+}
+
+/* ---------------------------------------------------------------- *
+ * Touch targets (D-10) — 44 x 44 minimum, regardless of visual size.
+ * ---------------------------------------------------------------- */
+@utility touch-target {
+  min-inline-size: 44px;
+  min-block-size: 44px;
+}
+
+/* Visual box stays small, hit area does not. Used by icon buttons and the
+   compact admin controls. */
+@utility touch-target-pseudo {
+  position: relative;
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset-block-start: 50%;
+    inset-inline-start: 50%;
+    translate: -50% -50%;
+    min-inline-size: 44px;
+    min-block-size: 44px;
+    inline-size: 100%;
+    block-size: 100%;
+  }
+}
+
+/* ---------------------------------------------------------------- *
+ * Admin density scale (D-4) — §6.1/§6.2
+ * ---------------------------------------------------------------- */
+@utility h-row {
+  block-size: var(--density-row-height);
+}
+@utility min-h-row {
+  min-block-size: var(--density-row-height);
+}
+@utility h-control {
+  block-size: var(--density-control-height);
+}
+@utility min-h-control {
+  min-block-size: var(--density-control-height);
+}
+@utility px-cell {
+  padding-inline: var(--density-cell-px);
+}
+@utility py-cell {
+  padding-block: var(--density-cell-py);
+}
+@utility p-cell {
+  padding-inline: var(--density-cell-px);
+  padding-block: var(--density-cell-py);
+}
+@utility text-density {
+  font-size: var(--density-font-size);
+}
+@utility gap-stack {
+  gap: var(--density-stack-gap);
+}
+@utility gap-section {
+  gap: var(--density-section-gap);
+}
+
+/* ---------------------------------------------------------------- *
+ * Gutters — the two layout languages (D-4).  §6.2
+ * Consumer gutters grow with the viewport; admin gutters are fixed.
+ * ---------------------------------------------------------------- */
+@utility gutter-consumer {
+  padding-inline: var(--space-5);
+
+  @media (width >= 768px) {
+    padding-inline: var(--space-8);
+  }
+
+  @media (width >= 1200px) {
+    padding-inline: var(--space-12);
+  }
+}
+
+@utility gutter-admin {
+  padding-inline: var(--space-4);
+}
+
+/* ---------------------------------------------------------------- *
+ * Shell metrics — §6.2
+ * ---------------------------------------------------------------- */
+@utility w-sidenav {
+  inline-size: var(--sidenav-width);
+}
+@utility w-sidenav-collapsed {
+  inline-size: var(--sidenav-width-collapsed);
+}
+@utility h-topbar-consumer {
+  block-size: var(--topbar-height-consumer);
+}
+@utility h-topbar-admin {
+  block-size: var(--topbar-height-admin);
+}
+@utility h-tabbar {
+  block-size: var(--tabbar-height);
+}
+
+/* ---------------------------------------------------------------- *
+ * Skeleton shimmer (D-8). Sits still under prefers-reduced-motion —
+ * globals.css clamps every animation to 1ms.
+ * ---------------------------------------------------------------- */
+@utility skeleton-sheen {
+  background-color: var(--color-skeleton);
+  background-image: linear-gradient(
+    to var(--sheen-direction, right),
+    transparent 0%,
+    color-mix(in oklab, var(--color-surface) 60%, transparent) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+  animation: drape-sheen 1.4s var(--ease-in-out) infinite;
+}
+
+@keyframes drape-sheen {
+  from {
+    background-position: -100% 0;
+  }
+  to {
+    background-position: 200% 0;
+  }
+}

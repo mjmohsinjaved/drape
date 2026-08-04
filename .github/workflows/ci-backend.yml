@@ -1,0 +1,103 @@
+name: CI — backend
+
+on:
+  push:
+    branches: [main]
+    paths: ['backend/**', '.github/workflows/ci-backend.yml']
+  pull_request:
+    paths: ['backend/**', '.github/workflows/ci-backend.yml']
+
+defaults:
+  run:
+    working-directory: backend
+
+jobs:
+  verify:
+    name: typecheck · lint · test · build
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: drape
+          POSTGRES_PASSWORD: drape_ci_only
+          POSTGRES_DB: drape_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U drape"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      NODE_ENV: test
+      # CI-only values. Nothing here is a real credential, and none of these
+      # have working defaults in the application itself (PRD E-2).
+      DATABASE_URL: postgres://drape:drape_ci_only@localhost:5432/drape_test
+      SESSION_SECRET: ci_session_secret_not_used_outside_ci_0000000000
+      CSRF_SECRET: ci_csrf_secret_not_used_outside_ci_00000000000000
+      STORAGE_URL_SECRET: ci_storage_secret_not_used_outside_ci_0000000
+      STORAGE_ROOT: ${{ runner.temp }}/drape-storage
+      # The upstream account has a 10-image budget — CI must never spend it.
+      TRYON_DRIVER: mock
+      EMAIL_DRIVER: console
+      SMS_DRIVER: console
+      WEB_ORIGIN: http://localhost:3000
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - run: npm ci
+
+      - name: Ensure storage root exists outside the repository
+        run: npm run storage:ensure
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Every route declares a role guard (PRD B-5)
+        run: npm run check:guards
+
+      - name: Unit tests
+        run: npm run test:cov
+
+      - name: Migrations apply and revert cleanly (PRD E-3)
+        run: |
+          npm run migration:run
+          npm run migration:revert
+          npm run migration:run
+
+      - name: Seed
+        run: npm run seed
+        env:
+          SEED_ADMIN_EMAIL: ci-admin@example.test
+          SEED_ADMIN_PASSWORD: ci_only_password_$RANDOM
+
+      - name: End-to-end tests
+        run: npm run test:e2e
+
+      - name: Build
+        run: npm run build
+
+      - name: OpenAPI contract is up to date (PRD B-4, E-16)
+        run: |
+          npm run openapi:generate
+          git diff --exit-code openapi.json \
+            || (echo "::error::openapi.json is stale — run 'npm run openapi:generate' and commit the result" && exit 1)
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-coverage
+          path: backend/coverage
+          retention-days: 7

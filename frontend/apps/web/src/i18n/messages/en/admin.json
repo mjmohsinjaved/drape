@@ -1,0 +1,160 @@
+{
+  "categories": {
+    "title": "Categories",
+    "description": "The tree customers browse. Reorder or archive it without breaking a link.",
+    "next1": "The tree with drag reorder, and archive rather than delete.",
+    "next2": "A category in use cannot be removed silently — it says what depends on it."
+  },
+  "catalog": {
+    "title": "Catalog",
+    "description": "Every garment, its publish state and its image health.",
+    "next1": "The dense table with sorting, selection and bulk actions.",
+    "next2": "Keyboard: j and k move, Enter opens, p publishes, / searches."
+  },
+  "catalogNew": {
+    "title": "Add a garment",
+    "description": "Details, images and the test render, in one pass.",
+    "next1": "The editor with drag-and-drop images and per-file progress.",
+    "next2": "Saving as a draft is always available; publishing needs the checks to pass."
+  },
+  "catalogHealth": {
+    "title": "Catalog health",
+    "description": "Garments missing an image, a price or an approved test render.",
+    "next1": "One row per problem, with the fix a click away.",
+    "next2": "Counts that match the dashboard, so the two never disagree."
+  },
+  "garment": {
+    "title": "Garment",
+    "description": "Details, images, the quality report and the test render.",
+    "next1": "The editor, the image manager and the quality report side by side.",
+    "next2": "Publish state changes are audited and confirmed in the same words."
+  },
+  "garmentTestRender": {
+    "title": "Test render",
+    "description": "The source photo beside the render. Approve it, or send it back with a reason.",
+    "next1": "Side-by-side compare at full width, with zoom on both.",
+    "next2": "Approve and reject, both audited, with the reason required on reject."
+  },
+  "consumers": {
+    "title": "Customers",
+    "description": "Who has signed up, what they've tried on, and what they've asked about.",
+    "next1": "The table with signup date, last activity, generations and shortlist size.",
+    "next2": "Quota overrides and suspension, both audited and both reversible."
+  },
+  "consumer": {
+    "title": "Customer",
+    "description": "Her account, her shortlist and her enquiries. Her photos are never shown here.",
+    "next1": "Renders appear only where she attached them to an enquiry.",
+    "next2": "Quota, suspension and deletion, each with the confirmation it deserves."
+  },
+  "enquiries": {
+    "title": "Enquiries",
+    "description": "The inbox. Anything untouched for a day is flagged.",
+    "next1": "The table, the stale highlight, and the status change in one click.",
+    "next2": "It works on a phone, because enquiries do not wait for a desk."
+  },
+  "enquiry": {
+    "title": "Enquiry",
+    "description": "The pieces, the notes and the status.",
+    "next1": "The detail view with the attached renders and the customer’s message.",
+    "next2": "Notes are append-only, and WhatsApp opens with the message ready."
+  },
+  "moderation": {
+    "title": "Moderation",
+    "description": "Flagged photos and renders, blurred until you choose to open one.",
+    "next1": "The queue with blurred thumbnails and a deliberate reveal.",
+    "next2": "Approve or reject, both audited, with the customer told what happened."
+  },
+  "abuse": {
+    "title": "Abuse",
+    "description": "Rate-limit hits, suspensions and blocked addresses.",
+    "next1": "The list with what triggered each entry and when it expires.",
+    "next2": "Blocking and unblocking, both audited."
+  },
+  "usage": {
+    "title": "Usage",
+    "description": "This month's generations, what they cost, and where the budget lands.",
+    "next1": "Burn rate and projection, with the warning threshold marked.",
+    "next2": "What happens when the budget runs out, stated before it does."
+  },
+  "analytics": {
+    "title": "Analytics",
+    "description": "The funnel, the pieces people try most, and why they pass.",
+    "next1": "Funnel, leaderboard, rejection reasons, categories and activity.",
+    "next2": "Every chart readable without colour alone, and every table exportable."
+  },
+  "audit": {
+    "title": "Audit",
+    "description": "Who changed what, and when.",
+    "next1": "The filterable log, append-only, with the actor and the action on each row.",
+    "next2": "No personal data and no storage keys ever appear in a log line."
+  },
+  "team": {
+    "title": "Team",
+    "description": "Admin accounts and open invitations.",
+    "next1": "Invite, resend and revoke, with the invitation single-use.",
+    "next2": "The last active admin cannot be removed, and no one changes their own role."
+  },
+  "settings": {
+    "title": "Settings",
+    "description": "Brand, quotas, budget and the toggles that shape the storefront.",
+    "next1": "The brand colour and logo, validated for contrast before they are accepted.",
+    "next2": "Quota and budget defaults, each with what it changes stated plainly."
+  },
+  "settingsPolicy": {
+    "title": "Policy",
+    "description": "Publish a new version. Everyone is asked to agree again.",
+    "next1": "The version list, the editor and the publish confirmation.",
+    "next2": "Publishing is deliberate: it says how many people it will affect."
+  },
+  "preview": {
+    "title": "Preview",
+    "description": "See the customer experience without spending a generation.",
+    "next1": "The consumer shell rendered with sample data and generation disabled.",
+    "next2": "A clear marker that this is a preview, so it is never mistaken for live."
+  },
+  "home": {
+    "title": "Console",
+    "description": "Today's enquiries, catalog health and this month's usage.",
+    "next1": "The enquiry inbox with the 24-hour flag, and catalog problems worth fixing.",
+    "next2": "Budget burn and the projection, so a surprise never arrives as a surprise."
+  },
+  "nav": {
+    "label": "Console navigation",
+    "consoleLabel": "Admin console",
+    "openMenu": "Open navigation",
+    "collapse": "Collapse",
+    "expand": "Expand",
+    "search": "Search",
+    "density": {
+      "compact": "Compact rows",
+      "comfortable": "Comfortable rows"
+    },
+    "groups": {
+      "work": "Work",
+      "catalog": "Catalog",
+      "people": "People",
+      "insight": "Insight",
+      "setup": "Setup"
+    },
+    "dashboard": "Dashboard",
+    "admin": "Console",
+    "enquiries": "Enquiries",
+    "moderation": "Moderation",
+    "categories": "Categories",
+    "catalog": "Catalog",
+    "catalogHealth": "Catalog health",
+    "health": "Health",
+    "new": "New",
+    "test-render": "Test render",
+    "consumers": "Customers",
+    "team": "Team",
+    "analytics": "Analytics",
+    "usage": "Usage",
+    "abuse": "Abuse",
+    "audit": "Audit",
+    "settings": "Settings",
+    "policy": "Policy",
+    "preview": "Preview"
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "appName": "Drape",
+  "tagline": "Try pieces on to shortlist them before you visit the studio.",
+  "loading": "Loading",
+  "skipToContent": "Skip to content",
+  "actions": {
+    "retry": "Try again",
+    "back": "Go back",
+    "signIn": "Sign in",
+    "signUp": "Create account",
+    "signOut": "Sign out",
+    "save": "Save",
+    "cancel": "Cancel"
+  },
+  "nav": {
+    "primaryLabel": "Main",
+    "breadcrumbLabel": "Breadcrumb",
+    "dashboard": "Dashboard",
+    "browse": "Browse",
+    "shortlist": "Shortlist",
+    "renders": "Your try-ons",
+    "account": "Account",
+    "photos": "Your photos",
+    "enquiries": "Enquiries",
+    "share": "Shared links",
+    "profile": "Profile",
+    "security": "Sign-in and security",
+    "notifications": "Notifications",
+    "data": "Your data"
+  },
+  "theme": {
+    "label": "Theme",
+    "light": "Daylight",
+    "dark": "Lamplight",
+    "system": "Match my device"
+  },
+  "locale": {
+    "label": "Language"
+  },
+  "userMenu": {
+    "label": "Your account"
+  },
+  "footer": {
+    "shortlistingNote": "A try-on is an approximate guide for shortlisting. Fabric fall, embroidery detail and length will differ in person.",
+    "copyright": "© {year} {name}"
+  },
+  "placeholder": {
+    "badge": "{workstream} builds this",
+    "nextTitle": "What lands here"
+  },
+  "dashboard": {
+    "title": "Your fitting room",
+    "description": "Your try-ons, your shortlist and your enquiries, in one place.",
+    "next1": "Try-ons left this month, and what happens when they run out.",
+    "next2": "Your shortlist, your recent try-ons and the next step from each."
+  }
+}
