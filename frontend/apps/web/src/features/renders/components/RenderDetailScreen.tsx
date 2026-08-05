@@ -4,10 +4,10 @@ import { notFound } from 'next/navigation';
 import { ChevronLeft } from 'lucide-react';
 import { getFormatter, getTranslations } from 'next-intl/server';
 
-import { Badge, Button, Callout, ErrorState } from '@repo/ui';
+import { Badge, Button, Callout } from '@repo/ui';
 
 import { DirectionalIcon } from '@/components/DirectionalIcon';
-import { DeniedState } from '@/components/states';
+import { DeniedState, ScreenError } from '@/components/states';
 import { getCatalogGarment } from '@/features/catalog-browse/api/endpoints';
 import { formatMoney } from '@/features/catalog-browse/lib/format';
 import { DeleteMyDataLink } from '@/features/consent/components/DeleteMyDataLink';
@@ -15,7 +15,7 @@ import { getResultServer } from '@/features/renders/api/server';
 import { RenderViewer } from '@/features/renders/components/RenderViewer';
 import { VerdictControls } from '@/features/renders/components/VerdictControls';
 import { getShortlistServer } from '@/features/shortlist/api/server';
-import { isPermissionDenied } from '@/features/tryon/lib/error-copy';
+import { isPermissionDenied, isRetryableCode } from '@/features/tryon/lib/error-copy';
 import { routes } from '@/lib/routes';
 
 import type { Locale } from '@/i18n/config';
@@ -53,9 +53,11 @@ export async function RenderDetailScreen({ locale, resultId }: RenderDetailScree
 
     const key = `errors.${result.error.errorCode}`;
     return (
-      <ErrorState
+      <ScreenError
         title={t('errors.detailTitle')}
         description={t.has(key) ? t(key) : t('errors.description')}
+        requestId={result.error.requestId}
+        retryable={isRetryableCode(result.error.errorCode)}
         secondaryAction={
           <Button asChild variant="secondary">
             <Link href={routes.renders(locale)}>{t('detail.back')}</Link>

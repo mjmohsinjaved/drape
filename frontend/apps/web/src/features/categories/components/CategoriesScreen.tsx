@@ -400,7 +400,14 @@ export function CategoriesScreen({ initialTree }: CategoriesScreenProps) {
                 </TableCell>
 
                 <TableCell>
-                  <div className="flex items-center justify-end gap-0.5">
+                  {/* D-10 holds per control and has to hold for the cluster too. Each button is
+                      32px of paint with a 44px hit area centred on it, so at `gap-0.5` the
+                      centres sat 34px apart and every pair of hit areas overlapped by 10px —
+                      six controls, five collisions, and only the last of each pair reachable.
+                      `gap-3` is 12px, the exact width at which 32 + gap = 44 and the hit areas
+                      meet without overlapping. The buttons stay 32px: the admin density is in
+                      the control, not in the space between two things you have to hit. */}
+                  <div className="flex items-center justify-end gap-3">
                     {/* The keyboard route to reordering. Same mutation as the drag (D-19, D-20). */}
                     <IconButton
                       size="sm"

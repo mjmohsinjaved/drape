@@ -39,7 +39,13 @@
   --color-ink-subtle: #7c6f63; /* Tertiary text, placeholders — 4.6:1 */
 
   --color-line: #e4dacb; /* Hairline borders, table rules */
-  --color-line-strong: #cfc0ab; /* Input borders, dividers that must read */
+  /* Input borders, dividers that must read — 3.09:1 on canvas, 3.27:1 on surface,
+     3.22:1 on surface-raised. This token is the ONLY thing that identifies an input's
+     boundary, which makes it a non-text UI component under WCAG 2.1 SC 1.4.11 and binds
+     it to 3:1, not to taste. The value that shipped (#cfc0ab) measured 1.78:1 on surface.
+     Darkened along the same hue (35°, 27% saturation) so the palette stays warm rather
+     than sliding into a generic grey (PRD D-3). Asserted by contrast.spec.ts. */
+  --color-line-strong: #a58a63;
 
   --color-brand: #71202f; /* Lac red — 10.2:1. Runtime-overridable (A-27) */
   --color-brand-hover: #591626; /* Runtime-overridable (A-27) */
@@ -215,7 +221,10 @@
   --color-ink-subtle: #918477;
 
   --color-line: #2e2721;
-  --color-line-strong: #443a31;
+  /* 3.61:1 on canvas, 3.39:1 on surface, 3.14:1 on surface-raised. Same SC 1.4.11 floor as
+     light mode; the value that shipped (#443a31) measured 1.49:1 on surface-raised. Lightened
+     along the same hue (28°, 16% saturation). */
+  --color-line-strong: #7b6959;
 
   --color-brand: #c96a78; /* 5.4:1. Runtime-overridable (A-27) */
   --color-brand-hover: #d9808c;

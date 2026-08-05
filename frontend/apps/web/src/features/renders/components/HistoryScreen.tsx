@@ -2,9 +2,9 @@ import Link from 'next/link';
 
 import { getTranslations } from 'next-intl/server';
 
-import { Button, EmptyState, ErrorState, ShortlistingCaption } from '@repo/ui';
+import { Button, EmptyState, ShortlistingCaption } from '@repo/ui';
 
-import { DeniedState } from '@/components/states';
+import { DeniedState, PartialDataNotice, ScreenError } from '@/components/states';
 import { DeleteMyDataLink } from '@/features/consent/components/DeleteMyDataLink';
 import { listPhotosServer } from '@/features/photos/api/server';
 import {
@@ -23,7 +23,7 @@ import {
 type  HistoryFilters as Filters } from '@/features/renders/lib/filters';
 import { getShortlistServer } from '@/features/shortlist/api/server';
 import { TryOnTray } from '@/features/tryon/components/TryOnTray';
-import { isPermissionDenied } from '@/features/tryon/lib/error-copy';
+import { isPermissionDenied, isRetryableCode } from '@/features/tryon/lib/error-copy';
 import { routes } from '@/lib/routes';
 
 import type { ResultListItem, Verdict } from '@/features/renders/api/types';
@@ -74,9 +74,11 @@ export async function HistoryScreen({ locale, filters }: HistoryScreenProps) {
 
     const key = `errors.${results.error.errorCode}`;
     return (
-      <ErrorState
+      <ScreenError
         title={t('errors.title')}
         description={t.has(key) ? t(key) : t('errors.description')}
+        requestId={results.error.requestId}
+        retryable={isRetryableCode(results.error.errorCode)}
         secondaryAction={
           <Button asChild variant="secondary">
             <Link href={routes.browse(locale)}>{t('empty.action')}</Link>
@@ -90,12 +92,24 @@ export async function HistoryScreen({ locale, filters }: HistoryScreenProps) {
   const visible = applyClientFilters(results.data, filters, verdicts);
   const totalPages = results.meta?.totalPages ?? 1;
 
+  // Two of the four reads are secondary — her try-ons render without either. But both feed
+  // *filters*, and a filter built from a failed read quietly narrows the list: an empty verdict
+  // map makes every try-on look undecided, and an empty photo list removes grouping altogether.
+  // Neither may pass for the truth, so each one that failed is named.
+  const incomplete: string[] = [];
+  if (!photos.ok) incomplete.push(t('list.partial.photos'));
+  if (!shortlist.ok) incomplete.push(t('list.partial.verdicts'));
+
   return (
     <div className="flex flex-col gap-8">
       <header className="flex flex-col gap-2">
         <h1 className="font-display text-3xl text-balance md:text-4xl">{t('list.title')}</h1>
         <p className="max-w-prose text-ink-muted">{t('list.subtitle')}</p>
       </header>
+
+      {incomplete.length === 0 ? null : (
+        <PartialDataNotice title={t('list.partial.title')} items={incomplete} />
+      )}
 
       <HistoryFilters
         filters={filters}

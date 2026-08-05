@@ -1,11 +1,16 @@
+import Link from 'next/link';
+
 import { getTranslations } from 'next-intl/server';
 
-import { Separator } from '@repo/ui';
+import { Button, Separator } from '@repo/ui';
 
+import { DeniedState, ScreenError } from '@/components/states';
 import { DeleteMyDataLink } from '@/features/consent/components/DeleteMyDataLink';
 import { listPhotosServer } from '@/features/photos/api/server';
 import { PhotoGuidance } from '@/features/photos/components/PhotoGuidance';
 import { PhotoUploader } from '@/features/photos/components/PhotoUploader';
+import { isPermissionDenied, isRetryableCode } from '@/features/tryon/lib/error-copy';
+import { routes } from '@/lib/routes';
 
 import type { Locale } from '@/i18n/config';
 
@@ -22,15 +27,44 @@ export interface AddPhotoScreenProps {
  * enough that a first attempt usually passes. Putting the button above the six drawings would
  * technically satisfy neither.
  *
- * The list read below only answers one question — is this her first photo? — which decides
- * whether the new one silently becomes active. A failure to answer it is not worth blocking the
- * screen for, so it degrades to "not her first", which is the safer default: an upload then
- * never changes which photo her next try-on uses without her saying so.
+ * The list read below answers one question — is this her first photo? — which decides whether
+ * the new one silently becomes active, and whether she is already at the C-16 limit. Both are
+ * facts about her account that the uploader acts on, so a failed read is not degraded away here:
+ * guessing "not her first" would either hand her an inactive photo she expected to use, or walk
+ * her through an upload that the API refuses at the end. The screen says it could not check and
+ * offers the re-read instead.
+ *
+ * All six D-5 states are present: default (guidance and picker), loading (`loading.tsx`), empty
+ * (there is nothing to be empty of — the guidance *is* the screen), error and permission-denied
+ * below, and success (the uploader's own saved state).
  */
 export async function AddPhotoScreen({ locale, returnTo }: AddPhotoScreenProps) {
   const t = await getTranslations({ locale, namespace: 'photos' });
   const existing = await listPhotosServer();
-  const isFirstPhoto = existing.ok && existing.data.length === 0;
+
+  if (!existing.ok) {
+    // S-9 / D-5: an authorisation refusal is the permission-denied state, never an error state
+    // and never a raw 403. Adding a photo needs a session; without one there is nothing to add
+    // it to, so this is the whole screen rather than a notice on it.
+    if (isPermissionDenied(existing.error.errorCode)) return <DeniedState locale={locale} />;
+
+    const key = `errors.${existing.error.errorCode}`;
+    return (
+      <ScreenError
+        title={t('errors.title')}
+        description={t.has(key) ? t(key) : t('errors.description')}
+        requestId={existing.error.requestId}
+        retryable={isRetryableCode(existing.error.errorCode)}
+        secondaryAction={
+          <Button asChild variant="secondary">
+            <Link href={routes.photos(locale)}>{t('meta.listTitle')}</Link>
+          </Button>
+        }
+      />
+    );
+  }
+
+  const isFirstPhoto = existing.data.length === 0;
 
   return (
     <div className="flex flex-col gap-10">

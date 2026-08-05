@@ -1,9 +1,10 @@
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
 import { accountPaths ,type  NotificationPreferences } from '@repo/api-client';
-import { ErrorState } from '@repo/ui';
 
+import { ScreenError } from '@/components/states';
 import { NotificationPreferencesForm } from '@/features/account/components/NotificationPreferencesForm';
+import { isRetryableCode } from '@/features/tryon/lib/error-copy';
 import { buildMetadata } from '@/lib/metadata';
 import { routes } from '@/lib/routes';
 import { serverGet } from '@/lib/server-api';
@@ -58,7 +59,13 @@ export default async function AccountNotificationsPage({ params }: Props) {
       {result.ok ? (
         <NotificationPreferencesForm preferences={result.data} />
       ) : (
-        <ErrorState title={t('loadErrorTitle')} description={t('loadErrorBody')} headingLevel="h2" />
+        <ScreenError
+          title={t('loadErrorTitle')}
+          description={t('loadErrorBody')}
+          requestId={result.error.requestId}
+          retryable={isRetryableCode(result.error.errorCode)}
+          headingLevel="h2"
+        />
       )}
     </section>
   );

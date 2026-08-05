@@ -43,7 +43,12 @@
       "priceOnRequest": "Price in the studio"
     },
     "loadMore": "Show more",
-    "loading": "Loading your try-ons"
+    "loading": "Loading your try-ons",
+    "partial": {
+      "title": "Part of this screen is incomplete",
+      "photos": "Your photo list didn't load, so filtering and grouping by photo aren't available on this view.",
+      "verdicts": "What you thought of each piece didn't load, so the verdict filter shows everything as not yet decided. Your shortlist itself is untouched."
+    }
   },
   "empty": {
     "title": "Try your first piece on",

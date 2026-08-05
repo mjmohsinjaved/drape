@@ -48,7 +48,9 @@ export interface BrowseFiltersProps {
  * someone can send to a friend (§6.5).
  *
  * Every facet arrives with a count, so the UI never offers a filter that would empty the grid
- * (§5.8). A facet the API did not return simply is not drawn.
+ * (§5.8). A facet the API did not return simply is not drawn — but `facets === null` means the
+ * whole read failed, and that is not a small collection, it is an incomplete list. The screen
+ * says so above this island rather than letting a partial set pass for the whole (D-7).
  *
  * On a phone the controls live in a drawer behind one 44px trigger; from `md` they sit inline.
  * The applied filters are always visible as removable chips, so nothing is ever filtering

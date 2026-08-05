@@ -1,11 +1,13 @@
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
 import { accountPaths, authPaths ,type  MyAccount,type  SessionSummary } from '@repo/api-client';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, ErrorState } from '@repo/ui';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@repo/ui';
 
+import { ScreenError } from '@/components/states';
 import { ChangePasswordForm } from '@/features/account/components/ChangePasswordForm';
 import { SessionsPanel } from '@/features/account/components/SessionsPanel';
 import { TwoFactorSettings } from '@/features/account/components/TwoFactorSettings';
+import { isRetryableCode } from '@/features/tryon/lib/error-copy';
 import { buildMetadata } from '@/lib/metadata';
 import { routes } from '@/lib/routes';
 import { serverGet } from '@/lib/server-api';
@@ -37,7 +39,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
  * - **default** — the three panels.
  * - **loading** — `loading.tsx` beside this file.
  * - **empty** — the sessions panel handles a list with nothing in it (D-6).
- * - **error** — a failed read renders `ErrorState`; a failed write is handled in its panel.
+ * - **error** — a failed read renders `ScreenError`; a failed write is handled in its panel.
  * - **permission denied** — the segment is role-ANY (§5.2), so the state that applies is the
  *   API refusing an individual call; it renders as that panel's error copy, never a raw 403 (S-9).
  * - **success** — each panel confirms its own action in the same words (D-13).
@@ -55,7 +57,13 @@ export default async function AccountSecurityPage({ params }: Props) {
 
   if (!accountResult.ok) {
     return (
-      <ErrorState title={t('loadErrorTitle')} description={t('loadErrorBody')} headingLevel="h2" />
+      <ScreenError
+        title={t('loadErrorTitle')}
+        description={t('loadErrorBody')}
+        requestId={accountResult.error.requestId}
+        retryable={isRetryableCode(accountResult.error.errorCode)}
+        headingLevel="h2"
+      />
     );
   }
 
@@ -101,11 +109,13 @@ export default async function AccountSecurityPage({ params }: Props) {
           {sessionsResult.ok ? (
             <SessionsPanel sessions={sessionsResult.data} />
           ) : (
-            <ErrorState
+            <ScreenError
               size="inline"
               headingLevel="h3"
               title={t('sessionsErrorTitle')}
               description={t('sessionsErrorBody')}
+              requestId={sessionsResult.error.requestId}
+              retryable={isRetryableCode(sessionsResult.error.errorCode)}
             />
           )}
         </CardContent>

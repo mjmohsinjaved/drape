@@ -99,8 +99,10 @@ export function BulkActionBar({
         {t('testRender')}
       </Button>
 
+      {/* On a phone the bar wraps, and a cap warning squeezed into the tail of a wrapped row is
+          unreadable. It takes its own line below `sm` and sits inline from there (D-9). */}
       {overRenderCap || overRecordCap ? (
-        <p className="text-xs text-ink-muted">
+        <p className="text-xs text-ink-muted max-sm:basis-full">
           {overRecordCap
             ? t('overRecordCap', { max: maxForRecords })
             : t('overRenderCap', { max: maxForTestRender })}

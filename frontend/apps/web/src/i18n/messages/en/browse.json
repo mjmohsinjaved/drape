@@ -35,7 +35,11 @@
     "count": "{count, plural, =0 {No pieces} one {1 piece} other {# pieces}}",
     "appliedLabel": "Applied filters",
     "remove": "Remove {label} filter",
-    "pricesHidden": "Prices are shown in the studio."
+    "pricesHidden": "Prices are shown in the studio.",
+    "partial": {
+      "title": "The filter list is incomplete",
+      "facets": "The categories, colours, sizes and price range didn't load, so the filters below show only part of what the collection holds. Every piece is still in the grid."
+    }
   },
   "weights": {
     "LIGHT": "Light work",

@@ -9,16 +9,17 @@ import {
   Button,
   DescriptionItem,
   DescriptionList,
-  ErrorState,
   ImageGallery,
   ShortlistingCaption,
 } from '@repo/ui';
 
 import { DirectionalIcon } from '@/components/DirectionalIcon';
+import { ScreenError } from '@/components/states';
 import { getCatalogGarment } from '@/features/catalog-browse/api/endpoints';
 import { facetLabel, formatMoney, imageAlt } from '@/features/catalog-browse/lib/format';
 import { TryOnButton } from '@/features/tryon/components/TryOnButton';
 import { TryOnTray } from '@/features/tryon/components/TryOnTray';
+import { isRetryableCode } from '@/features/tryon/lib/error-copy';
 import { routes } from '@/lib/routes';
 
 import type { Locale } from '@/i18n/config';
@@ -52,9 +53,11 @@ export async function GarmentDetailScreen({
 
     const key = `errors.${result.error.errorCode}`;
     return (
-      <ErrorState
+      <ScreenError
         title={t('errors.detailTitle')}
         description={t.has(key) ? t(key) : t('errors.description')}
+        requestId={result.error.requestId}
+        retryable={isRetryableCode(result.error.errorCode)}
         secondaryAction={
           <Button asChild variant="secondary">
             <Link href={routes.browse(locale)}>{t('detail.backToBrowse')}</Link>

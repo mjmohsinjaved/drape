@@ -3,15 +3,15 @@ import Link from 'next/link';
 import { Camera } from 'lucide-react';
 import { getTranslations } from 'next-intl/server';
 
-import { Button, EmptyState, ErrorState } from '@repo/ui';
+import { Button, EmptyState } from '@repo/ui';
 
-import { DeniedState } from '@/components/states';
+import { DeniedState, ScreenError } from '@/components/states';
 import { DeleteMyDataLink } from '@/features/consent/components/DeleteMyDataLink';
 import { listPhotosServer } from '@/features/photos/api/server';
 import { FullBodyDiagram } from '@/features/photos/components/PhotoDiagrams';
 import { PhotoList } from '@/features/photos/components/PhotoList';
 import { TryOnTray } from '@/features/tryon/components/TryOnTray';
-import { isPermissionDenied } from '@/features/tryon/lib/error-copy';
+import { isPermissionDenied, isRetryableCode } from '@/features/tryon/lib/error-copy';
 import { routes } from '@/lib/routes';
 
 import type { Locale } from '@/i18n/config';
@@ -41,9 +41,11 @@ export async function PhotosScreen({ locale }: PhotosScreenProps) {
 
     const key = `errors.${result.error.errorCode}`;
     return (
-      <ErrorState
+      <ScreenError
         title={t('errors.title')}
         description={t.has(key) ? t(key) : t('errors.description')}
+        requestId={result.error.requestId}
+        retryable={isRetryableCode(result.error.errorCode)}
         secondaryAction={
           <Button asChild variant="secondary">
             <Link href={routes.photoNew(locale)}>{t('list.add')}</Link>

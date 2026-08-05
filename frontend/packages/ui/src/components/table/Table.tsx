@@ -23,8 +23,20 @@ export interface TableProps extends React.TableHTMLAttributes<HTMLTableElement> 
  * tables — do not reach for this on the consumer side.
  *
  * Sticky header, zebra off, hover `--color-surface-sunken`, selected `--color-brand-tint`, all
- * from §6.2. Below 768px the caller collapses rows into stacked cards; this component keeps a
- * horizontal scroll container so a wide table degrades to scrolling rather than to overflow.
+ * from §6.2.
+ *
+ * **Narrow viewports: columns are dropped, and what is left scrolls.** This paragraph used to
+ * promise that "below 768px the caller collapses rows into stacked cards". No caller does — the
+ * three admin tables (categories, garment list, catalog health) each hide their lower-priority
+ * columns with `hidden sm:table-cell` / `md:` / `lg:` and fold the dropped value into the name
+ * cell where it still matters, and `DataTable` formalises the same thing as `hideBelow`. That is
+ * the behaviour, so it is what is documented: a contract nobody implements is worse than a
+ * plainer one that everybody does, because the next person builds against the promise.
+ *
+ * What this component itself guarantees is the floor under that: the `overflow-x-auto` container
+ * below, so a table too wide for its column-hiding to save degrades to scrolling rather than
+ * bursting the page. A caller that genuinely wants cards renders cards — not a `<table>` — and
+ * `Card` is already the primitive for it.
  */
 export const Table = React.forwardRef<HTMLTableElement, TableProps>(function Table(
   { className, containerClassName, density = 'scale', caption, showCaption = false, children, ...props },

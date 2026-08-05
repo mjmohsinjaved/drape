@@ -2374,7 +2374,7 @@ Warm ivory ground, lac-red brand, antique gold accent. Hex is the normative form
 | `--color-ink-muted` | `#6B5F55` | `#B4A697` | Secondary text — **5.9 : 1** light, 8.1 : 1 dark |
 | `--color-ink-subtle` | `#7C6F63` | `#8A7D70` | Tertiary text, placeholders — **4.6 : 1** light, 4.8 : 1 dark |
 | `--color-line` | `#E4DACB` | `#2E2721` | Hairline borders, table rules |
-| `--color-line-strong` | `#CFC0AB` | `#443A31` | Input borders, dividers that must read |
+| `--color-line-strong` | `#A58A63` | `#7B6959` | Input borders, dividers that must read — **3.09 : 1** light, 3.14 : 1 dark, worst ground. Bound by WCAG 2.1 SC 1.4.11 (non-text contrast), not by taste: it is the only thing that identifies an input's boundary, so it may never be lightened back below 3 : 1 |
 | `--color-brand` | `#71202F` | `#C96A78` | Lac red. **10.2 : 1** light, 5.4 : 1 dark. Runtime-overridable (A-27) |
 | `--color-brand-hover` | `#591626` | `#D9808C` | |
 | `--color-brand-active` | `#45101D` | `#E695A0` | |

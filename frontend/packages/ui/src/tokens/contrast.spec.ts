@@ -60,6 +60,17 @@ const TEXT_TOKENS = [
   '--color-info',
 ] as const;
 
+/**
+ * Non-text UI components: the tokens that draw a *boundary* rather than a glyph.
+ *
+ * WCAG 2.1 SC 1.4.11 (Non-text Contrast) requires 3:1 for "visual information required to
+ * identify user interface components and their states", which is precisely what these do — an
+ * input, a select or a checkbox has no other visible edge. `--color-line` is deliberately absent:
+ * §6.1 scopes it to "hairline borders, table rules", which are decorative separators between
+ * static content, and 1.4.11 exempts pure decoration.
+ */
+const NON_TEXT_TOKENS = ['--color-line-strong', '--color-focus', '--color-brand'] as const;
+
 const SEMANTIC_PAIRS = [
   ['--color-success', '--color-success-tint'],
   ['--color-warning', '--color-warning-tint'],
@@ -126,6 +137,25 @@ describe.each(MODES)('§6.1 palette — %s', (_name, palette) => {
   it('keeps the focus ring visible against every ground it is drawn on (1.4.11)', () => {
     for (const background of [...TEXT_BACKGROUNDS, '--color-surface-sunken']) {
       expect(ratio(palette, '--color-focus', background)).toBeGreaterThanOrEqual(AA_NON_TEXT);
+    }
+  });
+
+  describe.each(NON_TEXT_TOKENS)('%s', (token) => {
+    it.each(TEXT_BACKGROUNDS)(
+      `identifies a control boundary at 1.4.11's ${AA_NON_TEXT}:1 on %s`,
+      (background) => {
+        expect(ratio(palette, token, background)).toBeGreaterThanOrEqual(AA_NON_TEXT);
+      },
+    );
+  });
+
+  it('keeps --color-line-strong stronger than --color-line', () => {
+    // The pair only means anything if the "strong" one reads harder. If a future palette change
+    // inverts them, §6.1's split between a hairline rule and a control boundary is a fiction.
+    for (const background of TEXT_BACKGROUNDS) {
+      expect(ratio(palette, '--color-line-strong', background)).toBeGreaterThan(
+        ratio(palette, '--color-line', background),
+      );
     }
   });
 

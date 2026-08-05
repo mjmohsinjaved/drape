@@ -3,15 +3,15 @@ import Link from 'next/link';
 import { MessageSquare } from 'lucide-react';
 import { getTranslations } from 'next-intl/server';
 
-import { Button, Card, CardContent, EmptyState, ErrorState, ShortlistingCaption } from '@repo/ui';
+import { Button, Card, CardContent, EmptyState, ShortlistingCaption } from '@repo/ui';
 
-import { DeniedState } from '@/components/states';
+import { DeniedState, ScreenError } from '@/components/states';
 import { formatMoney } from '@/features/catalog-browse/lib/format';
 import { DeleteMyDataLink } from '@/features/consent/components/DeleteMyDataLink';
 import { getShortlistServer } from '@/features/shortlist/api/server';
 import { ShortlistBoard } from '@/features/shortlist/components/ShortlistBoard';
 import { TryOnTray } from '@/features/tryon/components/TryOnTray';
-import { isPermissionDenied } from '@/features/tryon/lib/error-copy';
+import { isPermissionDenied, isRetryableCode } from '@/features/tryon/lib/error-copy';
 import { routes } from '@/lib/routes';
 
 import type { ShortlistBudget } from '@/features/shortlist/api/types';
@@ -46,9 +46,11 @@ export async function ShortlistScreen({ locale }: ShortlistScreenProps) {
 
     const key = `errors.${result.error.errorCode}`;
     return (
-      <ErrorState
+      <ScreenError
         title={t('errors.title')}
         description={t.has(key) ? t(key) : t('errors.description')}
+        requestId={result.error.requestId}
+        retryable={isRetryableCode(result.error.errorCode)}
         secondaryAction={
           <Button asChild variant="secondary">
             <Link href={routes.browse(locale)}>{t('empty.action')}</Link>

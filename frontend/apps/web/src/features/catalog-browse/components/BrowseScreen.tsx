@@ -2,8 +2,9 @@ import Link from 'next/link';
 
 import { getTranslations } from 'next-intl/server';
 
-import { Button, EmptyState, ErrorState } from '@repo/ui';
+import { Button, EmptyState } from '@repo/ui';
 
+import { PartialDataNotice, ScreenError } from '@/components/states';
 import {
   getCatalogFacets,
   getCatalogGarments,
@@ -13,6 +14,7 @@ import { BrowsePagination } from '@/features/catalog-browse/components/BrowsePag
 import { GarmentCard } from '@/features/catalog-browse/components/GarmentCard';
 import { hasAnyFilter, toCatalogQuery ,type  BrowseFilters as Filters } from '@/features/catalog-browse/lib/filters';
 import { TryOnTray } from '@/features/tryon/components/TryOnTray';
+import { isRetryableCode } from '@/features/tryon/lib/error-copy';
 
 import type { Locale } from '@/i18n/config';
 
@@ -58,9 +60,11 @@ export async function BrowseScreen({
   if (!garments.ok) {
     const key = `errors.${garments.error.errorCode}`;
     return (
-      <ErrorState
+      <ScreenError
         title={t('errors.title')}
         description={t.has(key) ? t(key) : t('errors.description')}
+        requestId={garments.error.requestId}
+        retryable={isRetryableCode(garments.error.errorCode)}
         secondaryAction={
           <Button asChild variant="secondary">
             <Link href={basePath}>{t('empty.catalogAction')}</Link>
@@ -83,6 +87,16 @@ export async function BrowseScreen({
         </h1>
         <p className="max-w-prose text-ink-muted">{subtitle ?? t('heading.subtitle')}</p>
       </header>
+
+      {/* The facet read is secondary — the grid is complete without it. What is not acceptable
+          is drawing a filter list built from nothing and letting it read as the full set of
+          choices, so a failed read is announced rather than absorbed. */}
+      {facets.ok ? null : (
+        <PartialDataNotice
+          title={t('filters.partial.title')}
+          items={[t('filters.partial.facets')]}
+        />
+      )}
 
       <BrowseFilters
         locale={locale}

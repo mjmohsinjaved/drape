@@ -20,6 +20,13 @@ export interface ToolbarProps
  * `variant="bulk"` is the bar that appears when a selection exists. It reports its own count and
  * hosts the operations; per-item progress and the success/failure summary belong to the caller
  * (D-16).
+ *
+ * **Both variants wrap.** `bulk` did not, and its contents have an intrinsic width of roughly
+ * 700px — a count, five labelled operations, a cap warning and a clear button. At the 360px floor
+ * that is not a cramped bar but one whose last controls sit outside a `sticky` element the page
+ * cannot scroll sideways to reach, and D-9 requires the console to be usable on a phone for
+ * exactly the approvals this bar performs. Wrapping is also why the row gap matters: `gap-2`
+ * applies on both axes, so a wrapped second line keeps the same rhythm as the first.
  */
 export const Toolbar = React.forwardRef<
   React.ComponentRef<typeof ToolbarPrimitive.Root>,
@@ -29,8 +36,7 @@ export const Toolbar = React.forwardRef<
     <ToolbarPrimitive.Root
       ref={ref}
       className={cn(
-        'flex items-center gap-2',
-        variant === 'inline' && 'flex-wrap',
+        'flex flex-wrap items-center gap-2',
         variant === 'bulk' && [
           'sticky bottom-0 z-20 rounded-lg border border-line bg-surface-raised px-4 py-3 shadow-lg',
           'transition-[opacity,translate] duration-base ease-out',

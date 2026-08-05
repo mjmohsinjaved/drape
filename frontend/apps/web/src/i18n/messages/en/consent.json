@@ -60,6 +60,8 @@
     "NETWORK_ERROR": "You appear to be offline. We'll record your agreement when you're back.",
     "REQUEST_TIMEOUT": "That took too long. Try again.",
     "SERVICE_UNAVAILABLE": "We're briefly unavailable. Try again shortly.",
-    "INTERNAL_ERROR": "Your agreement wasn't recorded. Try again — we've been notified."
+    "INTERNAL_ERROR": "Your agreement wasn't recorded. Try again — we've been notified.",
+    "stateUnknownTitle": "We couldn't check what you've already agreed to",
+    "stateUnknownDescription": "Rather than ask you to agree to something twice, we've stopped here. Try again and we'll pick up where your record leaves off."
   }
 }

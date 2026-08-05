@@ -1,12 +1,14 @@
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
 import { accountPaths ,type  ConsumerProfile,type  MyAccount } from '@repo/api-client';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, ErrorState } from '@repo/ui';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@repo/ui';
 
+import { ScreenError } from '@/components/states';
 import { AccountSections } from '@/features/account/components/AccountSections';
 import { EventDetailsForm } from '@/features/account/components/EventDetailsForm';
 import { PhoneVerification } from '@/features/account/components/PhoneVerification';
 import { ProfileForm } from '@/features/account/components/ProfileForm';
+import { isRetryableCode } from '@/features/tryon/lib/error-copy';
 import { buildMetadata } from '@/lib/metadata';
 import { routes } from '@/lib/routes';
 import { serverGet } from '@/lib/server-api';
@@ -48,7 +50,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
  * - **default** — the three panels.
  * - **loading** — `loading.tsx` beside this file.
  * - **empty** — the unanswered event details, which is a normal state and not a failure.
- * - **error** — the read failed: `ErrorState`, with the retry the boundary already provides.
+ * - **error** — the read failed: `ScreenError`, which carries the retry and the request id.
  * - **permission denied** — the segment is role-ANY (§5.2), so the state that applies is the
  *   API refusing an individual call; it renders as that panel's error copy, never a raw 403 (S-9).
  * - **success** — each form confirms its own save.
@@ -66,9 +68,11 @@ export default async function AccountPage({ params }: Props) {
 
   if (!accountResult.ok) {
     return (
-      <ErrorState
+      <ScreenError
         title={t('loadErrorTitle')}
         description={t('loadErrorBody')}
+        requestId={accountResult.error.requestId}
+        retryable={isRetryableCode(accountResult.error.errorCode)}
         headingLevel="h2"
       />
     );

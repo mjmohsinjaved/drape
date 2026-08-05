@@ -21,9 +21,9 @@ export interface RouteErrorViewProps extends RouteErrorProps {
  * does not blame, and is never vague. The retry is always present because `reset()` always
  * exists at a route boundary.
  *
- * `error.digest` is shown as a plain reference the user can quote to us. It is not a status
- * code and not a stack trace — no screen shows either (§8.1). `ErrorState` owns both the retry
- * button (`onRetry`) and the reference line (`reference`), so neither is rebuilt here.
+ * A plain reference the user can quote to us is shown, and it is not a status code or a stack
+ * trace — no screen shows either (§8.1). `ErrorState` owns both the retry button (`onRetry`) and
+ * the reference line (`reference`), so neither is rebuilt here.
  */
 export function RouteError({ error, reset, scope }: RouteErrorViewProps) {
   const t = useTranslations('errors');
@@ -31,6 +31,7 @@ export function RouteError({ error, reset, scope }: RouteErrorViewProps) {
   // In production Next replaces a server-side message with a digest, so we only display a
   // message when the boundary genuinely received one worth reading.
   const hasMessage = error.message.length > 0 && error.message.length < 200;
+  const reference = referenceId(error);
 
   return (
     <ErrorState
@@ -38,7 +39,21 @@ export function RouteError({ error, reset, scope }: RouteErrorViewProps) {
       description={hasMessage ? error.message : t('generic.body')}
       onRetry={reset}
       retryLabel={t('generic.action')}
-      reference={error.digest ? t('reference', { id: error.digest }) : undefined}
+      reference={reference === undefined ? undefined : t('reference', { id: reference })}
     />
   );
+}
+
+/**
+ * The id the studio can correlate with, in order of usefulness.
+ *
+ * An `ApiError` thrown inside a Client Component reaches this boundary intact, still carrying
+ * the `X-Request-Id` the API stamped on the response — and because E-12 keeps personal data out
+ * of the logs, that id is the only correlator that exists. Next's `digest` is the fallback: it
+ * identifies a *server* throw, which is the only kind whose message gets stripped in production.
+ */
+function referenceId(error: Error & { digest?: string }): string | undefined {
+  const requestId: unknown = (error as { requestId?: unknown }).requestId;
+  if (typeof requestId === 'string' && requestId.length > 0) return requestId;
+  return error.digest !== undefined && error.digest.length > 0 ? error.digest : undefined;
 }
