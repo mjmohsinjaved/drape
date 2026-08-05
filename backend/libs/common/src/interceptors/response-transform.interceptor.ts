@@ -20,11 +20,17 @@ import { isPaginated } from '../interfaces/pagination.interface';
 import { RequestContext } from '../logger/request-context';
 
 /**
- * The metadata key `@Sse()` sets. NestJS exports it from a deep internal path
- * (`@nestjs/common/constants`), which the import rules discourage, so the literal
- * is pinned here with a name instead of being spelled inline.
+ * The metadata key `@Sse()` sets — `SSE_METADATA` in `@nestjs/common/constants`.
+ *
+ * NestJS exports it only from that deep internal path, which the import rules
+ * discourage, so the literal is pinned here with a name instead of being spelled
+ * inline. It is **not** `'sse'`: the constant's value is the underscored form, and a
+ * near-miss here fails silently — `getAllAndOverride` simply returns `undefined`, the
+ * route is not recognised as SSE, and every frame of a `text/event-stream` gets wrapped
+ * in the §2.3 envelope. `response-transform.interceptor.spec.ts` pins this value against
+ * a handler carrying the real decorator so it can never drift again.
  */
-const NEST_SSE_METADATA = 'sse';
+const NEST_SSE_METADATA = '__sse__';
 
 /** Response content types that must never be wrapped. */
 const PASS_THROUGH_CONTENT_TYPES = ['text/event-stream', 'application/octet-stream'];

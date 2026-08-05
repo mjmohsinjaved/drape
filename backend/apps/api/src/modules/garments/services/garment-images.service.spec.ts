@@ -629,3 +629,148 @@ describe('GarmentImagesService.revalidate (§5.7)', () => {
     expect(report.needsBetterPhoto).toBe(true);
   });
 });
+
+/**
+ * `POST /admin/garment-images/batch` — §5.7, §6.2.
+ *
+ * What §6.2's catalog table needs to draw a 40 px thumbnail per row without a request per
+ * row. Three properties, and each one is a bug the table would otherwise ship with:
+ *
+ *  - **the ceiling refuses rather than truncates** — a silently short response leaves the
+ *    caller unable to tell which rows it did not get an answer for;
+ *  - **a garment with no image is present with `image: null`** — an omission would make the
+ *    caller guess whether the piece has no image or whether the request lost it, and its
+ *    rows would slide out of alignment;
+ *  - **the URL is signed and scoped to the requesting admin** — §3.4: a storage key must
+ *    never cross the network boundary.
+ */
+describe('GarmentImagesService.findPrimaryForGarments (§5.7, §6.2)', () => {
+  const GARMENT_B = '11111111-2222-4333-8444-555566667777';
+  const GARMENT_C = '22222222-3333-4444-8555-666677778888';
+
+  /** A signer that records its subject, so "scoped to the caller" is assertable. */
+  function scopedSigner(harness: Harness): void {
+    harness.storage.signedUrl.mockImplementation(
+      (key: string, subject?: string) =>
+        `https://api.test/api/v1/files/${Buffer.from(key, 'utf8').toString('hex')}` +
+        `.sig?sub=${subject ?? 'none'}`,
+    );
+  }
+
+  it('returns one entry per requested id, in the order asked', async () => {
+    const harness = build({
+      images: [
+        buildImageRow({ id: IMAGE_A, garmentId: GARMENT_ID, position: 0 }),
+        buildImageRow({ id: IMAGE_B, garmentId: GARMENT_B, position: 0 }),
+      ],
+    });
+
+    const response = await harness.service.findPrimaryForGarments(
+      [GARMENT_B, GARMENT_ID, GARMENT_C],
+      ADMIN,
+    );
+
+    expect(response.items.map((entry) => entry.garmentId)).toEqual([
+      GARMENT_B,
+      GARMENT_ID,
+      GARMENT_C,
+    ]);
+  });
+
+  it('answers a garment with no image with `image: null` rather than dropping the row', async () => {
+    const harness = build({
+      images: [buildImageRow({ id: IMAGE_A, garmentId: GARMENT_ID })],
+    });
+
+    const response = await harness.service.findPrimaryForGarments([GARMENT_ID, GARMENT_C], ADMIN);
+
+    // The caller is drawing a table. Two ids in, two rows out.
+    expect(response.items).toHaveLength(2);
+    expect(response.items[1]).toEqual({ garmentId: GARMENT_C, image: null });
+    expect(response.items[0]?.image).not.toBeNull();
+  });
+
+  it('is all nulls, never an empty list, when none of the garments has an image', async () => {
+    const harness = build({ images: [] });
+
+    const response = await harness.service.findPrimaryForGarments([GARMENT_ID, GARMENT_B], ADMIN);
+
+    expect(response.items).toEqual([
+      { garmentId: GARMENT_ID, image: null },
+      { garmentId: GARMENT_B, image: null },
+    ]);
+  });
+
+  it('prefers the try-on source over gallery order (A-9)', async () => {
+    const harness = build({
+      images: [
+        buildImageRow({ id: IMAGE_A, garmentId: GARMENT_ID, position: 0, isTryOnSource: false }),
+        buildImageRow({ id: IMAGE_B, garmentId: GARMENT_ID, position: 3, isTryOnSource: true }),
+      ],
+    });
+
+    const response = await harness.service.findPrimaryForGarments([GARMENT_ID], ADMIN);
+
+    expect(response.items[0]?.image?.id).toBe(IMAGE_B);
+    expect(response.items[0]?.image?.isTryOnSource).toBe(true);
+  });
+
+  it('falls back to the first image in gallery order', async () => {
+    const harness = build({
+      images: [
+        buildImageRow({ id: IMAGE_B, garmentId: GARMENT_ID, position: 2 }),
+        buildImageRow({ id: IMAGE_A, garmentId: GARMENT_ID, position: 0 }),
+      ],
+    });
+
+    const response = await harness.service.findPrimaryForGarments([GARMENT_ID], ADMIN);
+
+    expect(response.items[0]?.image?.id).toBe(IMAGE_A);
+  });
+
+  it('signs the URL for the requesting admin and never returns a storage key (§3.4)', async () => {
+    const harness = build({
+      images: [buildImageRow({ id: IMAGE_A, garmentId: GARMENT_ID })],
+    });
+    scopedSigner(harness);
+
+    const response = await harness.service.findPrimaryForGarments([GARMENT_ID], ADMIN);
+    const image = response.items[0]?.image;
+
+    expect(image).toBeDefined();
+    // Scoped to the caller (§3.4), not a bearer-anybody URL.
+    expect(image?.url).toContain(`sub=${ADMIN.id}`);
+    expect(image?.thumbnailUrl).toContain(`sub=${ADMIN.id}`);
+    expect(harness.storage.signedUrl).toHaveBeenCalledWith(keyFor('image-a'), ADMIN.id);
+
+    // Not the key, not the hash, in any field of the DTO.
+    const serialised = JSON.stringify(response);
+    expect(serialised).not.toContain(keyFor('image-a'));
+    expect(serialised).not.toContain('storageKey');
+    expect(serialised).not.toContain('thumbnailKey');
+    expect(serialised).not.toContain('a'.repeat(64));
+  });
+
+  it('scopes the URLs to whichever admin asked', async () => {
+    const harness = build({
+      images: [buildImageRow({ id: IMAGE_A, garmentId: GARMENT_ID })],
+    });
+    scopedSigner(harness);
+    const otherAdmin: ICurrentUser = { ...ADMIN, id: 'eeeeeeee-1111-4222-8333-444455556666' };
+
+    const mine = await harness.service.findPrimaryForGarments([GARMENT_ID], ADMIN);
+    const theirs = await harness.service.findPrimaryForGarments([GARMENT_ID], otherAdmin);
+
+    expect(mine.items[0]?.image?.url).not.toBe(theirs.items[0]?.image?.url);
+    expect(theirs.items[0]?.image?.url).toContain(`sub=${otherAdmin.id}`);
+  });
+
+  it('asks the database nothing for an empty list — an empty `IN ()` is not valid SQL', async () => {
+    const harness = build({ images: [buildImageRow({ id: IMAGE_A })] });
+
+    const response = await harness.service.findPrimaryForGarments([], ADMIN);
+
+    expect(response.items).toEqual([]);
+    expect(harness.images.find).not.toHaveBeenCalled();
+  });
+});

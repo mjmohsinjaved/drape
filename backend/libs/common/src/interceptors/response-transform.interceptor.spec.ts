@@ -1,7 +1,13 @@
 import { Readable } from 'node:stream';
 
-import { StreamableFile, type CallHandler, type ExecutionContext } from '@nestjs/common';
-import type { Reflector } from '@nestjs/core';
+import {
+  Sse,
+  StreamableFile,
+  type CallHandler,
+  type ExecutionContext,
+  type MessageEvent,
+} from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 
 import { firstValueFrom, of, type Observable } from 'rxjs';
 
@@ -137,10 +143,60 @@ describe('ResponseTransformInterceptor — pagination', () => {
 });
 
 describe('ResponseTransformInterceptor — pass-through', () => {
-  it('leaves an SSE route untouched, detected from the @Sse() metadata', async () => {
+  /**
+   * Pinned against the **real** decorator and a **real** `Reflector`, not a hand-built
+   * metadata bag.
+   *
+   * The interceptor has to spell Nest's `SSE_METADATA` key as a literal — it is only
+   * exported from `@nestjs/common/constants`, a deep path the import rules discourage —
+   * and a near-miss fails silently: `getAllAndOverride` returns `undefined`, the route is
+   * not recognised, and every frame of a `text/event-stream` is wrapped in the §2.3
+   * envelope. A test that supplied its own `{ sse: true }` would agree with whatever the
+   * literal happened to say, which is how the key came to be wrong in the first place.
+   */
+  class SseFixtureController {
+    @Sse('stream')
+    stream(): Observable<MessageEvent> {
+      return of({ data: { status: 'RUNNING' } });
+    }
+
+    poll(): { status: string } {
+      return { status: 'RUNNING' };
+    }
+  }
+
+  function contextFor(handler: (...args: never[]) => unknown): ExecutionContext {
+    return {
+      getType: <T>(): T => 'http' as unknown as T,
+      getHandler: () => handler,
+      getClass: () => SseFixtureController,
+      switchToHttp: () => ({
+        getRequest: <T>(): T => ({ originalUrl: '/api/v1/tryon', headers: {} }) as unknown as T,
+        getResponse: <T>(): T => ({ statusCode: 200 }) as unknown as T,
+      }),
+    } as unknown as ExecutionContext;
+  }
+
+  async function runAgainst<T>(handler: (...args: never[]) => unknown, value: T): Promise<unknown> {
+    const interceptor = new ResponseTransformInterceptor(new Reflector());
+    return firstValueFrom(interceptor.intercept(contextFor(handler), createHandler(value)));
+  }
+
+  it('leaves an @Sse() route untouched, detected from the decorator’s own metadata', async () => {
     const event = { data: { status: 'RUNNING' } };
-    const result = await run(event, { metadata: { sse: true } });
-    expect(result).toBe(event);
+
+    expect(await runAgainst(SseFixtureController.prototype.stream, event)).toBe(event);
+  });
+
+  it('still envelopes the plain handler beside it, so the SSE check is not vacuous', async () => {
+    const payload = { status: 'RUNNING' };
+
+    const result = (await runAgainst(SseFixtureController.prototype.poll, payload)) as ApiResponse<
+      typeof payload
+    >;
+
+    expect(result.success).toBe(true);
+    expect(result.data).toEqual(payload);
   });
 
   it('leaves a response already committed to text/event-stream untouched', async () => {
