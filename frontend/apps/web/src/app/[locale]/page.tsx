@@ -3,16 +3,25 @@ import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
-import { Button, Card, CardContent, DirectionalIcon } from '@repo/ui';
+import { Button, Card, CardContent, DirectionalIcon, EmptyState, ErrorState } from '@repo/ui';
 
 import { PublicShell } from '@/components/layout/PublicShell';
-import { PageSkeleton } from '@/components/states';
+import {
+  getCatalogGarments,
+  getPublicCategories,
+} from '@/features/catalog-browse/api/endpoints';
+import { GarmentCard } from '@/features/catalog-browse/components/GarmentCard';
+import { categoryName } from '@/features/catalog-browse/lib/category-name';
 import { buildMetadata } from '@/lib/metadata';
 import { routes } from '@/lib/routes';
 import { getCurrentUser, toShellUser } from '@/lib/session';
 
+import type { Locale } from '@/i18n/config';
 import type { LocaleParams } from '@/lib/route-params';
 import type { Metadata } from 'next';
+
+/** One row of four on desktop, two on mobile. */
+const NEW_ARRIVALS_COUNT = 4;
 
 export async function generateMetadata({ params }: LocaleParams): Promise<Metadata> {
   const { locale } = await params;
@@ -72,18 +81,110 @@ export default async function LandingPage({ params }: LocaleParams) {
 
         <div className="flex flex-col gap-4">
           <h2 className="text-2xl">{t('categoriesTitle')}</h2>
-          <Card>
-            <CardContent className="py-6">
-              <PageSkeleton variant="list" count={3} />
-            </CardContent>
-          </Card>
+          <CategoryRail locale={locale} />
         </div>
 
         <div className="flex flex-col gap-4">
           <h2 className="text-2xl">{t('newArrivalsTitle')}</h2>
-          <PageSkeleton variant="grid" count={4} />
+          <NewArrivals locale={locale} />
         </div>
       </section>
     </PublicShell>
+  );
+}
+
+/**
+ * The A-6 rail: categories in their admin-defined order, which is what drives the consumer
+ * browse screen. Top-level only — sub-categories are one level deep (A-5) and belong on the
+ * category page, not here.
+ */
+async function CategoryRail({ locale }: { locale: Locale }) {
+  const t = await getTranslations({ locale, namespace: 'catalog.landing' });
+  const result = await getPublicCategories();
+
+  if (!result.ok) {
+    return (
+      <ErrorState
+        title={t('categoriesErrorTitle')}
+        description={t('categoriesErrorBody')}
+        reference={result.error.requestId}
+      />
+    );
+  }
+
+  if (result.data.length === 0) {
+    // D-6: name the next step rather than the absence.
+    return (
+      <EmptyState
+        title={t('categoriesEmptyTitle')}
+        description={t('categoriesEmptyBody')}
+        action={
+          <Button asChild variant="primary">
+            <Link href={routes.browse(locale)}>{t('heroAction')}</Link>
+          </Button>
+        }
+      />
+    );
+  }
+
+  return (
+    <Card>
+      <CardContent className="flex flex-col gap-1 py-2">
+        {result.data.map((category) => (
+          <Link
+            key={category.id}
+            href={routes.browseCategory(locale, category.slug)}
+            className="focus-ring touch-target flex items-center justify-between gap-4 rounded-lg px-3 py-3 transition-colors hover:bg-surface-raised"
+          >
+            <span className="text-base">{categoryName(category, locale)}</span>
+            <DirectionalIcon>
+              <ArrowRight aria-hidden="true" className="size-4 text-ink-subtle" />
+            </DirectionalIcon>
+          </Link>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * The newest published pieces. Every one carries an approved test render — that is enforced by
+ * the catalog projection itself (E-10), not by anything asked for here.
+ */
+async function NewArrivals({ locale }: { locale: Locale }) {
+  const t = await getTranslations({ locale, namespace: 'catalog.landing' });
+  const result = await getCatalogGarments({ page: 1, limit: NEW_ARRIVALS_COUNT, sortBy: 'newest' });
+
+  if (!result.ok) {
+    return (
+      <ErrorState
+        title={t('newArrivalsErrorTitle')}
+        description={t('newArrivalsErrorBody')}
+        reference={result.error.requestId}
+      />
+    );
+  }
+
+  if (result.data.length === 0) {
+    return (
+      <EmptyState
+        title={t('newArrivalsEmptyTitle')}
+        description={t('newArrivalsEmptyBody')}
+        action={
+          <Button asChild variant="primary">
+            <Link href={routes.browse(locale)}>{t('heroAction')}</Link>
+          </Button>
+        }
+      />
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+      {result.data.map((garment, index) => (
+        // The first row is the LCP candidate on this route too (§9.1).
+        <GarmentCard key={garment.id} locale={locale} garment={garment} priority={index < 2} />
+      ))}
+    </div>
   );
 }

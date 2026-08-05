@@ -4,6 +4,7 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 
 import { findCategoryBySlug } from '@/features/catalog-browse/api/endpoints';
 import { BrowseScreen } from '@/features/catalog-browse/components/BrowseScreen';
+import { categoryName } from '@/features/catalog-browse/lib/category-name';
 import { parseBrowseFilters } from '@/features/catalog-browse/lib/filters';
 import { buildMetadata } from '@/lib/metadata';
 import { routes } from '@/lib/routes';
@@ -36,7 +37,9 @@ export async function generateMetadata({ params }: PageParams): Promise<Metadata
 
   return buildMetadata({
     locale,
-    title: category?.name ?? t('meta.browseTitle'),
+    // The same locale rule as the heading — otherwise an Urdu reader gets an
+    // Urdu page under an English browser tab and an English share preview.
+    title: category === null ? t('meta.browseTitle') : categoryName(category, locale),
     description: t('meta.categoryDescription'),
     path: routes.browseCategory(locale, categorySlug),
   });
@@ -69,7 +72,7 @@ export default async function PublicBrowseCategorySlugPage({ params, searchParam
       filters={filters}
       basePath={routes.browseCategory(locale, categorySlug)}
       lockedCategoryId={category.id}
-      title={locale === 'ur' && category.nameUr ? category.nameUr : category.name}
+      title={categoryName(category, locale)}
     />
   );
 }

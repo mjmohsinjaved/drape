@@ -26,6 +26,14 @@
     "heroSecondary": "Create an account",
     "heroNote": "A try-on is an approximate guide for shortlisting. Fabric fall, embroidery detail and length will differ in person.",
     "categoriesTitle": "Start with a category",
-    "newArrivalsTitle": "New this week"
+    "newArrivalsTitle": "New this week",
+    "categoriesEmptyTitle": "The collection is being set up",
+    "categoriesEmptyBody": "Categories will appear here as soon as the studio adds them. Browse everything in the meantime.",
+    "categoriesErrorTitle": "We could not load the categories",
+    "categoriesErrorBody": "Browse the full collection instead, or reload in a moment.",
+    "newArrivalsEmptyTitle": "Nothing new just yet",
+    "newArrivalsEmptyBody": "New pieces show up here as they are published. Browse what is already in the collection.",
+    "newArrivalsErrorTitle": "We could not load the newest pieces",
+    "newArrivalsErrorBody": "Browse the full collection instead, or reload in a moment."
   }
 }

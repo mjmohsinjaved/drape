@@ -19,7 +19,15 @@ export class Setting extends BaseEntity {
   @Column({ type: 'varchar', length: 80 })
   key: string;
 
-  @Column({ type: 'jsonb' })
+  /**
+   * Nullable because "not configured yet" is a real state for several keys, not an
+   * error: `brand.logoKey`, `brand.whatsappNumber`, `brand.instagramHandle` and
+   * `brand.contactEmail` all ship with `defaultValue: null` in the registry, and a
+   * brand that has not uploaded a logo has no value to store. `SettingsService`
+   * already reads these as `?? null`; only the column disagreed, which made the
+   * seeder fail on a not-null violation and left a fresh install with no settings.
+   */
+  @Column({ type: 'jsonb', nullable: true })
   value: unknown;
 
   @Column({

@@ -1,7 +1,13 @@
 import { type MigrationInterface, type QueryRunner } from 'typeorm';
 
 export class InitialSchema1785943830311 implements MigrationInterface {
-  name = 'Migration1785943830311';
+  /**
+   * TypeORM records THIS value in `api_migrations`, not the class name — it reads the
+   * instance property first and only falls back to `constructor.name`. Renaming the class
+   * without renaming this leaves the code and the tracking table disagreeing, and the next
+   * `migration:run` tries to re-apply a migration that is already in place.
+   */
+  name = 'InitialSchema1785943830311';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`CREATE TYPE "public"."role_enum" AS ENUM('ADMIN', 'CONSUMER')`);
@@ -206,7 +212,7 @@ export class InitialSchema1785943830311 implements MigrationInterface {
       `CREATE TYPE "public"."settings_value_type_enum" AS ENUM('STRING', 'NUMBER', 'BOOLEAN', 'JSON')`,
     );
     await queryRunner.query(
-      `CREATE TABLE "settings" ("id" uuid NOT NULL DEFAULT gen_random_uuid(), "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updatedAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "deletedAt" TIMESTAMP WITH TIME ZONE, "key" character varying(80) NOT NULL, "value" jsonb NOT NULL, "valueType" "public"."settings_value_type_enum" NOT NULL, "description" character varying(255) NOT NULL, "isPublic" boolean NOT NULL DEFAULT false, "updatedBy" uuid, CONSTRAINT "PK_0669fe20e252eb692bf4d344975" PRIMARY KEY ("id"))`,
+      `CREATE TABLE "settings" ("id" uuid NOT NULL DEFAULT gen_random_uuid(), "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updatedAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "deletedAt" TIMESTAMP WITH TIME ZONE, "key" character varying(80) NOT NULL, "value" jsonb, "valueType" "public"."settings_value_type_enum" NOT NULL, "description" character varying(255) NOT NULL, "isPublic" boolean NOT NULL DEFAULT false, "updatedBy" uuid, CONSTRAINT "PK_0669fe20e252eb692bf4d344975" PRIMARY KEY ("id"))`,
     );
     await queryRunner.query(`CREATE INDEX "IDX_settings_updatedBy" ON "settings" ("updatedBy") `);
     await queryRunner.query(
