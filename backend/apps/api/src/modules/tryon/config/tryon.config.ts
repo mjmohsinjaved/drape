@@ -4,6 +4,12 @@ import { ConfigService } from '@nestjs/config';
 import { TryOnDriverName } from '@api/config/env.validation';
 
 /**
+ * Default ceiling on an upstream response body — 25 MB, the same order as
+ * `STORAGE_MAX_UPLOAD_MB`. Overridden by `TRYON_MAX_RESPONSE_BYTES`.
+ */
+export const DEFAULT_MAX_RESPONSE_BYTES = 25 * 1024 * 1024;
+
+/**
  * The try-on module's slice of §7, resolved once at construction.
  *
  * **`apiKey` exists here and nowhere else** (PRD B-1, §9.2). It is `null` under the
@@ -28,6 +34,21 @@ export class TryOnConfig {
 
   /** Retry ceiling, **3** per §8.3 — total attempts, not retries-after-the-first. */
   readonly maxAttempts: number;
+
+  /**
+   * Hard ceiling on an upstream response body, in bytes (E-11).
+   *
+   * The upstream returns one render. Without a ceiling, axios buffers whatever arrives
+   * into a single `Buffer` *before* the provider can look at the status or the content
+   * type — so a hostile or compromised upstream can spend a megabyte of gzip to make
+   * the API allocate gigabytes, three times over per `TRYON_MAX_ATTEMPTS`, and take the
+   * single process down along with every open SSE stream.
+   *
+   * 25 MB by default, matching `STORAGE_MAX_UPLOAD_MB`: a render is a PNG of roughly
+   * the same order as the photo that produced it, and a body larger than the largest
+   * thing we would ever accept as an upload is not a render.
+   */
+  readonly maxResponseBytes: number;
 
   /** Exponential backoff base: attempt *n* waits `base * 2^(n-1)`. */
   readonly backoffBaseMs: number;
@@ -57,6 +78,9 @@ export class TryOnConfig {
     this.apiVersion = config.getOrThrow<string>('TRYON_API_VERSION');
     this.timeoutMs = config.getOrThrow<number>('TRYON_TIMEOUT_MS');
     this.maxAttempts = config.getOrThrow<number>('TRYON_MAX_ATTEMPTS');
+    this.maxResponseBytes = TryOnConfig.readByteCap(
+      config.get<string | number>('TRYON_MAX_RESPONSE_BYTES'),
+    );
     this.backoffBaseMs = config.getOrThrow<number>('TRYON_BACKOFF_BASE_MS');
     this.testRenderConcurrency = config.getOrThrow<number>('TRYON_TEST_RENDER_CONCURRENCY');
     this.mockLatencyMs = config.getOrThrow<number>('TRYON_MOCK_LATENCY_MS');
@@ -96,6 +120,21 @@ export class TryOnConfig {
       this.apiKeyValue !== null &&
       this.apiKeyValue.length > 0
     );
+  }
+
+  /**
+   * `TRYON_MAX_RESPONSE_BYTES` → a positive integer, or `DEFAULT_MAX_RESPONSE_BYTES`.
+   *
+   * Read defensively rather than with `getOrThrow` because `env.validation.ts` does not
+   * yet declare the key, so `ConfigService` hands back the raw string when it is set and
+   * `undefined` when it is not. This is a *bound*, never a secret — E-2 forbids a default
+   * for a credential, not for a ceiling — and a bound that fails open would be the whole
+   * vulnerability back again, so an unparseable value falls back to the default rather
+   * than to "unlimited".
+   */
+  private static readByteCap(raw: string | number | undefined): number {
+    const parsed = typeof raw === 'number' ? raw : Number.parseInt(String(raw ?? ''), 10);
+    return Number.isInteger(parsed) && parsed > 0 ? parsed : DEFAULT_MAX_RESPONSE_BYTES;
   }
 
   /** Backoff for attempt `attempt` (1-based), in milliseconds. */

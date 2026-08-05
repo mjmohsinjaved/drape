@@ -4,6 +4,8 @@
  * The subject-mismatch case is the one that matters most: PRD §9.2 requires that a render URL
  * issued to one account cannot be replayed by another.
  */
+import { createHmac } from 'node:crypto';
+
 import { SignedUrlService, URL_EXPIRY_BUCKET_SECONDS } from './signed-url.service';
 
 import type { StorageConfig } from './storage.config';
@@ -328,5 +330,142 @@ describe('SignedUrlService', () => {
         'FILE_TOKEN_INVALID',
       );
     });
+
+    /**
+     * `''` is not a subject.
+     *
+     * `POST /files/upload/:token` is a `@Public()` route, so a caller with no session
+     * reaches `verifyUploadTicket` with `subject` resolved from nothing. A ticket whose
+     * `sub` were `''` would compare **equal** to that and be redeemable by anybody.
+     * Unreachable today because every call site passes a session id — but the local
+     * driver used to default `subject` to `''`, which is precisely how it would have
+     * become reachable.
+     */
+    it('refuses to mint a ticket with an empty subject', () => {
+      expect(
+        errorCodeOf(() => service.issueUploadTicket(PHOTO_KEY, { ...ticketOptions, subject: '' })),
+      ).toBe('UPLOAD_TICKET_INVALID');
+    });
+
+    it('refuses a ticket whose sub is empty, however it was minted', () => {
+      // Forged with this service's own secret, so only the emptiness is under test.
+      const encoded = Buffer.from(
+        JSON.stringify({
+          key: PHOTO_KEY,
+          exp: Math.floor(now.getTime() / 1000) + 900,
+          sub: '',
+          maxBytes: 1024,
+          contentType: 'image/jpeg',
+        }),
+        'utf8',
+      ).toString('base64url');
+      const forged = `${encoded}.${signUploadPayload(SECRET, encoded)}`;
+
+      expect(errorCodeOf(() => service.verifyUploadTicket(forged, { subject: '', now }))).toBe(
+        'UPLOAD_TICKET_INVALID',
+      );
+    });
+  });
+
+  /**
+   * ARCHITECTURE §3.4 — `exports/**`.
+   *
+   * The single caller passes a subject, so nothing leaked. But `subjectRequiredForKey` is
+   * the guard whose entire job is to make forgetting impossible, and it did not cover the
+   * class: `issue('exports/…')` with no subject minted a session-less bearer URL to an
+   * archive holding up to five hundred full-resolution renders of one consumer's body —
+   * on the *public* 3600-second TTL, four times the render TTL.
+   */
+  describe('export archives are a private object class (§3.4)', () => {
+    const EXPORT_KEY = `exports/${OWNER}/aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee.zip`;
+
+    it('requires a subject', () => {
+      expect(service.subjectRequiredForKey(EXPORT_KEY)).toBe(true);
+      expect(errorCodeOf(() => service.issue(EXPORT_KEY))).toBe('FILE_TOKEN_SUBJECT_MISMATCH');
+    });
+
+    it('takes the render TTL, not the public one — an archive is a container of renders', () => {
+      expect(service.ttlSecondsForKey(EXPORT_KEY)).toBe(900);
+    });
+
+    it('cannot be replayed by another account', () => {
+      const token = service.issue(EXPORT_KEY, { subject: OWNER, now });
+      expect(errorCodeOf(() => service.verify(token, { subject: ATTACKER, now }))).toBe(
+        'FILE_TOKEN_SUBJECT_MISMATCH',
+      );
+    });
+  });
+
+  /**
+   * An empty `sub` is a token scoped to nobody that still *looks* scoped: `payload.sub
+   * !== undefined` is true for `''`, so verification compares it against a session id and
+   * refuses everybody — or, on a `@Public()` route where no session resolves, matches.
+   * Neither is an outcome any caller wants, so it is refused at issue.
+   */
+  describe('an empty subject or audience is never a credential', () => {
+    it('refuses an empty subject on a public key', () => {
+      expect(errorCodeOf(() => service.issue(PUBLIC_KEY, { subject: '' }))).toBe(
+        'FILE_TOKEN_SUBJECT_MISMATCH',
+      );
+    });
+
+    it('refuses an empty subject on a private key', () => {
+      expect(errorCodeOf(() => service.issue(RENDER_KEY, { subject: '' }))).toBe(
+        'FILE_TOKEN_SUBJECT_MISMATCH',
+      );
+    });
+
+    it('refuses an empty audience', () => {
+      expect(errorCodeOf(() => service.issue(PUBLIC_KEY, { audience: '' }))).toBe(
+        'FILE_TOKEN_SUBJECT_MISMATCH',
+      );
+    });
+  });
+
+  /** C-34 — the claim that lets a revoked share link stop the images it handed out. */
+  describe('the audience claim (C-34)', () => {
+    const THUMB_KEY = 'thumbnails/render/aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee-320.webp';
+    const AUDIENCE = 'share-link:0f1e2d3c-4b5a-4988-9776-a5b4c3d2e1f0';
+
+    it('round-trips through sign and verify, unmodified', () => {
+      const token = service.issue(THUMB_KEY, { audience: AUDIENCE, ttlSeconds: 300, now });
+      expect(service.verify(token, { now })).toEqual({
+        key: THUMB_KEY,
+        exp: Math.floor(now.getTime() / 1000) + 300,
+        aud: AUDIENCE,
+      });
+    });
+
+    it('is covered by the HMAC, so it cannot be swapped for another link', () => {
+      const token = service.issue(THUMB_KEY, { audience: AUDIENCE, ttlSeconds: 300, now });
+      const [, signature] = token.split('.');
+      const swapped = Buffer.from(
+        JSON.stringify({
+          key: THUMB_KEY,
+          exp: Math.floor(now.getTime() / 1000) + 300,
+          aud: 'share-link:ffffffff-ffff-4fff-8fff-ffffffffffff',
+        }),
+        'utf8',
+      ).toString('base64url');
+
+      expect(errorCodeOf(() => service.verify(`${swapped}.${signature ?? ''}`, { now }))).toBe(
+        'FILE_TOKEN_INVALID',
+      );
+    });
+
+    it('still yields a stable URL inside one expiry bucket, so caching survives', () => {
+      const first = service.issue(THUMB_KEY, { audience: AUDIENCE, ttlSeconds: 300, now });
+      const second = service.issue(THUMB_KEY, {
+        audience: AUDIENCE,
+        ttlSeconds: 300,
+        now: new Date(now.getTime() + 30_000),
+      });
+      expect(first).toBe(second);
+    });
   });
 });
+
+/** Reproduces the `"upload:"`-domain signature, so a forged ticket can be built in a test. */
+function signUploadPayload(secret: string, encodedPayload: string): string {
+  return createHmac('sha256', secret).update(`upload:${encodedPayload}`).digest('base64url');
+}

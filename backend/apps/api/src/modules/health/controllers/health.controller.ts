@@ -19,8 +19,17 @@ import { HealthService } from '../services/health.service';
  * both carry `@Public()` **and** the explicit `@Roles(Role.PUBLIC)` contract the
  * B-5 route-guard check requires.
  *
- * Throttling is explicitly **skipped** on both, per the §5.22 override table: a
- * rate-limited liveness probe takes a healthy instance out of rotation.
+ * Throttling is **skipped** on both, per the §5.22 override table: a rate-limited
+ * liveness probe takes a healthy instance out of rotation, and an orchestrator that
+ * cannot get an answer stops routing traffic to a perfectly healthy process.
+ *
+ * §2.6 requires a `@Public()` route to declare its throttle policy explicitly, and
+ * these two carry their `@SkipThrottle()` **on the handler** rather than relying on
+ * the class-level one alone. That is the §5.22 declaration, made local and visible
+ * next to the `@Public()` it qualifies; adding a `@Throttle()` beside it would be
+ * dead metadata, because `@nestjs/throttler` checks the skip first and the two would
+ * contradict each other. The class-level decorator stays as the default for anything
+ * added here later.
  *
  * Neither response reveals configuration: no host, no path, no driver name, no
  * version of any dependency.
@@ -34,6 +43,7 @@ export class HealthController {
   @Get()
   @Public()
   @Roles(Role.PUBLIC)
+  @SkipThrottle()
   @ResponseMessage('Service is live')
   @ApiOperation({ summary: 'Liveness probe' })
   @ApiOkResponse({ type: LivenessResponseDto })
@@ -44,6 +54,7 @@ export class HealthController {
   @Get('ready')
   @Public()
   @Roles(Role.PUBLIC)
+  @SkipThrottle()
   @ResponseMessage('Service is ready')
   @ApiOperation({ summary: 'Readiness probe: database and storage root' })
   @ApiOkResponse({ type: ReadinessResponseDto })

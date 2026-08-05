@@ -10,7 +10,12 @@ import {
   type InMemoryRepository,
 } from '../../../../test/fixtures';
 import { FIXED_NOW, freezeClock, minutesFromFixedNow } from '../../../../test/setup/time';
-import { AUTH_CONFIG, REVOKE_REASONS, USER_DIRECTORY } from '../auth.constants';
+import {
+  AUTH_CONFIG,
+  REVOKE_REASONS,
+  TWOFA_MAX_CHALLENGE_ATTEMPTS,
+  USER_DIRECTORY,
+} from '../auth.constants';
 import { AUTH_EVENTS } from '../auth.events';
 import { AuthAttempt } from '../entities/auth-attempt.entity';
 import { Session } from '../entities/session.entity';
@@ -600,6 +605,153 @@ describe('AuthService', () => {
       expect(suite.attempts.$rows.some((row) => row.outcome === AuthOutcome.TWOFA_FAILED)).toBe(
         true,
       );
+    });
+
+    /* ---------------------------------------------------------------------------------------
+     * S-6 — the second factor is a credential, so it gets a credential's backoff
+     * ------------------------------------------------------------------------------------ */
+
+    /**
+     * `completeTwoFactorChallenge` recorded `TWOFA_FAILED` and never read it back, and
+     * `assertNotLockedOut` was called on exactly one path: password login. The only limiter
+     * left on the challenge was `@Throttle(5/60s)` — and because `UserThrottlerGuard` runs
+     * *before* `SessionAuthGuard` on a `@Public()` route, its tracker is the **IP**. TOTP
+     * tolerance is ±1 step, so three of a million codes are live at any instant; an attacker
+     * holding a stolen password sprayed from a proxy pool with no backoff, no account lock and
+     * nothing written anywhere a human would look, and the second factor fell inside a day.
+     *
+     * Two independent bounds now apply, and each of these tests fails without one of them.
+     */
+    describe('the challenge is rate-limited per account, not per address', () => {
+      /** An enrolled admin, signed in as far as the pending session. */
+      async function pendingAdmin(): Promise<{ user: AuthUser; token: string; sessionId: string }> {
+        const totp = suite.harness.get<TotpService>(TotpService);
+        const enrolment = totp.enrol('admin@example.invalid');
+        const user = buildAuthUser({
+          role: Role.ADMIN,
+          email: 'admin@example.invalid',
+          passwordHash: await suite.passwords.hash(PASSWORD),
+          twofaSecret: enrolment.encryptedSecret,
+          twofaEnabledAt: FIXED_NOW,
+        });
+        suite.directory.rows.push(user);
+
+        const login = await suite.service.login(user.email, PASSWORD, FACTS);
+
+        return {
+          user,
+          token: login.issued?.token as string,
+          sessionId: login.issued?.session.id as string,
+        };
+      }
+
+      /**
+       * One wrong code, a second later.
+       *
+       * The clock moves because the lockout reads `auth_attempts.createdAt` newest-first;
+       * a run of attempts sharing one timestamp has no "newest", which is a property of a
+       * frozen clock and not of the code under test.
+       */
+      async function guessWrong(token: string | undefined, ip = FACTS.ip): Promise<string> {
+        jest.setSystemTime(new Date(Date.now() + 1_000));
+        return capture(
+          suite.service.completeTwoFactorChallenge(token, '000000', {
+            ip,
+            userAgent: FACTS.userAgent,
+          }),
+        );
+      }
+
+      it(`revokes the pending session after ${TWOFA_MAX_CHALLENGE_ATTEMPTS} wrong codes`, async () => {
+        const { token, sessionId } = await pendingAdmin();
+
+        for (let attempt = 0; attempt < TWOFA_MAX_CHALLENGE_ATTEMPTS; attempt += 1) {
+          expect(JSON.parse(await guessWrong(token))).toMatchObject({
+            errorCode: ErrorCode.TWOFA_INVALID,
+          });
+        }
+
+        const row = suite.sessions.$rows.find((candidate) => candidate.id === sessionId);
+        expect(row?.revokedAt).not.toBeNull();
+        expect(row?.revokedReason).toBe(REVOKE_REASONS.TWOFA_FAILED);
+      });
+
+      it('tells the attacker nothing — the cap is announced only to the operator', async () => {
+        const { user, token, sessionId } = await pendingAdmin();
+
+        for (let attempt = 0; attempt < TWOFA_MAX_CHALLENGE_ATTEMPTS; attempt += 1) {
+          await guessWrong(token);
+        }
+
+        // Same code and same copy on the attempt that locked as on the first one.
+        expect(suite.emit).toHaveBeenCalledWith(
+          AUTH_EVENTS.TWOFA_CHALLENGE_LOCKED,
+          expect.objectContaining({
+            userId: user.id,
+            sessionId,
+            failureCount: TWOFA_MAX_CHALLENGE_ATTEMPTS,
+          }),
+        );
+      });
+
+      it('forces the password step again — the dead session cannot be challenged further', async () => {
+        const { token } = await pendingAdmin();
+
+        for (let attempt = 0; attempt < TWOFA_MAX_CHALLENGE_ATTEMPTS; attempt += 1) {
+          await guessWrong(token);
+        }
+
+        expect(JSON.parse(await guessWrong(token))).toMatchObject({
+          errorCode: ErrorCode.SESSION_INVALID,
+        });
+      });
+
+      it('locks the account, so a fresh session from a new IP is refused too', async () => {
+        const { user, token } = await pendingAdmin();
+
+        for (let attempt = 0; attempt < TWOFA_MAX_CHALLENGE_ATTEMPTS; attempt += 1) {
+          await guessWrong(token);
+        }
+
+        // A proxy rotation buys a new address and a new pending session. Neither helps:
+        // the S-6 counter is keyed by the account, which is the thing being attacked.
+        const sessions = suite.harness.get<SessionService>(SessionService);
+        const fresh = await sessions.issue({
+          user,
+          ip: '198.51.100.9',
+          userAgent: null,
+          twofaPending: true,
+          now: new Date(),
+        });
+
+        expect(JSON.parse(await guessWrong(fresh.token, '198.51.100.9'))).toMatchObject({
+          errorCode: ErrorCode.ACCOUNT_LOCKED,
+        });
+      });
+
+      it('leaves an honest first attempt alone', async () => {
+        const { token } = await pendingAdmin();
+
+        expect(JSON.parse(await guessWrong(token))).toMatchObject({
+          errorCode: ErrorCode.TWOFA_INVALID,
+        });
+        expect(suite.emit).not.toHaveBeenCalledWith(
+          AUTH_EVENTS.TWOFA_CHALLENGE_LOCKED,
+          expect.anything(),
+        );
+      });
+
+      it('applies the same cap to recovery codes, which are guessable too', async () => {
+        const { token, sessionId } = await pendingAdmin();
+
+        for (let attempt = 0; attempt < TWOFA_MAX_CHALLENGE_ATTEMPTS; attempt += 1) {
+          jest.setSystemTime(new Date(Date.now() + 1_000));
+          await capture(suite.service.completeRecovery(token, 'AAAA-BBBB-CCCC', FACTS));
+        }
+
+        const row = suite.sessions.$rows.find((candidate) => candidate.id === sessionId);
+        expect(row?.revokedReason).toBe(REVOKE_REASONS.TWOFA_FAILED);
+      });
     });
 
     it('refuses a challenge with no session cookie', async () => {

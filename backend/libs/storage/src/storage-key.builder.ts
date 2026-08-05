@@ -25,6 +25,18 @@ export const IMAGE_EXTS: readonly ImageExt[] = ['jpg', 'jpeg', 'png', 'webp', 'h
 export type ThumbnailKind =
   'garment' | 'render' | 'category' | 'person-blurred' | 'reference-model';
 
+/**
+ * §3.3 / C-39 — the extension and content type of a data-export archive.
+ *
+ * A real ZIP, written by `retention`'s `buildZipArchive`. The constants live here
+ * rather than beside the writer for the same reason every other key constant does:
+ * "what a key may look like" has exactly one home.
+ */
+export const EXPORT_EXTENSION = 'zip';
+
+/** `application/zip`. Stored on the object so `GET /files/:token` serves it correctly. */
+export const EXPORT_CONTENT_TYPE = 'application/zip';
+
 /** §3.3 — `320w` grid, `640w` detail, `160w` admin table. */
 export type ThumbnailWidth = 160 | 320 | 640;
 
@@ -161,6 +173,26 @@ export const StorageKeys = {
 
   /** `brand/<uuid>.<ext>` — the only prefix allowed to hold an `svg`, sanitised before write. */
   brandAsset: (ext: ImageExt): string => `brand/${randomUUID()}.${ext}`,
+
+  /**
+   * `exports/<userId>/<uuid>.zip` — one C-39 data-export archive.
+   *
+   * Built from a **session-derived** `userId` and a fresh v4 uuid, and nothing else.
+   * There is no code path where a caller supplies a segment, which is what makes
+   * `GET /me/export/:exportId` safe: the key it reconstructs is always inside her own
+   * prefix, so an id belonging to somebody else addresses an object that does not
+   * exist rather than one that does.
+   */
+  dataExport: (userId: string): string => `exports/${userId}/${randomUUID()}.${EXPORT_EXTENSION}`,
+
+  /**
+   * The key an export id resolves to.
+   *
+   * Both segments are validated by the caller — `userId` comes from the session and
+   * `exportId` through `@IsUUID()` — so this cannot compose a key outside her prefix.
+   */
+  dataExportFor: (userId: string, exportId: string): string =>
+    `exports/${userId}/${exportId}.${EXPORT_EXTENSION}`,
 } as const;
 
 /**
@@ -175,12 +207,70 @@ export const StoragePrefixes = {
   thumbnailsOfKind: (kind: ThumbnailKind): string => `thumbnails/${kind}/`,
   referenceModels: (): string => 'reference-models/',
   brand: (): string => 'brand/',
+  /** `exports/<userId>/` — dropped wholesale on account deletion (§3.3, §9.3). */
+  exportsOfUser: (userId: string): string => `exports/${userId}/`,
+  /** `person-photos/` — every account's photographs. Only the retention sweep walks it. */
+  allPersonPhotos: (): string => 'person-photos/',
+  /** `renders/` — every account's renders. Only the retention sweep walks it. */
+  allRenders: (): string => 'renders/',
+  /** `exports/` — every account's archives. Only the retention sweep walks it. */
+  allExports: (): string => 'exports/',
 } as const;
 
 /** The `thumbnails/<kind>/` a key belongs to, used to pick the §3.4 TTL and subject rule. */
 export function keyPrefixSegment(key: string): string {
   const slash = key.indexOf('/');
   return slash === -1 ? key : key.slice(0, slash);
+}
+
+/* -------------------------------------------------------------------------------------------------
+ * Reading a key back (§3.3, §3.5 step 4)
+ * ---------------------------------------------------------------------------------------------- */
+
+/** The three key namespaces that are private to exactly one account. */
+export type OwnedKeyNamespace = 'person-photos' | 'renders' | 'exports';
+
+/** What {@link parseOwnedKey} recovers from `<namespace>/<userId>/<objectId>.<ext>`. */
+export interface ParsedOwnedKey {
+  readonly namespace: OwnedKeyNamespace;
+  /** The account the object belongs to — the second segment of the key. */
+  readonly userId: string;
+  /** The object's own uuid — the filename stem. */
+  readonly objectId: string;
+}
+
+const OWNED_KEY_PATTERN =
+  /^(person-photos|renders|exports)\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.[a-z0-9]{2,5}$/;
+
+/**
+ * Recovers the owner and the object id a key encodes, or `null` when it is not one of ours.
+ *
+ * The **only** sanctioned way to read a key. §3.3 says keys are built here and nowhere
+ * else; taking them apart with an ad-hoc `split('/')` at a call site is the same defect
+ * in the other direction, and it is how a sweep ends up deleting `renders/` itself.
+ *
+ * The retention orphan sweep (§3.5 step 4) needs both halves: the owner, so a
+ * `deletion_log` row can name whose object was removed, and the object id, so the row
+ * has a `subjectId` that was never invented. A key that does not parse is left alone
+ * rather than guessed at — an unrecognised object is a reason to investigate, never a
+ * reason to delete.
+ */
+export function parseOwnedKey(key: string): ParsedOwnedKey | null {
+  const match = OWNED_KEY_PATTERN.exec(key);
+  if (match === null) {
+    return null;
+  }
+  const [, namespace, userId, objectId] = match;
+  if (namespace === undefined || userId === undefined || objectId === undefined) {
+    return null;
+  }
+  return { namespace: namespace as OwnedKeyNamespace, userId, objectId };
+}
+
+/** The export id encoded in an `exports/**` key, or `null` when the key is not one. */
+export function exportIdFromKey(key: string): string | null {
+  const parsed = parseOwnedKey(key);
+  return parsed !== null && parsed.namespace === 'exports' ? parsed.objectId : null;
 }
 
 /* -------------------------------------------------------------------------------------------------

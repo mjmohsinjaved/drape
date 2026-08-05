@@ -21,6 +21,7 @@ import {
   MetricsService,
   Role,
   UserStatus,
+  type AppException,
   type ICurrentUser,
 } from '@library/common';
 import {
@@ -508,6 +509,34 @@ describe('PersonPhotosService — §9.2: ownership is a predicate', () => {
     await expect(service.assertOwnedPhoto(OWNER, PHOTO_B)).rejects.toMatchObject({
       errorCode: ErrorCode.PHOTO_NOT_FOUND,
     });
+  });
+
+  /**
+   * §2.4 masks `PHOTO_NOT_OWNED` into `PHOTO_NOT_FOUND` — but it rewrites the *code*, and
+   * `GlobalExceptionFilter` used to strip `details` only on the branch it rewrote. Both
+   * throws here carried `details: { photoId }`, so a foreign id answered without a `details`
+   * key and a never-existed id answered with one. Same status, same code, different bytes:
+   * the mask defeated by the one field it did not touch.
+   *
+   * The filter now drops `details` for every mask target as well, and this asserts the other
+   * half — neither throw attaches one in the first place, so nothing depends on that.
+   */
+  it.each([
+    ['another account’s photo', PHOTO_A, ErrorCode.PHOTO_NOT_OWNED],
+    ['an id that exists nowhere', PHOTO_B, ErrorCode.PHOTO_NOT_FOUND],
+  ])('carries no details for %s, so the two are indistinguishable', async (_label, id, code) => {
+    const { service } = build({ rows: [buildPhoto({ id: PHOTO_A, userId: OTHER })] });
+
+    const thrown = await service.assertOwnedPhoto(OWNER, id).then(
+      () => {
+        throw new Error('expected the call to reject');
+      },
+      (error: unknown) => error as AppException,
+    );
+
+    expect(thrown.errorCode).toBe(code);
+    expect(thrown.getAppPayload().details).toBeUndefined();
+    expect(JSON.stringify(thrown.getAppPayload())).not.toContain(id);
   });
 
   it('puts the userId in the query rather than comparing it afterwards', async () => {

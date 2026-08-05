@@ -5,7 +5,7 @@
  * never read and never written by this suite.
  */
 import { createHash } from 'node:crypto';
-import { mkdtemp, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdtemp, readdir, rm, stat, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { Readable } from 'node:stream';
@@ -461,6 +461,72 @@ describe('LocalDiskDriver', () => {
   describe('free space (requirement 10)', () => {
     it('reports a positive number of bytes for the volume holding the root', async () => {
       expect(await driver.freeSpaceBytes()).toBeGreaterThan(0);
+    });
+  });
+
+  /**
+   * ARCHITECTURE §3.2 requirement 4 — "`.tmp` swept of files older than 6 hours by the
+   * retention cron."
+   *
+   * `init()`'s own comment claimed this happened; nothing implemented it. A `.tmp` file is
+   * a write that started and never renamed into place — an aborted upload, a process
+   * killed mid-stream — so it may be most of a photograph, and it is addressable by no
+   * key, which means no row names it and no other sweep can see it. This is the only way
+   * one is ever removed.
+   */
+  describe('sweeping .tmp (requirement 4)', () => {
+    const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
+
+    async function writeTemporaryFile(name: string, ageMs: number): Promise<string> {
+      const full = join(root, '.tmp', name);
+      await writeFile(full, 'a partial photograph');
+      const when = new Date(Date.now() - ageMs);
+      await utimes(full, when, when);
+      return full;
+    }
+
+    it('removes a stale temporary file', async () => {
+      await writeTemporaryFile('aborted-upload', SIX_HOURS_MS + 60_000);
+
+      const removed = await driver.sweepTemporaryFiles(new Date(Date.now() - SIX_HOURS_MS), 100);
+
+      expect(removed).toBe(1);
+      expect(await readdir(join(root, '.tmp'))).toEqual([]);
+    });
+
+    it('leaves a write that may still be in flight completely alone', async () => {
+      await writeTemporaryFile('in-flight', 30_000);
+
+      const removed = await driver.sweepTemporaryFiles(new Date(Date.now() - SIX_HOURS_MS), 100);
+
+      expect(removed).toBe(0);
+      expect(await readdir(join(root, '.tmp'))).toEqual(['in-flight']);
+    });
+
+    it('never touches a real object, however old', async () => {
+      const key = StorageKeys.render(USER_ID);
+      await driver.put(key, pngBytes('old render'), { contentType: 'image/png' });
+
+      await driver.sweepTemporaryFiles(new Date(Date.now() + SIX_HOURS_MS), 100);
+
+      expect(await driver.exists(key)).toBe(true);
+    });
+
+    it('honours the per-run bound', async () => {
+      for (let index = 0; index < 5; index += 1) {
+        await writeTemporaryFile(`stale-${index}`, SIX_HOURS_MS + 60_000);
+      }
+
+      const removed = await driver.sweepTemporaryFiles(new Date(Date.now() - SIX_HOURS_MS), 2);
+
+      expect(removed).toBe(2);
+      expect(await readdir(join(root, '.tmp'))).toHaveLength(3);
+    });
+
+    it('reports nothing when .tmp does not exist rather than throwing', async () => {
+      await rm(join(root, '.tmp'), { recursive: true, force: true });
+
+      await expect(driver.sweepTemporaryFiles(new Date(), 100)).resolves.toBe(0);
     });
   });
 });

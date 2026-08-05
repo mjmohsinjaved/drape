@@ -7,6 +7,7 @@ import { DataSource, type EntityManager } from 'typeorm';
 import { isAdmin, Locale } from '@library/common';
 import { runInTransaction } from '@library/database';
 
+import type { InviteAcceptedEvent } from '@api/modules/invites/constants/invite-events.constant';
 import { InvitesService } from '@api/modules/invites/services/invites.service';
 
 import { INVITED_ACCOUNT_DIRECTORY } from '../auth.constants';
@@ -49,6 +50,10 @@ import type { AuthUser } from '../interfaces/user-directory.interface';
  * clause. Two requests racing on one token therefore cannot both create an account:
  * the loser updates zero rows, `INVITE_ALREADY_CONSUMED` propagates, and its
  * transaction — account included — rolls back.
+ *
+ * The `INVITE_ACCEPTED` event is emitted **after** that commit, not from inside the
+ * block. An `EventEmitter2` emit does not roll back, so a rolled-back acceptance would
+ * otherwise leave a permanent audit row saying it succeeded.
  */
 @Injectable()
 export class InviteAcceptanceService {
@@ -82,12 +87,14 @@ export class InviteAcceptanceService {
 
     const userId = randomUUID();
 
-    const user = await runInTransaction(
+    const { user, acceptedEvent } = await runInTransaction(
       this.dataSource,
-      async (manager: EntityManager): Promise<AuthUser> => {
+      async (
+        manager: EntityManager,
+      ): Promise<{ user: AuthUser; acceptedEvent: InviteAcceptedEvent }> => {
         const acceptance = await this.invites.consumeToken(rawToken, userId, { manager, now });
 
-        return this.accounts.createInvitedAccount(
+        const created = await this.accounts.createInvitedAccount(
           {
             id: userId,
             // Every one of these three comes off the invite row (S-5, S-4).
@@ -101,13 +108,25 @@ export class InviteAcceptanceService {
           },
           { manager },
         );
+
+        return { user: created, acceptedEvent: acceptance.acceptedEvent };
       },
       { label: 'auth.acceptInvitation' },
     );
 
+    // After the commit, never inside it. `createInvitedAccount` above can still fail —
+    // a duplicate address, a constraint — and roll the token burn back with it; an
+    // `INVITE_ACCEPTED` audit row emitted from inside the block would have survived
+    // that rollback and recorded an acceptance that never happened.
+    this.invites.announceAccepted(acceptedEvent);
+
     if (isAdmin(user.role)) {
       // S-8: mandatory for admins, and impossible to enrol before the account exists.
-      // The session below is what lets the console send them straight to `/auth/2fa/setup`.
+      // The session below is what lets them reach `/auth/2fa/setup` — and *only* that,
+      // plus `/auth/2fa/enable`, `/auth/me` and `/auth/logout`:
+      // `SessionResolverService` refuses an admin with `twofaEnabledAt === null`
+      // everywhere else with `TWOFA_REQUIRED`. The warning below is a record, not the
+      // control.
       this.logger.warn(
         `admin ${user.id} accepted an invitation and has no second factor yet (S-8)`,
       );

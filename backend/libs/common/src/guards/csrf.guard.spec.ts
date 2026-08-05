@@ -61,7 +61,7 @@ describe('CsrfGuard — skips', () => {
     },
   );
 
-  it('skips @SkipCsrf() — login and signup have no session-bound secret yet', () => {
+  it('skips @SkipCsrf() — the ticket-redemption route carries its credential in the URL', () => {
     expect(activate({ method: 'POST', skipCsrf: true })).toBe(true);
   });
 

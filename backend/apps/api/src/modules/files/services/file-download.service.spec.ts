@@ -10,7 +10,12 @@ import { Readable } from 'node:stream';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 
 import { ErrorCode } from '@library/common';
-import { type StorageService, type SignedUrlService, type StoredObject } from '@library/storage';
+import {
+  SignedUrlAudienceRegistry,
+  type StorageService,
+  type SignedUrlService,
+  type StoredObject,
+} from '@library/storage';
 
 import { AUDIT_RECORD_EVENT } from '@api/modules/audit/events/audit.event';
 import { AUDIT_ACTIONS } from '@api/shared/constants/audit-actions.constant';
@@ -46,6 +51,7 @@ interface Harness {
   storage: jest.Mocked<StorageService>;
   signedUrls: SignedUrlService;
   events: EventEmitter2;
+  audiences: SignedUrlAudienceRegistry;
 }
 
 function build(object: StoredObject | null = storedObject(RENDER_KEY, 'image/png')): Harness {
@@ -60,11 +66,16 @@ function build(object: StoredObject | null = storedObject(RENDER_KEY, 'image/png
   const events = new EventEmitter2();
   jest.spyOn(events, 'emit');
 
+  // The real registry, with nothing registered unless a test registers it. That is the
+  // production default too, and it is what makes the fail-closed assertions meaningful.
+  const audiences = new SignedUrlAudienceRegistry();
+
   return {
-    service: new FileDownloadService(storage, signedUrls, events),
+    service: new FileDownloadService(storage, signedUrls, events, audiences),
     storage,
     signedUrls,
     events,
+    audiences,
   };
 }
 
@@ -221,6 +232,108 @@ describe('FileDownloadService — caching policy (§3.4 step 6)', () => {
     const file = await harness.service.open(token, undefined);
 
     expect(file.cacheControl).toMatch(/^public, max-age=\d+$/);
+  });
+});
+
+/**
+ * PRD C-34 — "share links are revocable at any time".
+ *
+ * A share-page thumbnail is read by somebody with no session, so there is no `sub` to
+ * check and the URL used to be a plain bearer token with the public one-hour TTL. Revoking
+ * the link removed the page and left every image URL already handed out working. These
+ * assert the binding that closes it — and, just as importantly, that it fails **closed**.
+ */
+describe('FileDownloadService — audience-bound tokens (C-34, §3.4 step 4b)', () => {
+  const SHARE_LINK_ID = 'dddddddd-1111-4222-8333-444455556666';
+  const AUDIENCE = `share-link:${SHARE_LINK_ID}`;
+  const THUMB_KEY = 'thumbnails/render/cccc1111-2222-4333-8444-555566667777-320.webp';
+
+  function thumbnail(): StoredObject {
+    return storedObject(THUMB_KEY, 'image/webp');
+  }
+
+  it('serves a share thumbnail while the link it names is live', async () => {
+    const harness = build(thumbnail());
+    harness.audiences.register('share-link', { isAudienceLive: async () => true });
+    const token = harness.signedUrls.issue(THUMB_KEY, { audience: AUDIENCE, ttlSeconds: 300 });
+
+    await expect(harness.service.open(token, undefined)).resolves.toMatchObject({
+      contentType: 'image/webp',
+    });
+  });
+
+  it('refuses the same URL once the link has been revoked', async () => {
+    const harness = build(thumbnail());
+    let revoked = false;
+    harness.audiences.register('share-link', { isAudienceLive: async () => !revoked });
+    const token = harness.signedUrls.issue(THUMB_KEY, { audience: AUDIENCE, ttlSeconds: 300 });
+
+    await expect(harness.service.open(token, undefined)).resolves.toBeDefined();
+
+    revoked = true;
+
+    await expect(harness.service.open(token, undefined)).rejects.toMatchObject({
+      errorCode: ErrorCode.FILE_TOKEN_EXPIRED,
+    });
+  });
+
+  it('never reaches storage for a token whose link is revoked', async () => {
+    const harness = build(thumbnail());
+    harness.audiences.register('share-link', { isAudienceLive: async () => false });
+    const token = harness.signedUrls.issue(THUMB_KEY, { audience: AUDIENCE, ttlSeconds: 300 });
+
+    await expect(harness.service.open(token, undefined)).rejects.toBeDefined();
+
+    expect(harness.storage.head).not.toHaveBeenCalled();
+    expect(harness.storage.get).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when no validator has claimed the scheme', async () => {
+    const harness = build(thumbnail());
+    const token = harness.signedUrls.issue(THUMB_KEY, { audience: AUDIENCE, ttlSeconds: 300 });
+
+    // Nothing registered. An unrecognised claim must never be treated as no claim —
+    // that would silently downgrade the token back to a bearer URL.
+    await expect(harness.service.open(token, undefined)).rejects.toMatchObject({
+      errorCode: ErrorCode.FILE_TOKEN_EXPIRED,
+    });
+  });
+
+  it('fails closed when the validator itself throws', async () => {
+    const harness = build(thumbnail());
+    harness.audiences.register('share-link', {
+      isAudienceLive: async () => {
+        throw new Error('the database is down');
+      },
+    });
+    const token = harness.signedUrls.issue(THUMB_KEY, { audience: AUDIENCE, ttlSeconds: 300 });
+
+    await expect(harness.service.open(token, undefined)).rejects.toMatchObject({
+      errorCode: ErrorCode.FILE_TOKEN_EXPIRED,
+    });
+  });
+
+  it('keeps an audience-bound thumbnail cacheable only for the token’s own short life', async () => {
+    const harness = build(thumbnail());
+    harness.audiences.register('share-link', { isAudienceLive: async () => true });
+    const token = harness.signedUrls.issue(THUMB_KEY, { audience: AUDIENCE, ttlSeconds: 300 });
+
+    const file = await harness.service.open(token, undefined);
+    const maxAge = Number(/max-age=(\d+)/.exec(file.cacheControl)?.[1]);
+
+    // The defect was the *public* 3600s TTL on an image of somebody's shortlist.
+    expect(maxAge).toBeGreaterThan(0);
+    expect(maxAge).toBeLessThanOrEqual(300);
+  });
+
+  it('leaves an ordinary subject-less asset alone — no claim, no check', async () => {
+    const harness = build(storedObject(CATALOG_KEY, 'image/jpeg'));
+    const registered = jest.fn(async () => false);
+    harness.audiences.register('share-link', { isAudienceLive: registered });
+    const token = harness.signedUrls.issue(CATALOG_KEY);
+
+    await expect(harness.service.open(token, undefined)).resolves.toBeDefined();
+    expect(registered).not.toHaveBeenCalled();
   });
 });
 

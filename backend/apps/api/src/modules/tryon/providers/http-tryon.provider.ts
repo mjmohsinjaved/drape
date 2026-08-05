@@ -29,6 +29,30 @@ const PERSON_FIELD = 'person_image';
 const MAX_ERROR_SNIPPET = 240;
 
 /**
+ * axios's own words when it aborts a response for exceeding `maxContentLength` or
+ * `maxBodyLength`. Matched so that a stream we cut off is classified as a malformed
+ * response — which does **not** retry — rather than as a transient outage, which would
+ * retry the bomb twice more.
+ */
+const AXIOS_SIZE_ABORT = /max(content|body)length/i;
+
+/**
+ * How much bigger the *request* bound is than the response bound.
+ *
+ * The two are not the same measurement and must not share a number. A response is one
+ * render; a request is **two** images — the garment source and the person photo — and
+ * both are stored as uploaded (only thumbnails are derived), so each can be as large as
+ * `STORAGE_MAX_UPLOAD_MB` allowed. Bounding the request at the response cap would reject
+ * a legitimate generation of two large pieces, which is a worse failure than the one
+ * being prevented: the request bound is a backstop against a runaway body of our own
+ * making, not a defence — both buffers are ours and both were size-checked on the way in.
+ */
+const REQUEST_IMAGES = 2;
+
+/** Multipart boundaries, headers and filenames. Bytes, not megabytes. */
+const MULTIPART_FRAMING_SLACK_BYTES = 64 * 1024;
+
+/**
  * Upstream failure vocabulary → the §8.3 taxonomy.
  *
  * Matched as substrings against the upstream's `code`/`error`/`message`, lower-cased,
@@ -72,6 +96,12 @@ const BODY_CODE_PATTERNS: readonly (readonly [RegExp, TryOnProviderErrorCode])[]
  *    production.
  *  - **Typed errors only.** Every axios shape, every unexpected content type and every
  *    malformed body is classified into the §8.3 taxonomy before it leaves this class.
+ *  - **A bounded response.** `TRYON_MAX_RESPONSE_BYTES` caps what the process will hold
+ *    for one upstream answer, and transparent decompression is off. Both matter because
+ *    axios materialises the *whole* body into a Buffer before `readResponse` sees a
+ *    status or a content type: a compromised upstream that answers a megabyte of gzip
+ *    inflating to gigabytes would OOM the single API process — taking every live SSE
+ *    result stream with it — long before any classification below could run.
  *
  * ### What it never does (E-12, B-1, §9.2)
  *
@@ -99,6 +129,14 @@ export class HttpTryOnProvider implements TryOnProvider {
       validateStatus: () => true,
       responseType: 'arraybuffer',
       maxRedirects: 0,
+      // Both default to `Infinity` on Node. Without `maxContentLength` axios buffers
+      // the entire response before this class is given a chance to reject it.
+      maxContentLength: config.maxResponseBytes,
+      maxBodyLength: config.maxResponseBytes * REQUEST_IMAGES + MULTIPART_FRAMING_SLACK_BYTES,
+      // `decompress: true` (the default) makes the cap above a cap on the *inflated*
+      // size only after the inflation has already happened in memory. The upstream
+      // returns PNG, which is already compressed, so there is nothing to give up.
+      decompress: false,
     });
   }
 
@@ -161,6 +199,11 @@ export class HttpTryOnProvider implements TryOnProvider {
           Authorization: `Bearer ${this.config.readApiKey() ?? ''}`,
           'X-Api-Version': this.config.apiVersion,
           'X-Correlation-Id': request.correlationId,
+          // axios advertises `gzip, deflate, br` whatever `decompress` says, so without
+          // this a well-behaved upstream would gzip a body we have told axios not to
+          // inflate and every render would arrive unreadable. Asking for `identity`
+          // keeps the bytes on the wire the bytes we measure against the cap.
+          'Accept-Encoding': 'identity',
         },
         signal: AbortSignal.timeout(this.config.timeoutMs),
       });
@@ -183,6 +226,22 @@ export class HttpTryOnProvider implements TryOnProvider {
     attempt: number,
     correlationId: string,
   ): TryOnProviderError {
+    // axios cut the response off at `maxContentLength`. That is not an outage and must
+    // not be retried — three attempts at a body designed to exhaust memory is the
+    // vulnerability, not the mitigation — so it is classified as a malformed response.
+    if (error instanceof Error && AXIOS_SIZE_ABORT.test(error.message)) {
+      this.logger.warn(
+        `Upstream response exceeded the ${this.config.maxResponseBytes}-byte cap on ` +
+          `attempt ${attempt}. correlationId=${correlationId}`,
+      );
+      return new TryOnProviderError(
+        ErrorCode.UPSTREAM_INVALID_RESPONSE,
+        'The upstream response exceeded the permitted size.',
+        undefined,
+        { cause: error },
+      );
+    }
+
     const timedOut =
       (axios.isAxiosError(error) &&
         (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT')) ||
@@ -205,6 +264,9 @@ export class HttpTryOnProvider implements TryOnProvider {
   /** Turns a received response into PNG bytes, or into the §8.3 code it represents. */
   private readResponse(response: AxiosResponse<ArrayBuffer>, correlationId: string): Buffer {
     const status = response.status;
+
+    this.assertWithinCap(response, correlationId);
+
     const body = Buffer.from(response.data);
     const contentType = String(response.headers['content-type'] ?? '').toLowerCase();
 
@@ -229,6 +291,44 @@ export class HttpTryOnProvider implements TryOnProvider {
     );
 
     throw new TryOnProviderError(code, `Upstream responded ${status} (${code}).`, status);
+  }
+
+  /**
+   * The size bound, re-asserted here rather than trusted to axios alone.
+   *
+   * `Content-Length` is checked first and on its own: it is a claim the upstream makes
+   * *before* the body is worth looking at, and an answer that declares more than one
+   * render's worth of bytes is refused whatever it then sends. The measured length is
+   * then checked too, because `Content-Length` is optional under chunked transfer and a
+   * hostile upstream will simply omit it.
+   *
+   * A failure here is `UPSTREAM_INVALID_RESPONSE`: §8.3 gives that code no retry, so an
+   * oversized answer costs one attempt rather than `TRYON_MAX_ATTEMPTS` of them, and —
+   * like every code in the taxonomy — it never reaches `commitGeneration()`, so the
+   * consumer is charged neither quota nor budget for it.
+   */
+  private assertWithinCap(response: AxiosResponse<ArrayBuffer>, correlationId: string): void {
+    const cap = this.config.maxResponseBytes;
+    const declared = Number.parseInt(String(response.headers['content-length'] ?? ''), 10);
+    const measured = response.data.byteLength;
+
+    const declaredOverCap = Number.isInteger(declared) && declared > cap ? declared : null;
+    if (declaredOverCap === null && measured <= cap) {
+      return;
+    }
+
+    // The size, never a byte of the body (E-12).
+    this.logger.warn(
+      `Upstream response exceeded the ${cap}-byte cap ` +
+        `(declared=${declaredOverCap ?? 'n/a'} measured=${measured}). ` +
+        `correlationId=${correlationId}`,
+    );
+
+    throw new TryOnProviderError(
+      ErrorCode.UPSTREAM_INVALID_RESPONSE,
+      'The upstream response exceeded the permitted size.',
+      response.status,
+    );
   }
 
   /**

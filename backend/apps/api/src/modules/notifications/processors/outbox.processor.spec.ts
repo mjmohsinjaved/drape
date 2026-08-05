@@ -293,3 +293,131 @@ describe('OutboxProcessor', () => {
     });
   });
 });
+
+/**
+ * PRD §9.3 / E-12 — a delivered row keeps nothing it no longer needs.
+ *
+ * The case that makes this necessary rather than merely tidy is the account-deletion
+ * confirmation. `AccountDeletionService` writes it with `recipientAddress = her email`,
+ * `props.consumerName = her name` and `recipientUserId = null`, inside the transaction
+ * that deletes her `users` row — all three deliberate and all three correct. The
+ * consequence was that after her deletion was logged complete with a verification hash,
+ * one row still held her name and her email address, and **nothing could ever remove it**:
+ * `NotificationsInboxService.purgeForUser` deletes by `recipientUserId`, which is null by
+ * construction, and nothing pruned `SENT` rows at all.
+ */
+describe('OutboxProcessor — a delivered row keeps nothing personal (§9.3, E-12)', () => {
+  it('clears the address and the payload the moment an email is accepted', async () => {
+    const row = outboxRow();
+    const { processor, outbox, notifications } = build([row]);
+    notifications.sendEmail.mockResolvedValue(ok());
+
+    await processor.drainOnce(NOW);
+
+    const settled = outbox.$rows[0];
+    expect(settled?.status).toBe(NotificationStatus.SENT);
+    expect(settled?.sentAt).toEqual(NOW);
+    expect(settled?.recipientAddress).toBeNull();
+    expect(settled?.payload).toEqual({});
+  });
+
+  it('leaves nothing of the deleted account behind after its confirmation is sent', async () => {
+    // The exact shape `AccountDeletionService.execute` writes: address stored, no user id.
+    const row = outboxRow({
+      template: 'ACCOUNT_DELETION_CONFIRMED',
+      recipientUserId: null,
+      recipientAddress: 'ayesha@example.com',
+      payload: { consumerName: 'Ayesha Khan', deletedAt: NOW.toISOString() },
+      dedupeKey: 'account-deleted:aaaaaaaa-1111-4222-8333-444455556666',
+    });
+    const { processor, outbox, notifications } = build([row]);
+    notifications.sendEmail.mockResolvedValue(ok());
+
+    await processor.drainOnce(NOW);
+
+    const serialised = JSON.stringify(outbox.$rows);
+    expect(serialised).not.toContain('ayesha@example.com');
+    expect(serialised).not.toContain('Ayesha Khan');
+  });
+
+  it('keeps an IN_APP payload — that row is her notification, not a delivery record', async () => {
+    const row = outboxRow({ channel: NotificationChannel.IN_APP, recipientAddress: null });
+    const { processor, outbox } = build([row]);
+
+    await processor.drainOnce(NOW);
+
+    const settled = outbox.$rows[0];
+    expect(settled?.status).toBe(NotificationStatus.SENT);
+    // §4.32 makes this row the in-app store; `NotificationsInboxService` renders its copy
+    // from `payload` on every read. Clearing it would blank her notification list.
+    expect(settled?.payload).toMatchObject({ garmentTitle: 'Anarkali in ivory' });
+  });
+
+  it('keeps the payload on a row that has not been delivered yet', async () => {
+    const row = outboxRow();
+    const { processor, outbox, notifications } = build([row]);
+    notifications.sendEmail.mockResolvedValue(failed(true));
+
+    await processor.drainOnce(NOW);
+
+    // A retry has to render the template again.
+    expect(outbox.$rows[0]?.status).toBe(NotificationStatus.PENDING);
+    expect(outbox.$rows[0]?.payload).toMatchObject({ consumerName: 'Ayesha' });
+    expect(outbox.$rows[0]?.recipientAddress).toBe('consumer@example.com');
+  });
+});
+
+describe('OutboxProcessor — pruning delivered rows', () => {
+  const LONG_AGO = new Date('2026-06-01T00:00:00.000Z');
+
+  it('removes a delivered email row past its retention window', async () => {
+    const row = outboxRow({ status: NotificationStatus.SENT, sentAt: LONG_AGO });
+    const { processor, outbox } = build([row]);
+
+    const pruned = await processor.pruneDelivered(NOW);
+
+    expect(pruned).toBe(1);
+    expect(outbox.$rows).toHaveLength(0);
+  });
+
+  it('keeps a recently delivered row, so a support ticket can still be answered', async () => {
+    const row = outboxRow({ status: NotificationStatus.SENT, sentAt: NOW });
+    const { processor, outbox } = build([row]);
+
+    await processor.pruneDelivered(NOW);
+
+    expect(outbox.$rows).toHaveLength(1);
+  });
+
+  it('never prunes an IN_APP row, however old — it is her notification (§4.32)', async () => {
+    const row = outboxRow({
+      channel: NotificationChannel.IN_APP,
+      recipientAddress: null,
+      status: NotificationStatus.SENT,
+      sentAt: LONG_AGO,
+    });
+    const { processor, outbox } = build([row]);
+
+    expect(await processor.pruneDelivered(NOW)).toBe(0);
+    expect(outbox.$rows).toHaveLength(1);
+  });
+
+  it('never prunes a dead letter — that is unresolved work, not a delivery record', async () => {
+    const row = outboxRow({
+      status: NotificationStatus.FAILED,
+      sentAt: LONG_AGO,
+      attempts: OUTBOX_MAX_ATTEMPTS,
+      lastError: 'the gateway has been rejecting every message since Tuesday',
+    });
+    const { processor, outbox } = build([row]);
+
+    expect(await processor.pruneDelivered(NOW)).toBe(0);
+    expect(outbox.$rows).toHaveLength(1);
+  });
+
+  it('is safe to run against an empty table', async () => {
+    const { processor } = build([]);
+
+    await expect(processor.pruneDelivered(NOW)).resolves.toBe(0);
+  });
+});

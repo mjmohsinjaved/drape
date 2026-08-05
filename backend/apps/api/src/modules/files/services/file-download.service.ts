@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 
 import { ErrorCode, isAdmin, StorageException, type ICurrentUser } from '@library/common';
-import { SignedUrlService, StorageService } from '@library/storage';
+import { SignedUrlAudienceRegistry, SignedUrlService, StorageService } from '@library/storage';
 
 import { AUDIT_RECORD_EVENT, AuditRecordEvent } from '@api/modules/audit/events/audit.event';
 import { AUDIT_ACTIONS, AUDIT_TARGET_TYPES } from '@api/shared/constants/audit-actions.constant';
@@ -47,6 +47,7 @@ export class FileDownloadService {
     private readonly storage: StorageService,
     private readonly signedUrls: SignedUrlService,
     private readonly events: EventEmitter2,
+    private readonly audiences: SignedUrlAudienceRegistry,
   ) {}
 
   /**
@@ -59,6 +60,19 @@ export class FileDownloadService {
     // Steps 1–4: malformed → FILE_TOKEN_INVALID, bad HMAC → FILE_TOKEN_INVALID, past `exp` →
     // FILE_TOKEN_EXPIRED, wrong account → FILE_TOKEN_SUBJECT_MISMATCH.
     const payload = this.signedUrls.verify(token, { subject: requester?.id });
+
+    // Step 4b — the `aud` claim, for objects handed to a reader who has no session and
+    // therefore no `sub` to match. A share-page thumbnail (C-33) is the only case today:
+    // the token names the share link it was minted under, and the module that owns
+    // `share_links` says whether that link is still live. Revoking a link (C-34) therefore
+    // stops its images on the very next request rather than at their own expiry.
+    //
+    // Refused, not ignored, when the claim cannot be validated — see
+    // `SignedUrlAudienceRegistry` for why an unrecognised scheme must fail closed.
+    // `FILE_TOKEN_EXPIRED` is the honest code: the token's authority has ended.
+    if (payload.aud !== undefined && !(await this.audiences.isLive(payload.aud))) {
+      throw new StorageException(ErrorCode.FILE_TOKEN_EXPIRED);
+    }
 
     // Step 5. `head` runs the key through `assertValidStorageKey` and `assertInsideRoot`
     // before it touches the filesystem (§3.2 requirements 2 and 3).
@@ -82,7 +96,11 @@ export class FileDownloadService {
         ? // `private` keeps it out of every shared cache; `no-store` is not used because the
           // token already expires and a re-fetch on every scroll would defeat §9.1.
           `private, max-age=${maxAge}, must-revalidate`
-        : `public, max-age=${maxAge}`,
+        : // An audience-bound object has no session to be private *to*, so it cannot be
+          // `private` — but it must not sit in a shared cache for longer than its own
+          // authority either. `max-age` is the token's remaining life, which the issuer
+          // deliberately keeps short for exactly this reason (C-34).
+          `public, max-age=${maxAge}`,
     };
   }
 

@@ -1,10 +1,10 @@
 import type { InjectionToken, ModuleMetadata, Provider, Type } from '@nestjs/common';
 import { Test, type TestingModule } from '@nestjs/testing';
-import { getRepositoryToken } from '@nestjs/typeorm';
+import { getDataSourceToken, getEntityManagerToken, getRepositoryToken } from '@nestjs/typeorm';
 
 import { createInMemoryRepository, type InMemoryRepository } from './in-memory-repository';
 
-import type { EntityManager, ObjectLiteral } from 'typeorm';
+import type { EntityManager, ObjectLiteral, QueryRunner } from 'typeorm';
 
 /**
  * Builds a Nest testing module with in-memory repositories, in one call.
@@ -72,6 +72,18 @@ export interface FakeDataSource {
   getRepository<T extends ObjectLiteral & { id: string }>(
     entity: EntityClass,
   ): InMemoryRepository<T>;
+  /**
+   * `runInTransaction` from `@library/database` — which is how §2.9 rule 3 is actually
+   * written at every call site — drives a `QueryRunner`, not `transaction()`. Without
+   * this a service that follows the house rule fails its own unit test with
+   * `createQueryRunner is not a function`, which reads as a broken fixture rather than
+   * as the missing double it is.
+   *
+   * The runner is a no-op: the repositories above are the store, so work done inside the
+   * "transaction" is visible to assertions outside it. That is the right fidelity for a
+   * unit test — rollback semantics need a database and belong in an integration test.
+   */
+  createQueryRunner(): QueryRunner;
   readonly manager: EntityManager;
 }
 
@@ -98,6 +110,16 @@ function createFakeManager(
     find: async (entity: EntityClass): Promise<unknown> => lookup(entity).find(),
   } as unknown as EntityManager;
 
+  const queryRunner = {
+    manager,
+    isTransactionActive: false,
+    connect: async (): Promise<void> => undefined,
+    startTransaction: async (): Promise<void> => undefined,
+    commitTransaction: async (): Promise<void> => undefined,
+    rollbackTransaction: async (): Promise<void> => undefined,
+    release: async (): Promise<void> => undefined,
+  } as unknown as QueryRunner;
+
   const dataSource: FakeDataSource = {
     manager,
     getRepository: <T extends ObjectLiteral & { id: string }>(
@@ -106,6 +128,7 @@ function createFakeManager(
     transaction: async <T>(
       runInTransaction: (transactional: EntityManager) => Promise<T>,
     ): Promise<T> => runInTransaction(manager),
+    createQueryRunner: (): QueryRunner => queryRunner,
   };
 
   return { manager, dataSource };
@@ -144,10 +167,31 @@ export async function createTestingModule(
     useValue: override.value,
   }));
 
+  /**
+   * `@InjectDataSource()` and `@InjectEntityManager()`, satisfied by the same fixtures.
+   *
+   * §2.9 rule 3 puts every multi-table write inside one transaction, so a service that
+   * writes two tables injects the `DataSource` and calls `runInTransaction`. Every spec
+   * for such a service used to have to know that and wire the token by hand — and a
+   * service that *gained* a second table broke every one of its specs with
+   * `Cannot read properties of undefined`, which names neither the token nor the cause.
+   *
+   * Registered before the caller's overrides so an explicit one still wins.
+   */
+  const connectionProviders: Provider[] = [
+    { provide: getDataSourceToken(), useValue: dataSource },
+    { provide: getEntityManagerToken(), useValue: dataSource.manager },
+  ];
+
   const module = await Test.createTestingModule({
     imports: [...(options.imports ?? [])],
     controllers: [...(options.controllers ?? [])],
-    providers: [...(options.providers ?? []), ...repositoryProviders, ...overrideProviders],
+    providers: [
+      ...(options.providers ?? []),
+      ...repositoryProviders,
+      ...connectionProviders,
+      ...overrideProviders,
+    ],
   }).compile();
 
   return {

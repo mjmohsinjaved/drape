@@ -22,18 +22,33 @@ import * as ts from 'typescript';
 const BACKEND_ROOT = resolve(__dirname, '..');
 const CONTROLLER_ROOT = resolve(BACKEND_ROOT, 'apps', 'api', 'src');
 
-/** The route-declaring decorators this check treats as endpoints. */
+/**
+ * The route-declaring decorators this check treats as endpoints.
+ *
+ * **The complete `@nestjs/common` set**, not the commonly used subset. `@All()` alone
+ * registers a handler for every verb including POST, so omitting it — as this list
+ * once did, along with `@Head()`, `@Options()` and `@Search()` — meant an unguarded
+ * mutating route could be declared and the check would simply not see it.
+ */
 const ROUTE_DECORATORS: ReadonlySet<string> = new Set([
   'Get',
   'Post',
   'Put',
   'Patch',
   'Delete',
+  'All',
+  'Head',
+  'Options',
+  'Search',
   'Sse',
 ]);
 
 const ROLES_DECORATOR = 'Roles';
 const PUBLIC_DECORATOR = 'Public';
+
+/** Why a route failed. Printed so the fix is obvious from the CI log alone. */
+type FailureReason =
+  'no-contract' | 'public-without-roles' | 'class-level-public' | 'class-level-public-declaration';
 
 interface RouteFinding {
   /** Repo-relative, forward-slashed, so the output is identical on Windows and Linux. */
@@ -43,22 +58,36 @@ interface RouteFinding {
   readonly handler: string;
   readonly verb: string;
   readonly path: string;
+  readonly reason: FailureReason;
 }
 
 interface CheckResult {
   readonly filesScanned: number;
   readonly routesChecked: number;
   readonly failures: readonly RouteFinding[];
-  /** `@Public()` without `@Roles(Role.PUBLIC)` — §2.6 asks for both. Reported, not fatal. */
-  readonly warnings: readonly RouteFinding[];
 }
+
+const FAILURE_EXPLANATIONS: Readonly<Record<FailureReason, string>> = {
+  'no-contract': 'declares neither @Roles() nor @Public()',
+  'public-without-roles': '@Public() without @Roles(Role.PUBLIC) — @Public() is not a contract',
+  'class-level-public': 'inherits a class-level @Public()',
+  'class-level-public-declaration': '@Public() on the controller class',
+};
 
 function write(line: string): void {
   process.stdout.write(`${line}\n`);
 }
 
-/** Recursively collects `*.controller.ts`, skipping build output and declaration files. */
-function findControllerFiles(directory: string): string[] {
+/**
+ * Recursively collects candidate TypeScript sources, skipping build output, tests and
+ * declaration files.
+ *
+ * **Filename is not the filter.** The check used to look only at `*.controller.ts`, so
+ * a `@Controller()` class in `admin.ts` — or in a file a refactor renamed — carried no
+ * contract check at all. Every source is parsed and the `@Controller` *decorator* is
+ * what selects a class; the cost is a second of parsing.
+ */
+function findCandidateFiles(directory: string): string[] {
   const found: string[] = [];
 
   // `ReturnType<typeof readdirSync>` resolves to the Buffer overload under
@@ -76,11 +105,12 @@ function findControllerFiles(directory: string): string[] {
       if (entry.name === 'node_modules' || entry.name === 'dist' || entry.name === 'coverage') {
         continue;
       }
-      found.push(...findControllerFiles(full));
+      found.push(...findCandidateFiles(full));
     } else if (
       entry.isFile() &&
-      entry.name.endsWith('.controller.ts') &&
-      !entry.name.endsWith('.d.ts')
+      entry.name.endsWith('.ts') &&
+      !entry.name.endsWith('.d.ts') &&
+      !entry.name.endsWith('.spec.ts')
     ) {
       found.push(full);
     }
@@ -133,24 +163,28 @@ function firstStringArgument(node: ts.Node, wanted: string): string | undefined 
   return undefined;
 }
 
-function checkFile(
-  filePath: string,
-  result: { routesChecked: number },
-): {
-  failures: RouteFinding[];
-  warnings: RouteFinding[];
-} {
+/** What one source file contributed. */
+export interface FileOutcome {
+  readonly routesChecked: number;
+  readonly failures: readonly RouteFinding[];
+}
+
+/**
+ * Analyses one source's text. Pure — no filesystem, no `process` — so the rules below
+ * can be asserted directly against hand-written controllers in a unit test rather than
+ * only against whatever happens to be in the repository today.
+ */
+export function checkSource(displayPath: string, text: string): FileOutcome {
   const source = ts.createSourceFile(
-    filePath,
-    readFileSync(filePath, 'utf8'),
+    displayPath,
+    text,
     ts.ScriptTarget.Latest,
     /* setParentNodes */ true,
     ts.ScriptKind.TS,
   );
 
-  const displayPath = relative(BACKEND_ROOT, filePath).split('\\').join('/');
   const failures: RouteFinding[] = [];
-  const warnings: RouteFinding[] = [];
+  let routesChecked = 0;
 
   for (const statement of source.statements) {
     if (!ts.isClassDeclaration(statement)) {
@@ -166,6 +200,24 @@ function checkFile(
     const basePath = firstStringArgument(statement, 'Controller') ?? '';
     const classDeclaresRoles = classDecorators.has(ROLES_DECORATOR);
     const classDeclaresPublic = classDecorators.has(PUBLIC_DECORATOR);
+    const classLine = source.getLineAndCharacterOfPosition(statement.getStart(source)).line + 1;
+
+    if (classDeclaresPublic) {
+      // A class-level `@Public()` is reported once, on the class, in addition to the
+      // per-route failures below. `getAllAndOverride` makes it apply to every handler,
+      // so one decorator on an admin controller turns the whole controller anonymous —
+      // the single highest-leverage mistake this check exists to stop, and previously
+      // the one it was blindest to.
+      failures.push({
+        file: displayPath,
+        line: classLine,
+        controller: controllerName,
+        handler: '(class)',
+        verb: 'CLASS',
+        path: `/${basePath}`.replace(/\/+/g, '/'),
+        reason: 'class-level-public-declaration',
+      });
+    }
 
     for (const member of statement.members) {
       if (!ts.isMethodDeclaration(member)) {
@@ -178,13 +230,13 @@ function checkFile(
         continue;
       }
 
-      result.routesChecked += 1;
+      routesChecked += 1;
 
       const handlerName = ts.isIdentifier(member.name)
         ? member.name.text
         : member.name.getText(source);
       const routePath = firstStringArgument(member, verb) ?? '';
-      const finding: RouteFinding = {
+      const locate = (reason: FailureReason): RouteFinding => ({
         file: displayPath,
         line: source.getLineAndCharacterOfPosition(member.getStart(source)).line + 1,
         controller: controllerName,
@@ -194,75 +246,88 @@ function checkFile(
           /\/+/g,
           '/',
         ),
-      };
+        reason,
+      });
 
       const hasRoles = handlerDecorators.has(ROLES_DECORATOR) || classDeclaresRoles;
-      const hasPublic = handlerDecorators.has(PUBLIC_DECORATOR) || classDeclaresPublic;
+      const declaresOwnPublic = handlerDecorators.has(PUBLIC_DECORATOR);
 
-      if (!hasRoles && !hasPublic) {
-        failures.push(finding);
-      } else if (hasPublic && !hasRoles) {
-        // §2.6: "A @Public() route must still declare @Roles(Role.PUBLIC) so the B-5 check
-        // passes." Surfaced so it gets fixed, but it is not the B-5 failure itself.
-        warnings.push(finding);
+      if (classDeclaresPublic) {
+        failures.push(locate('class-level-public'));
+      } else if (!hasRoles && !declaresOwnPublic) {
+        failures.push(locate('no-contract'));
+      } else if (!hasRoles) {
+        // §2.6: "A @Public() route must still declare @Roles(Role.PUBLIC) so the B-5
+        // check passes." This was a warning, and `RolesGuard` matched it by logging and
+        // returning true — so a route with `@Public()` and no `@Roles()` was open to
+        // anonymous callers *and* green in CI. Both ends now refuse it.
+        failures.push(locate('public-without-roles'));
       }
     }
   }
 
-  return { failures, warnings };
+  return { routesChecked, failures };
 }
 
-export function checkRouteGuards(): CheckResult {
-  const files = findControllerFiles(CONTROLLER_ROOT);
-  const counter = { routesChecked: 0 };
+function checkFile(filePath: string): FileOutcome {
+  return checkSource(
+    relative(BACKEND_ROOT, filePath).split('\\').join('/'),
+    readFileSync(filePath, 'utf8'),
+  );
+}
+
+export function checkRouteGuards(root: string = CONTROLLER_ROOT): CheckResult {
+  const files = findCandidateFiles(root);
   const failures: RouteFinding[] = [];
-  const warnings: RouteFinding[] = [];
+  let routesChecked = 0;
+  let filesScanned = 0;
 
   for (const file of files) {
-    const outcome = checkFile(file, counter);
+    const outcome = checkFile(file);
+    if (outcome.routesChecked === 0 && outcome.failures.length === 0) {
+      continue;
+    }
+    filesScanned += 1;
+    routesChecked += outcome.routesChecked;
     failures.push(...outcome.failures);
-    warnings.push(...outcome.warnings);
   }
 
-  return { filesScanned: files.length, routesChecked: counter.routesChecked, failures, warnings };
+  return { filesScanned, routesChecked, failures };
 }
 
 function describe(finding: RouteFinding): string {
-  return `${finding.file}:${finding.line}  ${finding.verb} ${finding.path}  ${finding.controller}.${finding.handler}()`;
+  return (
+    `${finding.file}:${finding.line}  ${finding.verb} ${finding.path}  ` +
+    `${finding.controller}.${finding.handler}()  — ${FAILURE_EXPLANATIONS[finding.reason]}`
+  );
 }
 
 function report(result: CheckResult): void {
-  write('check:guards — every route handler must declare @Roles(...) or @Public() (PRD B-5).');
+  write('check:guards — every route handler must declare exactly one @Roles(...) (PRD B-5).');
   write('');
   write(`  controllers scanned  ${result.filesScanned}`);
   write(`  routes checked       ${result.routesChecked}`);
   write(`  routes failing       ${result.failures.length}`);
-  write(`  warnings             ${result.warnings.length}`);
-
-  if (result.warnings.length > 0) {
-    write('');
-    write('WARN — @Public() without @Roles(Role.PUBLIC) (ARCHITECTURE.md §2.6 asks for both):');
-    for (const warning of result.warnings) {
-      write(`  ${describe(warning)}`);
-    }
-  }
 
   if (result.failures.length > 0) {
     write('');
-    write('FAIL — these route handlers declare no role contract:');
+    write('FAIL — these routes have no usable role contract:');
     for (const failure of result.failures) {
       write(`  ${describe(failure)}`);
     }
     write('');
     write('Add @Roles(Role.ADMIN | Role.CONSUMER | Role.PUBLIC) to the handler or its controller.');
-    write('A @Public() route also needs @Roles(Role.PUBLIC) and an explicit @Throttle().');
+    write('@Public() is not a contract: it bypasses SessionAuthGuard and says nothing about who');
+    write('may call the route. A @Public() route also needs @Roles(Role.PUBLIC) and an explicit');
+    write('@Throttle(). @Public() on a controller *class* is never allowed — it applies to every');
+    write('handler on it, which is how a whole admin controller becomes anonymous by accident.');
     return;
   }
 
   write('');
   if (result.routesChecked === 0) {
     write('No route handlers found yet — nothing to check. This passes, but verify the path:');
-    write(`  ${relative(BACKEND_ROOT, CONTROLLER_ROOT).split('\\').join('/')}/**/*.controller.ts`);
+    write(`  ${relative(BACKEND_ROOT, CONTROLLER_ROOT).split('\\').join('/')}/**/*.ts`);
     return;
   }
   write('OK — every route handler declares its role contract.');

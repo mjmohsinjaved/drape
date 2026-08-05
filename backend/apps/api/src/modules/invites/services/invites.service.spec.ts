@@ -344,15 +344,41 @@ describe('InvitesService — S-5', () => {
         role: Role.ADMIN,
         invitedBy: actor.id,
         expiresAt: invites.$rows[0].expiresAt,
+        // Carried, not emitted: the caller announces it once its transaction commits.
+        acceptedEvent: {
+          inviteId: invites.$rows[0].id,
+          email: 'new.admin@example.invalid',
+          actorId: newAdminId,
+          occurredAt: now,
+          consumedByUserId: newAdminId,
+        },
       });
       expect(invites.$rows[0].consumedAt).toEqual(now);
       expect(invites.$rows[0].consumedByUserId).toBe(newAdminId);
     });
 
-    it('emits invite.accepted for the audit listener', async () => {
+    /**
+     * `consumeToken` runs inside `auth`'s transaction, and `EventEmitter2` has no idea a
+     * transaction exists. Emitting inline meant the audit listener wrote `INVITE_ACCEPTED`
+     * the moment the token was burnt — so an account creation that failed a line later rolled
+     * the burn back and left a permanent audit row for an acceptance that never happened.
+     * A-3's log is evidence; an entry for an event that did not occur is worse than a missing
+     * one. The event is now prepared here and emitted by the caller after the commit.
+     */
+    it('prepares invite.accepted but does not emit it — the caller does, after the commit', async () => {
       await service.create(actor, { email: 'new.admin@example.invalid' });
 
-      await service.consumeToken(emailedToken(), newAdminId, { now });
+      const acceptance = await service.consumeToken(emailedToken(), newAdminId, { now });
+
+      expect(emitted.find((entry) => entry.name === INVITE_EVENTS.ACCEPTED)).toBeUndefined();
+      expect(acceptance.acceptedEvent).toMatchObject({ consumedByUserId: newAdminId });
+    });
+
+    it('emits it when announceAccepted is called', async () => {
+      await service.create(actor, { email: 'new.admin@example.invalid' });
+      const acceptance = await service.consumeToken(emailedToken(), newAdminId, { now });
+
+      service.announceAccepted(acceptance.acceptedEvent);
 
       const event = emitted.find((entry) => entry.name === INVITE_EVENTS.ACCEPTED);
       expect(event?.payload).toMatchObject({ consumedByUserId: newAdminId });

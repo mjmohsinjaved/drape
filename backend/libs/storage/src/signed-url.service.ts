@@ -33,6 +33,22 @@ export interface SignedUrlPayload {
   exp: number;
   /** owning userId — present for every private object */
   sub?: string;
+  /**
+   * The **credential** this token is bound to, as `<scheme>:<id>` — currently only
+   * `share-link:<uuid>`.
+   *
+   * `sub` binds a token to a session. Some objects are handed to somebody who has no
+   * session and never will: a share-page thumbnail (C-33) is read by a recipient whose
+   * only authorisation is the link itself. `aud` is the equivalent for them — the token
+   * is valid only while the credential that produced it is still live, so revoking the
+   * link (C-34, "revocable at any time") invalidates every URL it ever minted rather
+   * than only the next one.
+   *
+   * Liveness is decided by whoever owns the credential, through
+   * {@link SignedUrlAudienceRegistry}; this service only carries the claim and proves it
+   * was not tampered with.
+   */
+  aud?: string;
 }
 
 /** §3.5 — the upload ticket payload, signed under the `"upload:"` domain. */
@@ -47,6 +63,11 @@ export interface UploadTicketPayload {
 export interface IssueOptions {
   /** The userId the token is scoped to. Required for private object classes (§3.4). */
   subject?: string;
+  /**
+   * The credential the token is bound to, as `<scheme>:<id>`. See
+   * {@link SignedUrlPayload.aud}. Used where the reader has no session to be a `sub`.
+   */
+  audience?: string;
   /** Overrides the class TTL from the §3.4 table. */
   ttlSeconds?: number;
   /** Injectable clock, for tests. */
@@ -64,6 +85,23 @@ export interface VerifyOptions {
 const BLURRED_MODERATION_PREFIX = 'thumbnails/person-blurred/';
 
 const UPLOAD_DOMAIN_SEPARATOR = 'upload:';
+
+/**
+ * The key namespaces that are private to exactly one account and therefore require a `sub`.
+ *
+ * A **set**, not a chain of `||`, so adding a namespace is one line in one place rather
+ * than an edit to two switch statements that have to agree. `exports/**` was missing from
+ * the old chain for exactly as long as it took somebody to notice: an archive holds up to
+ * five hundred full-resolution renders of one consumer's body, and issuing it without a
+ * subject would have minted a session-less bearer URL to her entire history. The single
+ * caller did pass a subject — but a guard whose whole job is to make forgetting impossible
+ * has to cover the class, not rely on the call site.
+ */
+const SUBJECT_REQUIRED_SEGMENTS: ReadonlySet<string> = new Set([
+  'person-photos',
+  'renders',
+  'exports',
+]);
 
 /**
  * **The window `exp` is quantised to — the reason a signed URL is cacheable at all.**
@@ -98,17 +136,16 @@ export class SignedUrlService {
    * ------------------------------------------------------------------------------------------ */
 
   /**
-   * `true` when the object class requires a `sub` — `person-photos/**`, `renders/**` and
-   * `thumbnails/person-blurred/**`. For the blurred moderation thumbnail the subject is the
-   * reviewing **admin's** id (A-34), not the consumer's: the unblurred photo is never readable by
-   * an admin (S-10).
+   * `true` when the object class requires a `sub` — `person-photos/**`, `renders/**`,
+   * `exports/**` and `thumbnails/person-blurred/**`. For the blurred moderation thumbnail the
+   * subject is the reviewing **admin's** id (A-34), not the consumer's: the unblurred photo is
+   * never readable by an admin (S-10).
    */
   subjectRequiredForKey(key: string): boolean {
     if (key.startsWith(BLURRED_MODERATION_PREFIX)) {
       return true;
     }
-    const segment = keyPrefixSegment(key);
-    return segment === 'person-photos' || segment === 'renders';
+    return SUBJECT_REQUIRED_SEGMENTS.has(keyPrefixSegment(key));
   }
 
   /** The §3.4 TTL for the object class this key belongs to. */
@@ -120,6 +157,10 @@ export class SignedUrlService {
       case 'person-photos':
         return this.config.photoUrlTtlSeconds;
       case 'renders':
+      // An archive is a container full of renders, so it takes the render TTL. The
+      // public TTL it used to fall through to is four times longer, which is the wrong
+      // direction for the single most concentrated object in the store.
+      case 'exports':
         return this.config.renderUrlTtlSeconds;
       default:
         return this.config.publicUrlTtlSeconds;
@@ -140,16 +181,28 @@ export class SignedUrlService {
    */
   issue(key: string, options: IssueOptions = {}): string {
     assertValidStorageKey(key);
-    if (this.subjectRequiredForKey(key) && (options.subject ?? '') === '') {
+    // An empty string is not a subject. Passing one used to be indistinguishable from
+    // passing nothing at the issuing check, and then *distinguishable* at verification —
+    // `payload.sub !== undefined` would be true for `''`, so the token looked scoped while
+    // matching no session at all. Rejected outright, for every key class: there is no
+    // caller for whom "scoped to nobody" is the intended outcome.
+    if (options.subject !== undefined && options.subject === '') {
+      throw fileTokenSubjectMismatch();
+    }
+    if (options.audience !== undefined && options.audience === '') {
+      throw fileTokenSubjectMismatch();
+    }
+    if (this.subjectRequiredForKey(key) && options.subject === undefined) {
       throw fileTokenSubjectMismatch();
     }
     const nowSeconds = bucketedIssuedAtSeconds(options.now);
     const ttl = options.ttlSeconds ?? this.ttlSecondsForKey(key);
-    const payload: SignedUrlPayload =
-      options.subject === undefined
-        ? { key, exp: nowSeconds + ttl }
-        : { key, exp: nowSeconds + ttl, sub: options.subject };
-    return this.sign(payload);
+    return this.sign({
+      key,
+      exp: nowSeconds + ttl,
+      ...(options.subject === undefined ? {} : { sub: options.subject }),
+      ...(options.audience === undefined ? {} : { aud: options.audience }),
+    });
   }
 
   /** The ready-to-use URL a response DTO carries: `{APP_API_URL}/api/v1/files/{token}`. */
@@ -163,11 +216,14 @@ export class SignedUrlService {
 
   /** Signs an already-built payload. Exposed for tests and for re-signing a copied render. */
   sign(payload: SignedUrlPayload): string {
-    const encoded = encodePayload(
-      payload.sub === undefined
-        ? { key: payload.key, exp: payload.exp }
-        : { key: payload.key, exp: payload.exp, sub: payload.sub },
-    );
+    // Key order is part of the contract at the top of this file: two calls with the same
+    // claims must produce byte-identical JSON, or the URL stops being a stable cache key.
+    const encoded = encodePayload({
+      key: payload.key,
+      exp: payload.exp,
+      ...(payload.sub === undefined ? {} : { sub: payload.sub }),
+      ...(payload.aud === undefined ? {} : { aud: payload.aud }),
+    });
     return `${encoded}.${this.hmac(encoded)}`;
   }
 
@@ -228,6 +284,14 @@ export class SignedUrlService {
     },
   ): { token: string; payload: UploadTicketPayload } {
     assertValidStorageKey(key);
+    // §3.5: a ticket is always scoped to the account that will own the bytes. An empty
+    // `sub` would sail through `verifyUploadTicket` for a caller with no session at all,
+    // because `''` compares equal to the `''` a session-less redemption would supply —
+    // and `POST /files/upload/:token` is a `@Public()` route. Unreachable today; refused
+    // here so it stays unreachable.
+    if (options.subject === '') {
+      throw uploadTicketInvalid();
+    }
     const nowSeconds = Math.floor((options.now?.getTime() ?? Date.now()) / 1000);
     const payload: UploadTicketPayload = {
       key,
@@ -267,7 +331,10 @@ export class SignedUrlService {
       throw uploadTicketExpired();
     }
 
-    if (payload.sub !== options.subject) {
+    // The empty check comes first and is unconditional. Without it a ticket whose `sub`
+    // is `''` — which `issueUploadTicket` now refuses to mint, but an older token or a
+    // leaked secret could still present — would be redeemable by a caller supplying `''`.
+    if (payload.sub === '' || payload.sub !== options.subject) {
       throw uploadTicketInvalid();
     }
 
@@ -340,11 +407,16 @@ function parseJsonObject(encodedPayload: string): Record<string, unknown> {
 
 function decodeDownloadPayload(encodedPayload: string): SignedUrlPayload {
   const raw = parseJsonObject(encodedPayload);
-  const { key, exp, sub } = raw;
+  const { key, exp, sub, aud } = raw;
   if (typeof key !== 'string' || typeof exp !== 'number' || !Number.isFinite(exp)) {
     throw fileTokenInvalid();
   }
-  if (sub !== undefined && typeof sub !== 'string') {
+  // `''` is rejected as well as a non-string: a token carrying an empty `sub` would be
+  // "scoped" to a subject no session can ever match, and `issue` refuses to mint one.
+  if (sub !== undefined && (typeof sub !== 'string' || sub === '')) {
+    throw fileTokenInvalid();
+  }
+  if (aud !== undefined && (typeof aud !== 'string' || aud === '')) {
     throw fileTokenInvalid();
   }
   // A token whose HMAC is valid but whose key is not is only reachable if the secret leaked; reject
@@ -352,7 +424,12 @@ function decodeDownloadPayload(encodedPayload: string): SignedUrlPayload {
   if (!isValidStorageKey(key)) {
     throw fileTokenInvalid();
   }
-  return sub === undefined ? { key, exp } : { key, exp, sub };
+  return {
+    key,
+    exp,
+    ...(sub === undefined ? {} : { sub }),
+    ...(aud === undefined ? {} : { aud }),
+  };
 }
 
 function decodeUploadPayload(encodedPayload: string): UploadTicketPayload {

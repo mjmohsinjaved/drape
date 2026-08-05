@@ -17,6 +17,7 @@ import { SettingsService } from '@api/modules/settings';
 import { ShortlistItem } from '@api/modules/shortlist/entities/shortlist-item.entity';
 import { SETTINGS_KEYS } from '@api/shared/constants/settings-keys.constant';
 
+import { SHARE_THUMBNAIL_URL_TTL_SECONDS } from '../constants/share.constants';
 import { SharedShortlistResponseDto } from '../dto/shared-shortlist-response.dto';
 import { ShareLink } from '../entities/share-link.entity';
 import { Vote } from '../entities/vote.entity';
@@ -24,6 +25,7 @@ import { SHARE_COMMENT_LEFT_EVENT, ShareCommentLeftEvent } from '../events/share
 import { toSharedGarment, toVoteResponse } from '../mappers/share.mapper';
 import { publicShareScope, SHARED_ITEM_ALIAS } from '../queries/public-share.scope';
 
+import { ShareAudienceValidator } from './share-audience.validator';
 import { ShareTokenService } from './share-token.service';
 
 import type { CastVoteDto } from '../dto/cast-vote.dto';
@@ -64,6 +66,11 @@ export interface SharedShortlistResult {
  *    `queries/public-share.scope.ts` — the only query builder in this module — which
  *    joins no photo table, selects no `storageKey` and joins no `users` row. See that
  *    file's header for the three exclusions in full.
+ * 1b. **Revocation reaches the images, not just the page.** Every thumbnail URL is
+ *    signed with `aud = share-link:<id>` and a five-minute TTL, so `GET /files/:token`
+ *    re-checks this link's liveness on every fetch — see {@link ShareAudienceValidator}.
+ *    Without it, revoking removed the page and left an hour of working, publicly
+ *    cacheable image URLs in the hands of everyone who had already opened it.
  * 2. **A bad link is always the same answer.** Revoked, expired and never-existed all
  *    return `SHARE_LINK_NOT_FOUND` (C-34, S-9). `SHARE_LINK_REVOKED` and
  *    `SHARE_LINK_EXPIRED` exist for the *owner's* view of her own links, where telling
@@ -267,7 +274,18 @@ export class PublicShareService {
         // No subject: `thumbnails/render/**` is a public object class (§3.4), which is
         // what makes it issuable to somebody with no session. A `renders/**` key could
         // not be signed for a recipient at all, which is the point.
-        sign: (key: string) => this.storage.signedUrl(key),
+        //
+        // But subject-less used to mean *unbound*: a bearer URL with the public one-hour
+        // TTL, served `Cache-Control: public`, for an image of somebody's shortlist. C-34
+        // promises the link is "revocable at any time" and that was true only of the page.
+        // So the token carries `aud = share-link:<id>` — checked against this very link on
+        // every request by `ShareAudienceValidator`, so revocation bites immediately — and
+        // a five-minute TTL, which is the only control over a copy already in a cache.
+        sign: (key: string) =>
+          this.storage.signedUrlWith(key, {
+            audience: ShareAudienceValidator.audienceFor(link.id),
+            ttlSeconds: SHARE_THUMBNAIL_URL_TTL_SECONDS,
+          }),
         ownVote: voteByGarment.get(row.garmentId),
       }),
     );

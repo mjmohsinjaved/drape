@@ -7,7 +7,12 @@ import {
   type ExceptionFilter,
 } from '@nestjs/common';
 
-import { ERROR_CODE_SPECS, ErrorCode, maskErrorCode } from '../constants/error-codes.constant';
+import {
+  ERROR_CODE_SPECS,
+  ErrorCode,
+  isMaskTargetErrorCode,
+  maskErrorCode,
+} from '../constants/error-codes.constant';
 import { METRICS } from '../constants/metrics.constant';
 import { AppException, type FieldError } from '../exceptions/app.exception';
 import { RequestContext } from '../logger/request-context';
@@ -119,7 +124,21 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     const resolved = this.resolve(exception);
     const store = RequestContext.get();
     const requestId = store?.traceId ?? readRequestIdHeader(request) ?? '';
-    const path = request.originalUrl ?? request.url ?? '';
+    // Sanitised **once**, here, and used for the log line and the response body alike.
+    //
+    // The body used to carry the raw `originalUrl` while the log line was stripped, which
+    // is exactly backwards: the log stays on our disk and the body is the thing that
+    // leaves the building. On `GET /api/v1/files/:token` the path *is* a credential — a
+    // signed URL scoped to one consumer's photograph — so a 404 or an expired-token
+    // response handed that token back inside a JSON envelope, which client-side error
+    // reporting then ships wherever it ships things.
+    //
+    // `stripQuery` alone does not fix it, and this is the trap: the file token is a **path
+    // segment**, not a query parameter, so stripping the query leaves it entirely intact.
+    // `redactString` is what actually removes it — E-12's "no photo URL, storage key or
+    // token appears in any log line", applied to the one field that was never a log line.
+    // UUIDs survive it, so `/garments/<id>` stays readable and the field keeps its point.
+    const path = redactString(stripQuery(request.originalUrl ?? request.url ?? ''));
     const method = (request.method ?? 'UNKNOWN').toUpperCase();
 
     // ── Server-side log: the full truth, redacted of personal data (E-12) ────
@@ -129,7 +148,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       errorCode: resolved.errorCode,
       trueErrorCode: resolved.trueErrorCode,
       statusCode: resolved.status,
-      path: stripQuery(path),
+      path,
       method,
       durationMs: store === undefined ? undefined : Date.now() - store.startedAt,
       detail: resolved.logMessage,
@@ -140,9 +159,9 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     }
 
     if (resolved.level === 'error') {
-      this.logger.error(`${method} ${stripQuery(path)} → ${resolved.trueErrorCode}`, logPayload);
+      this.logger.error(`${method} ${path} → ${resolved.trueErrorCode}`, logPayload);
     } else {
-      this.logger.warn(`${method} ${stripQuery(path)} → ${resolved.trueErrorCode}`, logPayload);
+      this.logger.warn(`${method} ${path} → ${resolved.trueErrorCode}`, logPayload);
     }
 
     // ── Metrics (E-13) ──────────────────────────────────────────────────────
@@ -202,6 +221,10 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     const errorCode = maskErrorCode(trueErrorCode);
     const spec = ERROR_CODE_SPECS[errorCode];
     const masked = errorCode !== trueErrorCode;
+    // Dropped for the masked branch *and* for the branch it is masked into, so the two
+    // are byte-identical. See `MASK_TARGET_ERROR_CODES`: stripping only the masked side
+    // leaves the response length as the oracle the mask was meant to close.
+    const suppressDetails = masked || isMaskTargetErrorCode(errorCode);
 
     return {
       errorCode,
@@ -210,7 +233,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       // A masked code must not leak the overridden message of the true code either.
       message: masked ? spec.message : exception.message,
       errors: masked ? [] : exception.errors,
-      details: masked ? undefined : exception.details,
+      details: suppressDetails ? undefined : exception.details,
       logMessage: exception.message,
       stack: exception.stack,
       level: spec.status >= HttpStatus.INTERNAL_SERVER_ERROR ? 'error' : 'warn',

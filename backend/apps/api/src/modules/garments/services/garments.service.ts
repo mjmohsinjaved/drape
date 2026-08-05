@@ -38,6 +38,11 @@ import { SETTINGS_KEYS } from '@api/shared/constants/settings-keys.constant';
 
 import { GarmentBulkAction } from '../dto/garment-bulk.dto';
 import {
+  GARMENT_SORT_KEYS,
+  type GarmentQueryDto,
+  type GarmentSortKey,
+} from '../dto/garment-query.dto';
+import {
   GarmentBulkItemResultDto,
   GarmentBulkResultDto,
   GarmentResponseDto,
@@ -55,7 +60,6 @@ import type { CreateGarmentDto } from '../dto/create-garment.dto';
 import type { DeleteGarmentDto } from '../dto/delete-garment.dto';
 import type { GarmentBulkDto } from '../dto/garment-bulk.dto';
 import type { GarmentQualityOverrideDto } from '../dto/garment-quality-override.dto';
-import type { GarmentQueryDto } from '../dto/garment-query.dto';
 import type { UpdateGarmentDto } from '../dto/update-garment.dto';
 
 /** How many `slug`, `slug-2`, `slug-3` … candidates to try before giving up. */
@@ -665,12 +669,31 @@ export class GarmentsService {
     return this.settings.getNumber(SETTINGS_KEYS.QUALITY_MIN_SCORE);
   }
 
-  /** A-14's three sorts, plus a stable tie-breaker so rows cannot swap between pages. */
+  /**
+   * A-14's three sorts, plus a stable tie-breaker so rows cannot swap between pages.
+   *
+   * `sortBy` is interpolated into `ORDER BY` — TypeORM has no parameter form for a
+   * column name — so it is typed as the closed key union *and* re-checked against
+   * `GARMENT_SORT_KEYS` immediately before the interpolation. `GarmentQueryDto`'s
+   * `@IsIn` already rejects anything else over HTTP, but that is a validator on one
+   * caller's DTO: a second DTO that forgets `@IsIn`, or a non-HTTP caller building a
+   * query object by hand, would otherwise reach this line with an arbitrary string.
+   * `libs/database`'s shared paginator re-asserts its allow-list the same way, for the
+   * same reason (§2.8).
+   */
   private applyOrdering(
     qb: SelectQueryBuilder<Garment>,
-    sortBy: string,
+    sortBy: GarmentSortKey,
     sortOrder: SortOrder,
   ): void {
+    if (!GARMENT_SORT_KEYS.includes(sortBy)) {
+      throw new Error(
+        `sortBy "${sortBy}" is not a garment sort key ` +
+          `[${GARMENT_SORT_KEYS.join(', ')}]. Narrow sortBy with @IsIn([...]) on the ` +
+          `query DTO (ARCHITECTURE.md §2.8).`,
+      );
+    }
+
     const direction: SortOrder = sortOrder === 'ASC' ? 'ASC' : 'DESC';
 
     if (sortBy === 'starRate') {

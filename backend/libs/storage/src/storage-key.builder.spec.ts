@@ -6,6 +6,7 @@
  */
 import {
   buildTryOnCacheKey,
+  exportIdFromKey,
   extForMimeType,
   isAllowedUploadMimeType,
   isValidStorageKey,
@@ -14,6 +15,7 @@ import {
   MAX_KEY_LENGTH,
   mimeTypeForKey,
   mimeTypesMatch,
+  parseOwnedKey,
   sniffMimeType,
   StorageKeys,
   StoragePrefixes,
@@ -208,5 +210,89 @@ describe('buildTryOnCacheKey (§3.7)', () => {
 
   it('separates its components, so a:b and ab cannot collide', () => {
     expect(buildTryOnCacheKey('a', 'b', 'v')).not.toBe(buildTryOnCacheKey('ab', '', 'v'));
+  });
+});
+
+/**
+ * ARCHITECTURE §3.3 — reading a key back.
+ *
+ * §3.3 says keys are built here and nowhere else; taking one apart with an ad-hoc
+ * `split('/')` at a call site is the same defect in the other direction, and it is how a
+ * sweep ends up deleting `renders/` itself. The retention orphan sweep (§3.5 step 4) needs
+ * the owner (so a `deletion_log` row can name whose object went) and the object id (so the
+ * row has a `subjectId` that was never invented).
+ */
+describe('parseOwnedKey (§3.3, §3.5 step 4)', () => {
+  const USER = '11111111-2222-4333-8444-555555555555';
+  const OBJECT = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
+
+  it('recovers the owner and object id from each private namespace', () => {
+    expect(parseOwnedKey(`person-photos/${USER}/${OBJECT}.jpg`)).toEqual({
+      namespace: 'person-photos',
+      userId: USER,
+      objectId: OBJECT,
+    });
+    expect(parseOwnedKey(`renders/${USER}/${OBJECT}.png`)).toEqual({
+      namespace: 'renders',
+      userId: USER,
+      objectId: OBJECT,
+    });
+    expect(parseOwnedKey(`exports/${USER}/${OBJECT}.zip`)).toEqual({
+      namespace: 'exports',
+      userId: USER,
+      objectId: OBJECT,
+    });
+  });
+
+  it('round-trips every key the builders produce', () => {
+    expect(parseOwnedKey(StorageKeys.personPhoto(USER, 'jpg'))?.userId).toBe(USER);
+    expect(parseOwnedKey(StorageKeys.render(USER))?.userId).toBe(USER);
+    expect(parseOwnedKey(StorageKeys.dataExport(USER))?.namespace).toBe('exports');
+    expect(parseOwnedKey(StorageKeys.dataExportFor(USER, OBJECT))?.objectId).toBe(OBJECT);
+  });
+
+  /**
+   * The sweep deletes what this function recognises, so everything it must never delete
+   * has to come back `null` — a directory, a public namespace, a hand-built path.
+   */
+  it('returns null for anything it is not certain about', () => {
+    expect(parseOwnedKey('renders/')).toBeNull();
+    expect(parseOwnedKey('renders')).toBeNull();
+    expect(parseOwnedKey(`renders/${USER}/not-a-uuid.png`)).toBeNull();
+    expect(parseOwnedKey(`renders/not-a-uuid/${OBJECT}.png`)).toBeNull();
+    expect(parseOwnedKey(`renders/${USER}/nested/${OBJECT}.png`)).toBeNull();
+    expect(parseOwnedKey(`garments/${USER}/${OBJECT}.jpg`)).toBeNull();
+    expect(parseOwnedKey(`thumbnails/render/${OBJECT}-320.webp`)).toBeNull();
+    expect(parseOwnedKey('')).toBeNull();
+  });
+});
+
+describe('exportIdFromKey (C-39)', () => {
+  const USER = '11111111-2222-4333-8444-555555555555';
+
+  it('reads back the id the builder wrote', () => {
+    const key = StorageKeys.dataExport(USER);
+    const exportId = exportIdFromKey(key);
+    expect(exportId).not.toBeNull();
+    expect(StorageKeys.dataExportFor(USER, exportId ?? '')).toBe(key);
+  });
+
+  it('is null for a key from another namespace', () => {
+    expect(exportIdFromKey(StorageKeys.render(USER))).toBeNull();
+  });
+});
+
+describe('StoragePrefixes (§3.3)', () => {
+  const USER = '11111111-2222-4333-8444-555555555555';
+
+  it('produces prefixes the library itself accepts', () => {
+    for (const prefix of [
+      StoragePrefixes.exportsOfUser(USER),
+      StoragePrefixes.allPersonPhotos(),
+      StoragePrefixes.allRenders(),
+      StoragePrefixes.allExports(),
+    ]) {
+      expect(isValidStoragePrefix(prefix)).toBe(true);
+    }
   });
 });

@@ -107,7 +107,8 @@ describe('GlobalExceptionFilter — AppException', () => {
       message: ERROR_CODE_SPECS[ErrorCode.QUOTA_EXHAUSTED].message,
       errors: [],
       details: { period: '2026-08', limit: 15, used: 15 },
-      path: '/api/v1/tryon?debug=1',
+      // Sanitised, not raw. See the `path` block below for why.
+      path: '/api/v1/tryon',
       requestId: TRACE_ID,
     });
   });
@@ -186,6 +187,59 @@ describe('GlobalExceptionFilter — masking (§2.4, S-9)', () => {
     expect(harness.body().details).toBeUndefined();
     expect(harness.body().errors).toEqual([]);
     expect(JSON.stringify(harness.body())).not.toContain('someone-else');
+  });
+
+  /* -----------------------------------------------------------------------------------------
+   * The mask has to survive the *other* branch too
+   * -------------------------------------------------------------------------------------- */
+
+  /**
+   * A mask that rewrites the code but leaves the two bodies distinguishable is not a mask.
+   *
+   * `person-photos` threw `PHOTO_NOT_OWNED` and `PHOTO_NOT_FOUND` with the same
+   * `details: { photoId }`. The filter stripped `details` only on the masked branch, so a
+   * foreign id came back without a `details` key and a never-existed id came back with one:
+   * same status, same code, different bytes — the exact "does this exist?" oracle §9.2 and
+   * S-9 close. Dropping `details` for every *target* code closes it structurally, so a module
+   * cannot reintroduce the leak by attaching a detail to the not-found throw.
+   */
+  it.each([
+    ['photo', ErrorCode.PHOTO_NOT_OWNED, ErrorCode.PHOTO_NOT_FOUND],
+    ['result', ErrorCode.RESULT_NOT_OWNED, ErrorCode.RESULT_NOT_FOUND],
+    ['job', ErrorCode.JOB_NOT_OWNED, ErrorCode.JOB_NOT_FOUND],
+    ['enquiry', ErrorCode.ENQUIRY_NOT_OWNED, ErrorCode.ENQUIRY_NOT_FOUND],
+    ['shortlist item', ErrorCode.SHORTLIST_ITEM_NOT_OWNED, ErrorCode.SHORTLIST_ITEM_NOT_FOUND],
+    ['share link', ErrorCode.SHARE_LINK_NOT_OWNED, ErrorCode.SHARE_LINK_NOT_FOUND],
+  ])(
+    'a foreign %s id and a never-existed one produce byte-identical bodies, details or not',
+    (_label, ownershipCode, notFoundCode) => {
+      const details = { photoId: '9f1c0b3e-0000-4000-8000-00000000000f' };
+
+      const foreign = createHarness();
+      runFilter(foreign, new OwnershipException(ownershipCode, { details }));
+
+      const missing = createHarness();
+      runFilter(missing, new AppException(notFoundCode, { details }));
+
+      // The timestamp is the one field that legitimately differs between two responses.
+      const normalise = (body: ApiErrorResponse): string =>
+        JSON.stringify({ ...body, timestamp: 'X' });
+
+      expect(foreign.status()).toBe(missing.status());
+      expect(normalise(foreign.body())).toBe(normalise(missing.body()));
+      expect(JSON.stringify(foreign.body())).not.toContain(details.photoId);
+      expect(JSON.stringify(missing.body())).not.toContain(details.photoId);
+    },
+  );
+
+  it('leaves details alone on a code that is neither masked nor a mask target', () => {
+    const harness = createHarness();
+    runFilter(
+      harness,
+      new QuotaException(ErrorCode.QUOTA_EXHAUSTED, { details: { remaining: 0 } }),
+    );
+
+    expect(harness.body().details).toEqual({ remaining: 0 });
   });
 });
 
@@ -332,6 +386,56 @@ describe('GlobalExceptionFilter — logging and metrics', () => {
     const serialised = JSON.stringify(harness.logs().at(-1));
     expect(serialised).not.toContain('ayesha@example.com');
     expect(serialised).toContain('/api/v1/tryon');
+  });
+
+  /**
+   * E-12 — "no photo URL, storage key, token or personal data appears in any log line".
+   *
+   * The **response body** is the half that was never covered, and it is the half that
+   * leaves the building: on `GET /api/v1/files/:token` the path *is* a signed credential
+   * scoped to one consumer's photograph, so a 404 or an expired-token response handed
+   * that token straight back inside a JSON envelope for client-side error reporting to
+   * ship onwards.
+   *
+   * Note what `stripQuery` alone would not have caught: the token is a **path segment**.
+   */
+  describe('the path it returns to the client', () => {
+    const FILE_TOKEN =
+      'eyJrZXkiOiJyZW5kZXJzLzExMTExMTExLTIyMjItNDMzMy04NDQ0LTU1NTU2NjY2Nzc3Ny9hYWFhLnBuZyIsImV4cCI6OTk5OTk5OTk5OX0' +
+      '.Zm9vYmFyYmF6cXV1eGZvb2JhcmJhenF1dXhmb29iYXJiYXpxdQ';
+
+    it('never returns a signed file token in the error body', () => {
+      const harness = createHarness({ url: `/api/v1/files/${FILE_TOKEN}` });
+      runFilter(harness, new AppException(ErrorCode.FILE_TOKEN_EXPIRED));
+
+      const body = harness.body();
+      expect(JSON.stringify(body)).not.toContain(FILE_TOKEN);
+      expect(body.path).not.toContain(FILE_TOKEN);
+    });
+
+    it('never returns a storage key in the error body', () => {
+      const key = 'person-photos/11111111-2222-4333-8444-555566667777/aaaa.jpg';
+      const harness = createHarness({ url: `/api/v1/debug/${key}` });
+      runFilter(harness, new AppException(ErrorCode.RESOURCE_NOT_FOUND));
+
+      expect(JSON.stringify(harness.body())).not.toContain(key);
+    });
+
+    it('never returns an address that arrived in the query string', () => {
+      const harness = createHarness({ url: '/api/v1/tryon?email=ayesha@example.com' });
+      runFilter(harness, new AppException(ErrorCode.GARMENT_NOT_FOUND));
+
+      expect(JSON.stringify(harness.body())).not.toContain('ayesha@example.com');
+    });
+
+    it('still returns an ordinary path, uuids and all, so the field keeps its point', () => {
+      const harness = createHarness({
+        url: '/api/v1/garments/6f8b1a2c-7d10-4f9e-9a4c-3f2e1d0b9a8c',
+      });
+      runFilter(harness, new AppException(ErrorCode.GARMENT_NOT_FOUND));
+
+      expect(harness.body().path).toBe('/api/v1/garments/6f8b1a2c-7d10-4f9e-9a4c-3f2e1d0b9a8c');
+    });
   });
 
   it('emits errors.by_code tagged with the true code', () => {

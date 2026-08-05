@@ -121,8 +121,11 @@ const EMAIL_PATTERN = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
 const PHONE_PATTERN = /(?<![\w.-])\+?\d[\d\s().-]{7,17}\d(?![\w.-])/g;
 
 /** Storage keys as built by `storage-key.builder.ts` (§3.3). */
+// `exports` belongs here too: an export archive is her entire render history in
+// one object, and its uuid segments contain hyphens, so the opaque-token pattern
+// does not catch it either.
 const STORAGE_KEY_PATTERN =
-  /\b(?:garments|categories|person-photos|renders|thumbnails|reference-models|brand)\/[A-Za-z0-9\-_/]*\.[A-Za-z0-9]{2,5}\b/g;
+  /\b(?:garments|categories|person-photos|renders|thumbnails|reference-models|brand|exports)\/[A-Za-z0-9\-_/]*\.[A-Za-z0-9]{2,5}\b/g;
 
 /** Any absolute URL. Photo and render URLs are signed file URLs, so all of them go. */
 const URL_PATTERN = /\b(?:https?|ftp|file):\/\/[^\s"'<>)\]]+/gi;

@@ -37,6 +37,30 @@ export const OUTBOX_SENDING_TIMEOUT_MS = 5 * 60_000;
 /** `notifications_outbox.lastError` is `varchar(512)` (§4.32). */
 export const MAX_LAST_ERROR_LENGTH = 512;
 
+/**
+ * How long a delivered **email or SMS** row is kept before it is pruned.
+ *
+ * An `EMAIL` or `SMS` row that has been sent is a delivery record: it proves a message
+ * left, and `attempts`/`lastError` on the rows around it are how an operator sees that a
+ * gateway has been failing since Tuesday. None of that needs to be true forever, and
+ * nothing was pruning it — the table only ever grew, and every row in it carried template
+ * variables written for a person.
+ *
+ * Thirty days is long enough to answer "did she ever get the confirmation?" for any
+ * support ticket worth answering, and short enough that a row is not a permanent record of
+ * who was told what.
+ *
+ * `FAILED` rows are **not** pruned on this schedule. A dead letter is unresolved work; it
+ * goes when someone has looked at it.
+ */
+export const OUTBOX_DELIVERED_RETENTION_DAYS = 30;
+
+/** Rows one prune pass removes. Bounds the statement on the first run after a long gap. */
+export const OUTBOX_PRUNE_BATCH_SIZE = 500;
+
+/** The prune runs once a day, at 04:10 — after the 03:00 photo purge, not on top of it. */
+export const OUTBOX_PRUNE_CRON = '10 4 * * *';
+
 /** `notifications_outbox.dedupeKey` is `varchar(160)` (§4.32). */
 export const MAX_DEDUPE_KEY_LENGTH = 160;
 

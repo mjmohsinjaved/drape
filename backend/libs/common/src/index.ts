@@ -39,6 +39,8 @@ export {
   httpStatusForErrorCode,
   isErrorCode,
   isMaskedErrorCode,
+  isMaskTargetErrorCode,
+  MASK_TARGET_ERROR_CODES,
   MASKED_ERROR_CODES,
   maskErrorCode,
   type ErrorCodeSpec,
@@ -94,6 +96,7 @@ export {
   MIN_LIMIT,
   MIN_PAGE,
   PaginationQueryDto,
+  SORT_KEY_PATTERN,
 } from './dto/pagination-query.dto';
 
 // ── exceptions ────────────────────────────────────────────────────────────────

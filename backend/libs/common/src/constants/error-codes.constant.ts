@@ -785,6 +785,29 @@ export const MASKED_ERROR_CODES: Readonly<Partial<Record<ErrorCode, ErrorCode>>>
   [ErrorCode.SHARE_LINK_NOT_OWNED]: ErrorCode.SHARE_LINK_NOT_FOUND,
 };
 
+/**
+ * The codes a masked one collapses **into** — the right-hand column above.
+ *
+ * A mask that rewrites the code but leaves the two responses distinguishable is not a
+ * mask. `PHOTO_NOT_OWNED` arrives here as `PHOTO_NOT_FOUND` with its `details`
+ * stripped; if the genuine `PHOTO_NOT_FOUND` branch were allowed to carry
+ * `details: { photoId }`, the two bodies would differ in length and in shape, and a
+ * caller probing ids could tell "somebody else's" from "never existed" by counting
+ * bytes. That is exactly the inference §9.2 and S-9 exist to prevent.
+ *
+ * So `GlobalExceptionFilter` drops `details` from **every** response carrying one of
+ * these codes, whichever branch produced it. The property then holds structurally: a
+ * module cannot reintroduce the leak by attaching a detail to the not-found throw.
+ */
+export const MASK_TARGET_ERROR_CODES: ReadonlySet<ErrorCode> = new Set(
+  Object.values(MASKED_ERROR_CODES).filter((code): code is ErrorCode => code !== undefined),
+);
+
+/** true when `code` is what some other code is masked *into* — see above. */
+export function isMaskTargetErrorCode(code: ErrorCode): boolean {
+  return MASK_TARGET_ERROR_CODES.has(code);
+}
+
 /** Every declared code, as a value array. Order matches the enum declaration. */
 export const ALL_ERROR_CODES: readonly ErrorCode[] = Object.values(ErrorCode);
 

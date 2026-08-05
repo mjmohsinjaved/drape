@@ -1,5 +1,6 @@
 import type { Role } from '@library/common';
 
+import type { InviteAcceptedEvent } from '../constants/invite-events.constant';
 import type { EntityManager } from 'typeorm';
 
 /**
@@ -26,6 +27,20 @@ export interface InviteAcceptance {
   /** The admin who sent the invite — becomes `users.invitedBy`. */
   readonly invitedBy: string;
   readonly expiresAt: Date;
+  /**
+   * The `INVITE_ACCEPTED` event, prepared but **not yet emitted**.
+   *
+   * `consumeToken` runs inside the caller's transaction, and an `EventEmitter2` emit
+   * is not transactional: the audit listener fired immediately, so a failure later in
+   * the block — a duplicate email, a constraint, a lost connection — rolled the token
+   * burn back and left an `INVITE_ACCEPTED` row for an acceptance that never happened.
+   * An audit log that records events which did not occur is worse than one that misses
+   * some.
+   *
+   * The caller passes this to {@link InvitesService.announceAccepted} **after the
+   * transaction commits**.
+   */
+  readonly acceptedEvent: InviteAcceptedEvent;
 }
 
 export interface ConsumeInviteOptions {

@@ -29,7 +29,6 @@ import {
   ResponseMessage,
   Role,
   Roles,
-  SkipCsrf,
   type ICurrentUser,
 } from '@library/common';
 
@@ -74,10 +73,16 @@ const THROTTLE_DEFAULT = { default: { limit: 100, ttl: 60_000 } };
  * **Every handler carries exactly one `@Roles(...)`**, and every `@Public()` one
  * carries `@Roles(Role.PUBLIC)` plus an explicit `@Throttle()` (§2.6, B-5).
  *
- * `@SkipCsrf()` appears on exactly two handlers — login and signup — which is the
- * whole permitted budget (§2.6): neither caller can hold a session-bound CSRF secret
- * yet, because the session they would bind to does not exist until the call
- * succeeds.
+ * **No handler here carries `@SkipCsrf()`**, login and signup included.
+ *
+ * They used to, on the argument that "no session-bound CSRF secret exists yet". The
+ * argument was wrong on its own terms: `GET /auth/csrf` above mints an
+ * **anonymous-scope** token for exactly this case, `SessionCsrfBindingGuard` stands
+ * aside when `request.user` is undefined, and `POST /invites/token/:token/accept` —
+ * an equally session-less form — has always relied on that path. Skipping the guard
+ * bought nothing and made forced authentication possible: a cross-site
+ * auto-submitting form could sign a visitor into an attacker-controlled account, and
+ * her next upload would land inside it. Both handlers now go through guard 1.
  */
 @ApiTags('Auth')
 @Controller('auth')
@@ -132,14 +137,13 @@ export class AuthController {
    * `POST /auth/signup` — creates a **Consumer** account (S-4).
    *
    * A `role` in the payload is stripped and audit-logged, never rejected.
+   *
+   * CSRF-protected like every other mutation: the form calls `GET /auth/csrf` first
+   * and gets an anonymous-scope token.
    */
   @Post('signup')
   @Public()
   @Roles(Role.PUBLIC)
-  // Permitted use 1 of 2 (§2.6): the caller has no session, so there is no
-  // session-bound CSRF secret to verify against. The rate limit and the §8.4 bot
-  // check are what protect this route.
-  @SkipCsrf()
   @Throttle(THROTTLE_CREDENTIALS)
   @ResponseMessage('Account created')
   @ApiOperation({ summary: 'Create a Consumer account' })
@@ -152,12 +156,15 @@ export class AuthController {
     return this.withCookies(await this.authService.signup(dto, facts(request)), response);
   }
 
-  /** `POST /auth/login` — S-1, S-6. Generic failure copy; sets `drape.sid`. */
+  /**
+   * `POST /auth/login` — S-1, S-6. Generic failure copy; sets `drape.sid`.
+   *
+   * CSRF-protected. Forced authentication is a real attack: signing a victim into an
+   * account the attacker controls makes everything she then uploads his to read.
+   */
   @Post('login')
   @Public()
   @Roles(Role.PUBLIC)
-  // Permitted use 2 of 2 (§2.6). Same reason as signup.
-  @SkipCsrf()
   @Throttle(THROTTLE_CREDENTIALS)
   @HttpCode(HttpStatus.OK)
   @ResponseMessage('Signed in')

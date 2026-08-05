@@ -56,12 +56,23 @@ describe('InviteAcceptanceService — S-5', () => {
 
   /** What the invite row says. Never what the request body says. */
   function acceptance(overrides: Partial<InviteAcceptance> = {}): InviteAcceptance {
+    const inviteId = overrides.inviteId ?? 'b0000000-0000-4000-8000-00000000000b';
+    const email = overrides.email ?? 'invited.admin@example.invalid';
+
     return {
-      inviteId: 'b0000000-0000-4000-8000-00000000000b',
-      email: 'invited.admin@example.invalid',
+      inviteId,
+      email,
       role: Role.ADMIN,
       invitedBy: INVITER_ID,
       expiresAt: new Date('2026-09-01T00:00:00.000Z'),
+      // Prepared by `consumeToken`, emitted by the caller after the commit.
+      acceptedEvent: {
+        inviteId,
+        email,
+        actorId: 'c0000000-0000-4000-8000-00000000000c',
+        occurredAt: new Date('2026-08-05T00:00:00.000Z'),
+        consumedByUserId: 'c0000000-0000-4000-8000-00000000000c',
+      },
       ...overrides,
     };
   }
@@ -75,7 +86,7 @@ describe('InviteAcceptanceService — S-5', () => {
     managersSeen = [];
     sessions = createInMemoryRepository<Session>();
 
-    invites = createMock<InvitesService>(['consumeToken']);
+    invites = createMock<InvitesService>(['consumeToken', 'announceAccepted']);
     invites.consumeToken.mockImplementation(
       (_token: string, _userId: string, options: { manager?: EntityManager } = {}) => {
         managersSeen.push(options.manager);
@@ -203,6 +214,33 @@ describe('InviteAcceptanceService — S-5', () => {
       );
       expect(state.committed).toBe(0);
       expect(state.rolledBack).toBe(1);
+    });
+
+    /**
+     * An `EventEmitter2` emit does not roll back. Emitted from inside the block, the
+     * `INVITE_ACCEPTED` audit row survived a failed account creation and recorded an
+     * acceptance that never happened — while the token itself was correctly returned to the
+     * pool. These two tests pin the ordering from both sides.
+     */
+    it('announces the acceptance only after the transaction has committed', async () => {
+      await service.accept(RAW_TOKEN, body(), facts);
+
+      expect(state.committed).toBe(1);
+      expect(invites.announceAccepted).toHaveBeenCalledTimes(1);
+      expect(invites.announceAccepted).toHaveBeenCalledWith(
+        expect.objectContaining({ inviteId: 'b0000000-0000-4000-8000-00000000000b' }),
+      );
+    });
+
+    it('announces nothing when the account could not be created', async () => {
+      accounts.createInvitedAccount.mockRejectedValue(
+        new ConflictException(ErrorCode.EMAIL_ALREADY_EXISTS),
+      );
+
+      await errorCodeOf(service.accept(RAW_TOKEN, body(), facts));
+
+      expect(state.rolledBack).toBe(1);
+      expect(invites.announceAccepted).not.toHaveBeenCalled();
     });
 
     it('propagates INVITE_ALREADY_CONSUMED and creates nothing', async () => {

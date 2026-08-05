@@ -255,6 +255,14 @@ export function createInMemoryRepository<T extends ObjectLiteral & { id: string 
     if (typeof target.id !== 'string' || target.id === '') {
       target.id = randomUUID();
     }
+    // `BaseEntity.createdAt` is a `@CreateDateColumn`: PostgreSQL fills it on INSERT.
+    // Emulated here because service code legitimately queries on it — the S-6 lockout
+    // window reads `auth_attempts.createdAt`, and a row the ORM would have stamped but
+    // this fixture left undefined silently drops out of every window predicate, which
+    // makes a rate limit look like it works when the test never exercised it. Only set
+    // when absent, so a row seeded with an explicit timestamp keeps it.
+    target.createdAt ??= new Date();
+
     const index = rows.findIndex((row) => row.id === entity.id);
     if (index === -1) {
       rows.push(entity);

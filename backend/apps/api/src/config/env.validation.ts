@@ -160,6 +160,29 @@ export class EnvironmentVariables {
   @Transform(({ value }) => (isBlank(value) ? LogLevel.INFO : String(value).toLowerCase()))
   LOG_LEVEL: LogLevel;
 
+  /**
+   * Optional — **defaults to false, in every environment including development**.
+   *
+   * `/api/docs` and `/api/docs-json` are mounted by `SwaggerModule.setup()` as raw
+   * Express middleware, *outside* the §2.7 guard chain: no `APP_GUARD` runs on them
+   * and `npm run check:guards` cannot see them, because they are not route handlers.
+   * Anyone who can reach the port reads the entire API surface — every path, every
+   * DTO, every error code.
+   *
+   * It was previously derived from `NODE_ENV`, which meant staging served the whole
+   * contract anonymously to the internet. Exposure is now an explicit decision per
+   * deployment, and a network-reachable environment that sets it **must** put
+   * authentication in front of the mount (reverse-proxy basic auth or an IP
+   * allow-list); the API itself cannot, for the reason above.
+   */
+  // The initialiser, not just the `@Transform`, is what makes "false" the real default:
+  // `plainToInstance` only runs a transform for keys **present** in the source, so a
+  // deployment that never mentions the variable would otherwise fail `@IsBoolean()` — and a
+  // variable whose absence is a boot error is not a variable that defaults to closed.
+  @Transform(({ value }) => toBool(value, false))
+  @IsBoolean()
+  EXPOSE_API_DOCS: boolean = false;
+
   /* --- database (B-3) ---------------------------------------------------- */
 
   /** Required. */

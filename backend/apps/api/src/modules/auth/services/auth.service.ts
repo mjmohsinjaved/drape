@@ -16,7 +16,13 @@ import {
 import { NotificationsService, TemplateId } from '@library/notifications';
 import type { SendResult } from '@library/notifications';
 
-import { AUTH_CONFIG, AUTH_ROUTES, REVOKE_REASONS, USER_DIRECTORY } from '../auth.constants';
+import {
+  AUTH_CONFIG,
+  AUTH_ROUTES,
+  REVOKE_REASONS,
+  TWOFA_MAX_CHALLENGE_ATTEMPTS,
+  USER_DIRECTORY,
+} from '../auth.constants';
 import { AUTH_EVENTS } from '../auth.events';
 import { AuthOutcome } from '../enums/auth-outcome.enum';
 import { VerificationPurpose } from '../enums/verification-purpose.enum';
@@ -266,12 +272,12 @@ export class AuthService {
     });
 
     if (isAdmin(user.role) && !twofaRequired) {
-      // S-8 makes 2FA mandatory for admins. The API cannot refuse the session
-      // outright — an admin with no second factor yet (the E-4 seed, or an invite
-      // accepted moments ago) would have no way to enrol one. `GET /auth/me` reports
-      // `twofaEnabled: false`, the console forces the enrolment screen, and
-      // `POST /auth/2fa/disable` refuses admins outright, so the state is reachable
-      // but not sustainable.
+      // S-8 makes 2FA mandatory for admins. The session is still issued — an admin
+      // with no second factor yet (the E-4 seed, or an invite accepted moments ago)
+      // would otherwise have no way to enrol one — but it is **not** a fully
+      // authorised admin session: `SessionResolverService` refuses it with
+      // `TWOFA_REQUIRED` on every route outside `ADMIN_ENROLMENT_ROUTES`, so the
+      // enforcement is the API's, not the console's (S-3, S-11).
       this.logger.warn(`admin ${user.id} signed in without a second factor enrolled (S-8)`);
     }
 
@@ -302,17 +308,10 @@ export class AuthService {
     code: string,
     facts: RequestFacts,
   ): Promise<AuthResult<LoginResponseDto>> {
-    const { session, user, now } = await this.loadPendingSession(sessionToken);
+    const { session, user, now } = await this.loadPendingSession(sessionToken, facts);
 
     if (!this.totpService.verifyEncrypted(user.twofaSecret, code)) {
-      await this.attempts.record({
-        email: user.email,
-        userId: user.id,
-        ip: facts.ip,
-        userAgent: facts.userAgent,
-        outcome: AuthOutcome.TWOFA_FAILED,
-        route: AUTH_ROUTES.TWOFA,
-      });
+      await this.recordChallengeFailure(session, user, facts, now);
       throw new AuthException(ErrorCode.TWOFA_INVALID);
     }
 
@@ -325,20 +324,13 @@ export class AuthService {
     recoveryCode: string,
     facts: RequestFacts,
   ): Promise<AuthResult<LoginResponseDto>> {
-    const { session, user, now } = await this.loadPendingSession(sessionToken);
+    const { session, user, now } = await this.loadPendingSession(sessionToken, facts);
 
     const stored = user.twofaRecoveryCodes ?? [];
     const index = await this.totpService.findRecoveryCodeIndex(stored, recoveryCode);
 
     if (index === -1) {
-      await this.attempts.record({
-        email: user.email,
-        userId: user.id,
-        ip: facts.ip,
-        userAgent: facts.userAgent,
-        outcome: AuthOutcome.TWOFA_FAILED,
-        route: AUTH_ROUTES.TWOFA,
-      });
+      await this.recordChallengeFailure(session, user, facts, now);
       throw new AuthException(ErrorCode.TWOFA_INVALID);
     }
 
@@ -859,9 +851,16 @@ export class AuthService {
    * The route is `@Public()`, so `SessionAuthGuard` has deliberately *not* populated
    * `request.user` — a pending session is not an authenticated caller. The cookie is
    * read here instead.
+   *
+   * **The S-6 lockout is asserted here, keyed by the account.** It used to be checked
+   * on exactly one path — password login — which left the second factor as the only
+   * credential in the product with no backoff at all: `@Throttle` keys on the IP
+   * before the session is resolved, so rotating egress addresses defeated it
+   * completely.
    */
   private async loadPendingSession(
     sessionToken: string | undefined,
+    facts: RequestFacts,
   ): Promise<{ session: Session; user: AuthUser; now: Date }> {
     const now = new Date();
     if (sessionToken === undefined) {
@@ -884,7 +883,62 @@ export class AuthService {
     const user = await this.requireUser(session.userId);
     this.assertAccountUsable(user);
 
+    await this.attempts.assertNotLockedOut(
+      user.email,
+      facts.ip,
+      now,
+      this.config.lockoutThreshold,
+      this.config.lockoutMaxMinutes,
+    );
+
     return { session, user, now };
+  }
+
+  /**
+   * Records one wrong second-factor code and, past the cap, kills the pending session.
+   *
+   * The ledger row is what the S-6 backoff reads on the next attempt; revoking the
+   * session is what bounds the total guessing budget, because the attacker then has to
+   * present the password again to get another `twofaPending` session — and that path
+   * has its own lockout.
+   */
+  private async recordChallengeFailure(
+    session: Session,
+    user: AuthUser,
+    facts: RequestFacts,
+    now: Date,
+  ): Promise<void> {
+    await this.attempts.record({
+      email: user.email,
+      userId: user.id,
+      ip: facts.ip,
+      userAgent: facts.userAgent,
+      outcome: AuthOutcome.TWOFA_FAILED,
+      route: AUTH_ROUTES.TWOFA,
+    });
+
+    const failures = await this.attempts.countTwoFactorFailures(user.email, now);
+    if (failures < TWOFA_MAX_CHALLENGE_ATTEMPTS) {
+      return;
+    }
+
+    await this.sessionService.revoke(session, REVOKE_REASONS.TWOFA_FAILED, now);
+
+    // Logged and emitted, never returned: the client is told `TWOFA_INVALID` either
+    // way, so a caller cannot use the response to learn that the cap exists or where
+    // it sits.
+    this.logger.warn(
+      `two-factor challenge failed ${failures} times for user ${user.id}; pending session revoked (S-6, S-8)`,
+    );
+    this.events.emit(AUTH_EVENTS.TWOFA_CHALLENGE_LOCKED, {
+      userId: user.id,
+      role: user.role,
+      ip: facts.ip,
+      userAgent: facts.userAgent,
+      occurredAt: now,
+      failureCount: failures,
+      sessionId: session.id,
+    });
   }
 
   /** Rotates a completed pending session — the second privilege change of a login. */

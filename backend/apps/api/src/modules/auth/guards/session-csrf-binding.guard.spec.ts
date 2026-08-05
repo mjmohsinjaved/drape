@@ -71,7 +71,7 @@ describe('SessionCsrfBindingGuard — when it stands aside', () => {
     await expect(activate({ method })).resolves.toBe(true);
   });
 
-  it('skips @SkipCsrf() — login and signup have no session to bind to yet', async () => {
+  it('skips @SkipCsrf() — the ticket-redemption route carries its credential in the URL', async () => {
     await expect(activate({ method: 'POST', skipCsrf: true, user: CALLER })).resolves.toBe(true);
   });
 

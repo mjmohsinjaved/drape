@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 
-import { DataSource, IsNull, Repository, type EntityManager } from 'typeorm';
+import { DataSource, In, IsNull, Repository, type EntityManager } from 'typeorm';
 
 import {
   ConflictException,
@@ -19,7 +19,9 @@ import { TemplateId } from '@library/notifications';
 import { StoragePrefixes, StorageService } from '@library/storage';
 
 import { AUDIT_RECORD_EVENT, AuditRecordEvent } from '@api/modules/audit/events/audit.event';
+import { EnquiryItem } from '@api/modules/enquiries/entities/enquiry-item.entity';
 import { Enquiry } from '@api/modules/enquiries/entities/enquiry.entity';
+import { ModerationItem } from '@api/modules/moderation/entities/moderation-item.entity';
 import { NotificationsInboxService } from '@api/modules/notifications/services/notifications-inbox.service';
 import { OutboxService } from '@api/modules/notifications/services/outbox.service';
 import { PersonPhoto } from '@api/modules/person-photos/entities/person-photo.entity';
@@ -35,7 +37,6 @@ import { DEFAULT_DELETION_SLA_HOURS, DELETION_BATCH_SIZE } from '../constants/re
 import { DeletionLogEntry } from '../entities/deletion-log-entry.entity';
 import { DeletionInitiator } from '../enums/deletion-initiator.enum';
 import { DeletionSubject } from '../enums/deletion-subject.enum';
-import { ExportPrefixes } from '../utils/export-key.builder';
 
 import type { DeletionReceiptResponseDto } from '../dto/deletion-receipt.dto';
 
@@ -101,6 +102,8 @@ export interface AccountPurgeResult {
  * | `tryon_jobs`, `shortlist_items`, `share_links`, `votes` | cascade from `users`, but counted explicitly so the manifest is real |
  * | `enquiries` | see below |
  * | `notifications_outbox` | a notification addressed to her is hers |
+ * | `moderation_items` | rows **and** their blurred thumbnails — all four FKs are `SET NULL`, so nothing else would have taken them (§4.29) |
+ * | `enquiry_items.note` | her own words about a piece; the commercial columns beside them stay |
  * | `renders/<id>/`, `person-photos/<id>/`, `exports/<id>/` | storage prefixes, dropped wholesale (§3.3) |
  * | `tryon_cache` rows pointing into her prefix | otherwise a dangling pointer to bytes that no longer exist |
  * | `users` | last |
@@ -357,7 +360,17 @@ export class AccountDeletionService {
               shareLinksRevoked: purged.rowsDeleted.share_links ?? 0,
             },
             // Stored, not resolved later: the account it would be resolved from is
-            // deleted in this same transaction.
+            // deleted in this same transaction. `recipientUserId` is null for the same
+            // reason — a real id would be CASCADE-deleted with the `users` row before the
+            // processor ever saw it, taking the confirmation with it.
+            //
+            // That combination used to be the last copy of her name and email address in
+            // the database, and it was permanent: nothing resolves it, `purgeForUser`
+            // deletes by `recipientUserId` and so cannot match it, and nothing pruned
+            // `SENT` rows. `OutboxProcessor.markSent` now clears `recipientAddress` and
+            // `payload` the moment delivery succeeds, so the personal data lives exactly
+            // as long as it takes to send one email — and `pruneDelivered` removes the
+            // husk afterwards.
             recipientAddress: account.email,
             recipientUserId: null,
             locale: account.locale,
@@ -422,10 +435,20 @@ export class AccountDeletionService {
       where: { userId },
       withDeleted: true,
     });
+    // §4.29 — all four of `moderation_items`' FKs are `ON DELETE SET NULL`, so deleting
+    // her `users` row used to leave the row behind with its columns nulled *except*
+    // `blurredThumbnailKey`, which points at a derivative of her photograph. A dangling
+    // pointer to an image of a person who no longer exists, in a table the admin queue
+    // reads. Read `withDeleted` so a reviewed-and-soft-deleted item's thumbnail goes too.
+    const moderationItems = await manager.getRepository(ModerationItem).find({
+      where: { userId },
+      withDeleted: true,
+    });
 
     const namedKeys = [
       ...photos.flatMap((photo) => [photo.storageKey, photo.blurredThumbnailKey]),
       ...renders.flatMap((render) => [render.storageKey, render.thumbnailKey]),
+      ...moderationItems.map((item) => item.blurredThumbnailKey),
     ];
 
     const removed = await this.deleteObjects(namedKeys);
@@ -435,7 +458,7 @@ export class AccountDeletionService {
     const prefixCounts = await Promise.all([
       this.storage.deletePrefix(StoragePrefixes.personPhotosOfUser(userId)),
       this.storage.deletePrefix(StoragePrefixes.rendersOfUser(userId)),
-      this.storage.deletePrefix(ExportPrefixes.ofUser(userId)),
+      this.storage.deletePrefix(StoragePrefixes.exportsOfUser(userId)),
     ]);
     const prefixDeleted = prefixCounts.reduce((sum, value) => sum + value, 0);
 
@@ -452,6 +475,8 @@ export class AccountDeletionService {
       tryon_jobs: await this.deleteWhere(manager, TryOnJob, { userId }),
       notifications_outbox: await this.inbox.purgeForUser(userId),
       enquiries_anonymised: await this.anonymiseEnquiries(manager, userId),
+      enquiry_item_notes_cleared: await this.clearEnquiryItemNotes(manager, userId),
+      moderation_items: await this.deleteWhere(manager, ModerationItem, { userId }),
       tryon_cache: cacheRetired,
     };
 
@@ -473,8 +498,13 @@ export class AccountDeletionService {
   /**
    * Clears the personal columns an enquiry snapshotted (A-21) and keeps the row.
    *
-   * See the class comment for why. The message body goes too: she wrote it, and a
-   * sentence about her wedding is as personal as her phone number.
+   * See the class comment for why the *row* survives: it is a commercial record between
+   * her and the studio, and the studio is a party to it. The message body is not part of
+   * that argument and goes: she wrote it, and a sentence about her wedding is as personal
+   * as her phone number.
+   *
+   * `enquiry_items.note` is the same thing one level down, and {@link clearEnquiryItemNotes}
+   * is what actually removes it — see there for why it was missed.
    */
   private async anonymiseEnquiries(manager: EntityManager, userId: string): Promise<number> {
     const result = await manager.getRepository(Enquiry).update(
@@ -486,6 +516,38 @@ export class AccountDeletionService {
         message: '',
       },
     );
+    return result.affected ?? 0;
+  }
+
+  /**
+   * Clears `enquiry_items.note` — her own words about one piece.
+   *
+   * The commercial-record argument covers the enquiry: what she asked for, which pieces,
+   * at what price, on what date. It does **not** cover a free-text note she wrote against
+   * a garment ("not sure about the neckline on me") — that is her sentence about her own
+   * body, kept only because the row it hangs off is kept, and nothing in A-21 or §4.24
+   * asks for it. It was surviving deletion purely because the cascade stopped at
+   * `enquiries` and `enquiry_items` is a child table with no `userId` of its own.
+   *
+   * The commercial columns — rank and the three garment snapshots — stay. Two statements
+   * rather than a correlated `UPDATE … WHERE enquiryId IN (SELECT …)` so the operation is
+   * expressible through the repository and testable without a database.
+   */
+  private async clearEnquiryItemNotes(manager: EntityManager, userId: string): Promise<number> {
+    const enquiries = await manager.getRepository(Enquiry).find({
+      where: { userId },
+      withDeleted: true,
+      select: { id: true },
+    });
+
+    if (enquiries.length === 0) {
+      return 0;
+    }
+
+    const result = await manager
+      .getRepository(EnquiryItem)
+      .update({ enquiryId: In(enquiries.map((enquiry) => enquiry.id)) }, { note: null });
+
     return result.affected ?? 0;
   }
 

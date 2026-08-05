@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { GarmentsModule } from '@api/modules/garments/garments.module';
+import { DeletionLogEntry } from '@api/modules/retention/entities/deletion-log-entry.entity';
 import { SettingsModule } from '@api/modules/settings';
 import { ShortlistModule } from '@api/modules/shortlist/shortlist.module';
 
@@ -44,7 +45,16 @@ import { ResultsService } from './services/results.service';
  */
 @Module({
   imports: [
-    TypeOrmModule.forFeature([TryOnResult]),
+    // `DeletionLogEntry` is `retention`'s table (§4.33) and is registered here as a
+    // **write-only** dependency for exactly one statement: §4.18 makes a `deletion_log`
+    // row part of what `DELETE /results/:resultId` *is*, and it has to land in the same
+    // transaction as the soft delete (§2.9 rule 3). The entity rather than the module,
+    // for the reason `moderation.module.ts` sets out at length: importing
+    // `RetentionModule` would put the account-deletion cascade in this injector, and
+    // `retention` exports no service precisely so that cannot happen. Registering an
+    // entity in two `forFeature()` calls is harmless — the metadata is global to the
+    // connection.
+    TypeOrmModule.forFeature([TryOnResult, DeletionLogEntry]),
     GarmentsModule,
     SettingsModule,
     ShortlistModule,

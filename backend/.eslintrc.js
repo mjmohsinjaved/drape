@@ -38,6 +38,18 @@ module.exports = {
       typescript: {
         project: './tsconfig.json',
         alwaysTryTypes: true,
+        /*
+         * This app is built and run as CommonJS (`"module": "commonjs"`), so the
+         * declarations that describe what it actually loads are a package's `require`
+         * ones. Without this the resolver picks the `import` condition and reads a
+         * package's ESM typings instead — for `sharp` that means seeing a named
+         * `export const sharp` alongside the default, which the CommonJS entry point
+         * (`module.exports = Sharp`) does not have. `import/no-named-as-default` then
+         * asks every call site to switch to a named import that would be `undefined` at
+         * runtime. Resolving the same condition the compiler emits for is the fix; the
+         * rule stays on.
+         */
+        conditionNames: ['require', 'types', 'node', 'default'],
       },
       node: true,
     },

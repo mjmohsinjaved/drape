@@ -1,10 +1,10 @@
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { getRepositoryToken } from '@nestjs/typeorm';
 
-import { DataSource } from 'typeorm';
+import { DataSource, type SelectQueryBuilder } from 'typeorm';
 
 import { ErrorCode, Role } from '@library/common';
-import type { ICurrentUser } from '@library/common';
+import type { ICurrentUser, SortOrder } from '@library/common';
 
 import { AUDIT_RECORD_EVENT, type AuditRecordEvent } from '@api/modules/audit/events/audit.event';
 import { CategoriesService } from '@api/modules/categories';
@@ -31,6 +31,7 @@ import {
   createTestingModule,
 } from '../../../../test/fixtures';
 import { GarmentBulkAction } from '../dto/garment-bulk.dto';
+import { GARMENT_SORT_KEYS, type GarmentSortKey } from '../dto/garment-query.dto';
 import { GarmentImage } from '../entities/garment-image.entity';
 import { Garment } from '../entities/garment.entity';
 import { EmbellishmentWeight } from '../enums/embellishment-weight.enum';
@@ -611,6 +612,77 @@ describe('GarmentsService', () => {
         'NULLIF(garment.loveCount + garment.maybeCount + garment.rejectCount, 0)',
       );
       expect(STAR_RATE_SQL).not.toContain('tryOnCount');
+    });
+  });
+
+  /**
+   * §2.8 — a sort key reaches `ORDER BY` by string interpolation, because SQL has no
+   * parameter form for a column name. `GarmentQueryDto`'s `@IsIn` is the gate for the
+   * one HTTP caller that exists today; these are about the gate that has to hold for
+   * the caller that does not exist yet — a second DTO that forgets `@IsIn`, or anything
+   * that builds a query object by hand and never passes through validation at all.
+   */
+  describe('§2.8 — ORDER BY is built from the closed key list, never from the input', () => {
+    interface OrderingInternals {
+      applyOrdering(
+        qb: SelectQueryBuilder<Garment>,
+        sortBy: GarmentSortKey,
+        sortOrder: SortOrder,
+      ): void;
+    }
+
+    function stubBuilder(): { qb: SelectQueryBuilder<Garment>; orderBy: jest.Mock } {
+      const orderBy = jest.fn();
+      const addOrderBy = jest.fn();
+      return {
+        qb: { orderBy, addOrderBy } as unknown as SelectQueryBuilder<Garment>,
+        orderBy,
+      };
+    }
+
+    async function ordering(): Promise<{
+      apply: OrderingInternals['applyOrdering'];
+      close: () => Promise<void>;
+    }> {
+      const harness = await arrange();
+      const internals = harness.service as unknown as OrderingInternals;
+      return {
+        apply: internals.applyOrdering.bind(harness.service),
+        close: harness.close,
+      };
+    }
+
+    it.each(GARMENT_SORT_KEYS.filter((key) => key !== 'starRate'))(
+      'orders by the column for %s',
+      async (sortBy) => {
+        const { apply, close } = await ordering();
+        const { qb, orderBy } = stubBuilder();
+
+        apply(qb, sortBy, 'DESC');
+
+        expect(orderBy).toHaveBeenCalledWith(`garment.${sortBy}`, 'DESC', 'NULLS LAST');
+        await close();
+      },
+    );
+
+    it.each([
+      'createdAt; DROP TABLE garments--',
+      'createdAt, (SELECT password FROM users LIMIT 1)',
+      'id) --',
+      '',
+    ])('refuses %p rather than interpolating it into ORDER BY', async (injected) => {
+      const { apply, close } = await ordering();
+      const { qb, orderBy } = stubBuilder();
+
+      // The cast models exactly the caller this guard exists for: one that reached the
+      // service without `@IsIn` having run. The compiler stops the honest version of
+      // this mistake; the re-check stops the dishonest one.
+      expect(() => {
+        apply(qb, injected as unknown as GarmentSortKey, 'DESC');
+      }).toThrow(/not a garment sort key/);
+
+      expect(orderBy).not.toHaveBeenCalled();
+      await close();
     });
   });
 });

@@ -14,6 +14,7 @@ import { Global, Module, type DynamicModule, type Provider } from '@nestjs/commo
 import { LocalDiskDriver } from './drivers/local-disk.driver';
 import { StorageConfigError } from './exceptions/storage.exception';
 import { ImageService } from './image.service';
+import { SignedUrlAudienceRegistry } from './signed-url-audience.registry';
 import { SignedUrlService } from './signed-url.service';
 import {
   loadStorageConfig,
@@ -49,6 +50,9 @@ function buildProviders(config?: StorageConfig): Provider[] {
       useFactory: (): StorageConfig => config ?? loadStorageConfig(),
     },
     SignedUrlService,
+    // Global, and deliberately so: the module that *mints* an `aud` claim and the module
+    // that *checks* one must not have to know about each other. See the class comment.
+    SignedUrlAudienceRegistry,
     ImageService,
     LocalDiskDriver,
     {
@@ -60,7 +64,13 @@ function buildProviders(config?: StorageConfig): Provider[] {
   ];
 }
 
-const EXPORTS = [StorageService, ImageService, SignedUrlService, STORAGE_CONFIG];
+const EXPORTS = [
+  StorageService,
+  ImageService,
+  SignedUrlService,
+  SignedUrlAudienceRegistry,
+  STORAGE_CONFIG,
+];
 
 @Global()
 @Module({

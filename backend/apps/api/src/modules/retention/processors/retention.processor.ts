@@ -13,31 +13,41 @@ import {
   DEFAULT_DELETION_SLA_HOURS,
   DELETION_SLA_WARNING_FRACTION,
   DELETION_SWEEP_MS,
+  ORPHAN_SWEEP_CRON,
   PURGE_CRON,
 } from '../constants/retention.constants';
 import { AccountDeletionService, overdueBefore } from '../services/account-deletion.service';
+import { OrphanSweepService } from '../services/orphan-sweep.service';
 import { PurgeService } from '../services/purge.service';
 
 /** Names used in the E-14 alert copy and in the audit rows. */
 export const PURGE_JOB_NAME = 'photo-retention-purge';
 export const DELETION_JOB_NAME = 'account-deletion-purge';
+export const ORPHAN_SWEEP_JOB_NAME = 'storage-orphan-sweep';
 
 /**
- * **The two scheduled jobs §9.3 asks for, and the E-14 alert when either fails.**
+ * **The three scheduled jobs §9.3 asks for, and the E-14 alert when any of them fails.**
  *
- * | Job | Cadence | PRD |
+ * | Job | Cadence | PRD / ARCHITECTURE |
  * | --- | --- | --- |
  * | Photo retention purge | nightly, 03:00 | §9.3 — "person photos deleted 30 days after last account activity" |
  * | Account deletion sweep | every 15 minutes | A-20, C-38 — "completes within 24 hours" |
+ * | Storage orphan sweep | hourly, :25 | §3.5 step 4, §3.2 requirement 4 — an object with no owning row, and `.tmp` |
  *
- * ### Neither job can overlap itself, and both can be cancelled
+ * The third exists because the first two both operate on **rows**, and the leak §3.5 step
+ * 4 describes is an object with no row at all: a redeemed upload ticket whose `POST
+ * /person-photos` never arrived is a photograph that `PurgeService` cannot see, `GET
+ * /me/data` cannot show her, and `deletion_log` has never heard of. See
+ * {@link OrphanSweepService} for the full argument, including why it does not weaken C-27.
+ *
+ * ### No job can overlap itself, and all can be cancelled
  *
  * `@Cron` and `@Interval` both fire on a schedule regardless of whether the previous run
- * finished. The services own the guard — `PurgeService.isRunning` and
- * `AccountDeletionService.isRunning` — because that is where the state that must not be
- * re-entered lives. On shutdown this hook calls `cancel()` on both; a run in flight
- * finishes the account or photograph it is on, in its own transaction, and stops. Work
- * is never left half done, only not yet started.
+ * finished. The services own the guard — `PurgeService.isRunning`,
+ * `AccountDeletionService.isRunning` and `OrphanSweepService.isRunning` — because that is
+ * where the state that must not be re-entered lives. On shutdown this hook calls
+ * `cancel()` on all three; a run in flight finishes the account, photograph or object it
+ * is on and stops. Work is never left half done, only not yet started.
  *
  * ### A failed purge is an alert, not a log line
  *
@@ -60,6 +70,7 @@ export class RetentionProcessor implements OnModuleDestroy {
   constructor(
     private readonly purge: PurgeService,
     private readonly deletions: AccountDeletionService,
+    private readonly orphans: OrphanSweepService,
     private readonly alerts: AlertingService,
     private readonly config: ConfigService,
     private readonly events: EventEmitter2,
@@ -68,6 +79,7 @@ export class RetentionProcessor implements OnModuleDestroy {
   onModuleDestroy(): void {
     this.purge.cancel();
     this.deletions.cancel();
+    this.orphans.cancel();
   }
 
   /* -----------------------------------------------------------------------------------------
@@ -151,6 +163,70 @@ export class RetentionProcessor implements OnModuleDestroy {
     } catch (error: unknown) {
       await this.raisePurgeFailure(DELETION_JOB_NAME, startedAt, error, () =>
         this.pendingCount(now),
+      );
+    }
+  }
+
+  /* -----------------------------------------------------------------------------------------
+   * §3.5 step 4 / §3.2 requirement 4 — the orphan sweep
+   * -------------------------------------------------------------------------------------- */
+
+  @Cron(ORPHAN_SWEEP_CRON, { name: ORPHAN_SWEEP_JOB_NAME })
+  async runOrphanSweep(): Promise<void> {
+    await this.orphanSweepOnce();
+  }
+
+  /**
+   * One orphan sweep, with the E-14 alert on failure.
+   *
+   * A failed orphan sweep is an alert for the same reason a failed photo purge is: an
+   * object with no owning row is invisible to every other mechanism in §9.3, so a sweep
+   * that has been broken for a fortnight is a fortnight of photographs accumulating
+   * somewhere nobody is looking — including the consumer, who cannot see them in
+   * `GET /me/data` and therefore cannot ask for them to go.
+   *
+   * The pending count reported to the alert is the photo backlog, which is the number an
+   * operator can act on; there is no cheap count of "objects with no row" that does not
+   * repeat the sweep itself.
+   */
+  async orphanSweepOnce(now: Date = new Date()): Promise<void> {
+    const startedAt = now;
+
+    try {
+      const report = await this.orphans.sweepOnce(now);
+      const deleted =
+        report.personPhotos.deleted +
+        report.renders.deleted +
+        report.exports.deleted +
+        report.temporaryFilesDeleted;
+
+      if (deleted > 0) {
+        this.events.emit(
+          AUDIT_RECORD_EVENT,
+          new AuditRecordEvent({
+            action: AUDIT_ACTIONS.PURGE_JOB_COMPLETED,
+            targetType: AUDIT_TARGET_TYPES.DELETION_LOG,
+            actorId: null,
+            actorRole: null,
+            targetLabel: ORPHAN_SWEEP_JOB_NAME,
+            // Counts and byte totals only. Never a key (E-12).
+            metadata: {
+              personPhotoObjectsDeleted: report.personPhotos.deleted,
+              renderObjectsDeleted: report.renders.deleted,
+              exportArchivesDeleted: report.exports.deleted,
+              temporaryFilesDeleted: report.temporaryFilesDeleted,
+              bytesReclaimed:
+                report.personPhotos.bytesReclaimed +
+                report.renders.bytesReclaimed +
+                report.exports.bytesReclaimed,
+              cancelled: report.cancelled,
+            },
+          }),
+        );
+      }
+    } catch (error: unknown) {
+      await this.raisePurgeFailure(ORPHAN_SWEEP_JOB_NAME, startedAt, error, () =>
+        this.purge.countDue(now),
       );
     }
   }

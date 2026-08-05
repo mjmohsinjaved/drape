@@ -5,6 +5,7 @@ import { ConsentsModule } from '@api/modules/consents';
 import { Consent } from '@api/modules/consents/entities/consent.entity';
 import { EnquiryItem } from '@api/modules/enquiries/entities/enquiry-item.entity';
 import { Enquiry } from '@api/modules/enquiries/entities/enquiry.entity';
+import { ModerationItem } from '@api/modules/moderation/entities/moderation-item.entity';
 import { NotificationsModule } from '@api/modules/notifications/notifications.module';
 import { PersonPhoto } from '@api/modules/person-photos/entities/person-photo.entity';
 import { TryOnResult } from '@api/modules/results/entities/tryon-result.entity';
@@ -22,6 +23,7 @@ import { RetentionPolicyModule } from './retention-policy.module';
 import { AccountDeletionService } from './services/account-deletion.service';
 import { DataExportService } from './services/data-export.service';
 import { MyDataService } from './services/my-data.service';
+import { OrphanSweepService } from './services/orphan-sweep.service';
 import { PurgeService } from './services/purge.service';
 
 /**
@@ -42,6 +44,12 @@ import { PurgeService } from './services/purge.service';
  * "deleted" can never be confused for one another. The spec beside `purge.service.ts`
  * asserts the guarantee directly against a database full of expired photographs and
  * their renders.
+ *
+ * {@link OrphanSweepService} is the third class and reads `tryon_results` too — to build
+ * a **keep** set. Its predicate is "no row names this object", never "this row is old",
+ * so a render with a live row, a soft-deleted row, or a row written seconds ago is left
+ * standing in all three cases. Its own spec asserts each of them. The class that deletes
+ * on age still cannot reach the table; that is what C-27 rests on and it is unchanged.
  *
  * ### Entities registered here
  *
@@ -97,6 +105,11 @@ import { PurgeService } from './services/purge.service';
       Enquiry,
       EnquiryItem,
       Consent,
+      // §4.29 — `moderation_items` has four FKs and all four are `SET NULL`, so nothing
+      // about deleting an account removed one. A reviewed item survived her deletion
+      // carrying `blurredThumbnailKey`: a pointer to a derivative of her photograph, in a
+      // table an admin queue reads. The cascade below deletes the rows and the objects.
+      ModerationItem,
     ]),
     NotificationsModule,
     ConsentsModule,
@@ -106,6 +119,7 @@ import { PurgeService } from './services/purge.service';
   providers: [
     PurgeService,
     AccountDeletionService,
+    OrphanSweepService,
     MyDataService,
     DataExportService,
     RetentionProcessor,

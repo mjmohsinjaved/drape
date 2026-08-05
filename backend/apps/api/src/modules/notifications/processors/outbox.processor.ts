@@ -1,10 +1,10 @@
 import { Injectable, Logger, type OnModuleDestroy } from '@nestjs/common';
-import { Interval } from '@nestjs/schedule';
+import { Cron, Interval } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { LessThan, LessThanOrEqual, Repository } from 'typeorm';
+import { In, LessThan, LessThanOrEqual, Not, Repository } from 'typeorm';
 
-import { computeBackoffMs } from '@library/common';
+import { computeBackoffMs, MILLISECONDS_PER_DAY } from '@library/common';
 import { NotificationsService, type NotificationLocale, TemplateId } from '@library/notifications';
 
 import { User } from '@api/modules/users/entities/user.entity';
@@ -15,7 +15,10 @@ import {
   OUTBOX_BACKOFF_BASE_MS,
   OUTBOX_BACKOFF_MAX_MS,
   OUTBOX_BATCH_SIZE,
+  OUTBOX_DELIVERED_RETENTION_DAYS,
   OUTBOX_MAX_ATTEMPTS,
+  OUTBOX_PRUNE_BATCH_SIZE,
+  OUTBOX_PRUNE_CRON,
   OUTBOX_SENDING_TIMEOUT_MS,
   OUTBOX_TICK_MS,
 } from '../constants/notification.constants';
@@ -81,6 +84,15 @@ const EMPTY_REPORT: DrainReport = {
  * §4.32 makes the row itself the store. Delivering one means marking it `SENT`; the
  * consumer reads it through `GET /me/notifications`. There is nothing to time out and
  * nothing to retry, so it is settled without touching `NotificationsService` at all.
+ *
+ * ### A delivered row keeps nothing it no longer needs
+ *
+ * `recipientAddress` and `payload` are cleared the moment an email or SMS is accepted
+ * ({@link markSent}), and the husk is removed thirty days later ({@link pruneDelivered}).
+ * Both halves matter: §9.3 promises an account's data is gone when she deletes it, and the
+ * deletion-confirmation row is written with her address stored and `recipientUserId` null
+ * — deliberately, because there is nothing left to resolve it from — which put it outside
+ * the reach of `purgeForUser` forever. `IN_APP` rows are exempt from both; see each method.
  */
 @Injectable()
 export class OutboxProcessor implements OnModuleDestroy {
@@ -298,12 +310,38 @@ export class OutboxProcessor implements OnModuleDestroy {
   }
 
   /**
-   * `SENT`, with the attempt counted.
+   * `SENT`, with the attempt counted — and, for anything that left the building, with the
+   * personal data it needed dropped.
    *
    * `sentAt` is what proves a message left; `readAt` stays null because an `IN_APP`
    * row is not read merely because it was delivered.
+   *
+   * ### Why the address and the payload are cleared
+   *
+   * `recipientAddress` and `payload` exist to *render and deliver* one message. Once
+   * `sentAt` is set they have no remaining purpose, and what they hold is an email address
+   * or a phone number and a bag of template variables — her name, a garment title, an
+   * enquiry reference. `EnqueueNotificationInput.recipientAddress` already documents late
+   * resolution as the preferred shape "to keep one fewer copy of a personal identifier in
+   * a table (E-12)"; this is the same argument applied to the rows that had no choice.
+   *
+   * The account-deletion confirmation is the case that makes it necessary rather than
+   * merely tidy. That row is written with `recipientAddress = her email`, `props.consumerName
+   * = her name` and `recipientUserId = null`, inside the transaction that deletes her
+   * `users` row — all three deliberately, and all three correct (see
+   * `AccountDeletionService.execute`). The consequence was that after her deletion was
+   * logged complete with a verification hash, one row still held her name and her email
+   * address, and nothing could ever remove it: `purgeForUser` deletes by `recipientUserId`
+   * and hers is null by construction, and nothing pruned `SENT` rows at all.
+   *
+   * `IN_APP` is exempt from the payload clear and must stay exempt. §4.32 makes those rows
+   * the notification store itself and `NotificationsInboxService` renders their copy from
+   * `payload` on every read; clearing it would blank her notification list. They carry no
+   * `recipientAddress` in the first place — `OutboxService.draft` refuses to store one.
    */
   private async markSent(entry: NotificationOutboxEntry, now: Date): Promise<void> {
+    const isInApp = entry.channel === NotificationChannel.IN_APP;
+
     await this.outbox.update(
       { id: entry.id },
       {
@@ -311,8 +349,72 @@ export class OutboxProcessor implements OnModuleDestroy {
         sentAt: now,
         attempts: entry.attempts + 1,
         lastError: null,
+        ...(isInApp ? {} : { recipientAddress: null, payload: {} }),
       },
     );
+  }
+
+  /* -----------------------------------------------------------------------------------------
+   * Retention
+   * -------------------------------------------------------------------------------------- */
+
+  /** Daily. See {@link pruneDelivered}. */
+  @Cron(OUTBOX_PRUNE_CRON)
+  async pruneTick(): Promise<void> {
+    await this.pruneDelivered();
+  }
+
+  /**
+   * Removes delivered **email and SMS** rows older than
+   * {@link OUTBOX_DELIVERED_RETENTION_DAYS}.
+   *
+   * `markSent` has already emptied everything personal off these rows, so this is the
+   * second half of the same fix rather than the whole of it: without the prune the table
+   * grows without bound, and a husk that is never removed is still a row that says a
+   * particular template went out on a particular day.
+   *
+   * Three exclusions, each load-bearing:
+   *
+   *  - **`IN_APP`.** §4.32 makes those rows the in-app notification store — "there is no
+   *    second table". A sent in-app row is not a delivery record, it is her notification,
+   *    and pruning it would empty `GET /me/notifications` on a schedule nobody told her
+   *    about. They go when her account does (`purgeForUser`, §9.3).
+   *  - **Anything not `SENT`.** A `FAILED` row is a dead letter: unresolved work, and the
+   *    only visible sign that a gateway has been rejecting messages. It goes when a human
+   *    has looked at it. `PENDING` and `SENDING` are in flight.
+   *  - **Recent rows.** Thirty days answers any support ticket worth answering.
+   *
+   * Bounded per run and safe to run twice.
+   */
+  async pruneDelivered(now: Date = new Date()): Promise<number> {
+    const cutoff = new Date(now.getTime() - OUTBOX_DELIVERED_RETENTION_DAYS * MILLISECONDS_PER_DAY);
+
+    const stale = await this.outbox.find({
+      where: {
+        status: NotificationStatus.SENT,
+        channel: Not(NotificationChannel.IN_APP),
+        sentAt: LessThan(cutoff),
+      },
+      order: { sentAt: 'ASC' },
+      take: OUTBOX_PRUNE_BATCH_SIZE,
+      select: { id: true },
+    });
+
+    if (stale.length === 0) {
+      return 0;
+    }
+
+    const result = await this.outbox.delete({ id: In(stale.map((row) => row.id)) });
+    const pruned = result.affected ?? 0;
+
+    if (pruned > 0) {
+      this.logger.log(
+        `Pruned ${pruned} delivered notification row(s) older than ` +
+          `${OUTBOX_DELIVERED_RETENTION_DAYS} days. In-app notifications and dead letters ` +
+          'were not touched.',
+      );
+    }
+    return pruned;
   }
 
   /**

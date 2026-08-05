@@ -19,6 +19,9 @@ import {
   buildTryOnResult,
 } from '../../../../test/factories';
 import { createMock, createServiceUnderTest, type TestHarness } from '../../../../test/fixtures';
+import { DeletionLogEntry } from '../../retention/entities/deletion-log-entry.entity';
+import { DeletionInitiator } from '../../retention/enums/deletion-initiator.enum';
+import { DeletionSubject } from '../../retention/enums/deletion-subject.enum';
 import { TryOnResult } from '../entities/tryon-result.entity';
 
 import { ResultsService } from './results.service';
@@ -58,7 +61,12 @@ const QUERY: ResultQueryDto = { page: 1, limit: 20, sortBy: 'createdAt', sortOrd
 describe('ResultsService', () => {
   let harness: TestHarness;
   let service: ResultsService;
-  let storage: { delete: jest.Mock; signedUrl: jest.Mock; getBuffer: jest.Mock };
+  let storage: {
+    delete: jest.Mock;
+    head: jest.Mock;
+    signedUrl: jest.Mock;
+    getBuffer: jest.Mock;
+  };
   let shortlist: jest.Mocked<ShortlistService>;
 
   async function build(
@@ -68,6 +76,13 @@ describe('ResultsService', () => {
   ): Promise<void> {
     storage = {
       delete: jest.fn(async () => true),
+      head: jest.fn(async (key: string) => ({
+        key,
+        byteSize: 900_000,
+        contentType: 'image/png',
+        etag: 'd'.repeat(64),
+        lastModified: new Date('2026-08-01T00:00:00.000Z'),
+      })),
       signedUrl: jest.fn(
         (key: string, subject?: string) => `https://api.test/${key}?sub=${subject ?? ''}`,
       ),
@@ -83,6 +98,8 @@ describe('ResultsService', () => {
         { entity: TryOnResult, rows: results },
         { entity: Garment, rows: garments },
         { entity: ShortlistItem, rows: verdicts },
+        // §4.18 makes a `deletion_log` row part of what DELETE /results/:resultId *is*.
+        { entity: DeletionLogEntry },
       ],
       overrides: [
         { token: StorageService, value: storage },
@@ -512,6 +529,75 @@ describe('ResultsService', () => {
       await service.remove(OWNER, result.id);
 
       expect((await service.list(OWNER, QUERY)).items).toHaveLength(0);
+    });
+
+    /**
+     * §4.18's third clause: "soft-delete the row, hard-delete the file and thumbnail
+     * immediately, **write a `deletion_log` row**."
+     *
+     * The first two happened; the third did not, and `DeletionSubject.TRYON_RESULT` was
+     * declared and never written. Without a row there is nothing to check the "this is
+     * permanent" copy against — least of all in the case where the file delete failed,
+     * which left a soft-deleted row, a file still on disk, and no record of either.
+     */
+    it('writes the §4.18 deletion_log row, with what was actually reclaimed', async () => {
+      const result = buildTryOnResult({ userId: OWNER.id });
+      await build([result]);
+
+      await service.remove(OWNER, result.id);
+
+      const log = harness.repository<DeletionLogEntry>(DeletionLogEntry).$rows;
+      expect(log).toHaveLength(1);
+      expect(log[0]).toMatchObject({
+        subjectType: DeletionSubject.TRYON_RESULT,
+        subjectId: result.id,
+        userId: OWNER.id,
+        initiatedBy: DeletionInitiator.CONSUMER,
+        actorId: OWNER.id,
+        rowsDeleted: { tryon_results: 1 },
+        // Both the render and its thumbnail.
+        storageKeysDeleted: 2,
+        failureReason: null,
+      });
+      expect(log[0]?.completedAt).toBeInstanceOf(Date);
+      expect(log[0]?.verificationHash).toHaveLength(64);
+    });
+
+    it('records the failure when the file outlived its row, rather than logging and forgetting', async () => {
+      const result = buildTryOnResult({ userId: OWNER.id });
+      await build([result]);
+      storage.delete.mockRejectedValue(new Error('EBUSY: the volume is unavailable'));
+
+      await service.remove(OWNER, result.id);
+
+      const log = harness.repository<DeletionLogEntry>(DeletionLogEntry).$rows;
+      expect(log).toHaveLength(1);
+      // Nothing was reclaimed, and the row says so rather than implying success.
+      expect(log[0]?.storageKeysDeleted).toBe(0);
+      expect(log[0]?.bytesReclaimed).toBe('0');
+      expect(log[0]?.failureReason).toContain('EBUSY');
+    });
+
+    it('puts no storage key in the deletion_log row (E-12)', async () => {
+      const result = buildTryOnResult({ userId: OWNER.id });
+      await build([result]);
+
+      await service.remove(OWNER, result.id);
+
+      const serialised = JSON.stringify(
+        harness.repository<DeletionLogEntry>(DeletionLogEntry).$rows,
+      );
+      expect(serialised).not.toContain(result.storageKey);
+      expect(serialised).not.toContain('renders/');
+    });
+
+    it('writes no deletion_log row for a render that is not hers', async () => {
+      const result = buildTryOnResult({ userId: OWNER.id });
+      await build([result]);
+
+      await expect(service.remove(INTRUDER, result.id)).rejects.toBeDefined();
+
+      expect(harness.repository<DeletionLogEntry>(DeletionLogEntry).$rows).toHaveLength(0);
     });
   });
 

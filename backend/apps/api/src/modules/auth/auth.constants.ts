@@ -52,6 +52,12 @@ export const REVOKE_REASONS = {
   ADMIN_REVOKED: 'ADMIN_REVOKED',
   /** Privilege change: login and 2FA completion mint a new id and retire the old one. */
   ROTATED: 'ROTATED',
+  /**
+   * The pending session burned through {@link TWOFA_MAX_CHALLENGE_ATTEMPTS} wrong
+   * codes. Revoking it costs the attacker the password step again, which is the whole
+   * point of a second factor.
+   */
+  TWOFA_FAILED: 'TWOFA_FAILED',
 } as const;
 
 export type RevokeReason = (typeof REVOKE_REASONS)[keyof typeof REVOKE_REASONS];
@@ -77,6 +83,19 @@ export const OTP_DIGITS = 6;
 
 /** Recovery codes handed out once when 2FA is enabled (S-8). */
 export const RECOVERY_CODE_COUNT = 10;
+
+/**
+ * Wrong TOTP or recovery codes allowed against one pending session before it is
+ * revoked (S-6, S-8).
+ *
+ * `@Throttle(5/60s)` is not a second-factor control: `UserThrottlerGuard` runs before
+ * `SessionAuthGuard` on a `@Public()` route, so its tracker is the **IP**, and an
+ * attacker holding a stolen password sprays from a proxy pool at no cost. TOTP
+ * tolerance is ±1 step, so three of a million codes are live at any instant — a
+ * guessing budget that has to be bounded per *account*, not per address. Past this
+ * count the pending session dies and the password step has to be repeated.
+ */
+export const TWOFA_MAX_CHALLENGE_ATTEMPTS = 5;
 
 /** PASSWORD_POLICY_VIOLATION copy: "at least 10 characters, including a number and a symbol". */
 export const PASSWORD_MIN_LENGTH = 10;

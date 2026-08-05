@@ -56,3 +56,21 @@ export const VOTER_COOKIE_NAME = 'drape.voter';
 
 /** The voter cookie outlives the link it was minted for, so a returning visitor is recognised. */
 export const VOTER_COOKIE_MAX_AGE_MS = (SHARE_LINK_TTL_DAYS + 1) * MILLISECONDS_PER_DAY;
+
+/**
+ * How long a signed URL for a share-page thumbnail lives — **five minutes**.
+ *
+ * `thumbnails/render/**` is a public object class, so these used to fall to
+ * `STORAGE_URL_TTL_PUBLIC_SECONDS` — an hour — and `FileDownloadService` serves a
+ * subject-less object with `Cache-Control: public`. Combined with the two-minute issue
+ * bucket that makes the URL a stable shared-cache key, revoking a link left an hour of
+ * working image URLs in every proxy between here and the recipient. C-34 promises the
+ * link is "revocable at any time"; that was true of the page and false of the pictures.
+ *
+ * `ShareAudienceValidator` is the real control — it refuses a revoked link on the very
+ * next request. This TTL bounds the one case a server-side check cannot reach: bytes
+ * already cached. Five minutes is long enough that scrolling the page does not re-fetch
+ * every image and short enough that a revocation is effective in minutes rather than in
+ * an hour.
+ */
+export const SHARE_THUMBNAIL_URL_TTL_SECONDS = 300;

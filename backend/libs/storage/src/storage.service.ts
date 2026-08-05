@@ -11,7 +11,7 @@ import { Readable } from 'node:stream';
 import { Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 
 import { imageTooLarge, imageFormatUnsupported } from './exceptions/storage.exception';
-import { SignedUrlService, type SignedUrlPayload } from './signed-url.service';
+import { SignedUrlService, type IssueOptions, type SignedUrlPayload } from './signed-url.service';
 import {
   buildTryOnCacheKey,
   isAllowedUploadMimeType,
@@ -174,6 +174,17 @@ export class StorageService implements OnModuleInit {
     return this.signedUrls.issueUrl(key, subject === undefined ? {} : { subject });
   }
 
+  /**
+   * The same URL, with the full §3.4 issuing options.
+   *
+   * For the callers that need more than a subject: a shorter TTL than the object class
+   * default, or an `aud` binding the token to a credential rather than a session — the
+   * share page's thumbnails, whose reader has no account at all (C-33, C-34).
+   */
+  signedUrlWith(key: string, options: IssueOptions): string {
+    return this.signedUrls.issueUrl(key, options);
+  }
+
   /** The raw token, for callers that build their own URL shape (a download route, an export). */
   signToken(key: string, subject?: string): string {
     return this.signedUrls.issue(key, subject === undefined ? {} : { subject });
@@ -251,6 +262,25 @@ export class StorageService implements OnModuleInit {
   /* ---------------------------------------------------------------------------------------------
    * Health (§3.2 requirement 10, E-14)
    * ------------------------------------------------------------------------------------------ */
+
+  /* ---------------------------------------------------------------------------------------------
+   * Retention (§3.2 requirement 4, §3.5 step 4)
+   * ------------------------------------------------------------------------------------------ */
+
+  /**
+   * §3.2 requirement 4 — removes `.tmp` entries older than `olderThan`, up to `limit`.
+   *
+   * `0` when the active driver has no temporary directory (a bucket driver writes
+   * straight to the bucket, so an aborted upload leaves nothing behind to sweep). The
+   * caller cannot tell "nothing to sweep" from "nothing sweepable", and does not need to:
+   * both mean there is no orphaned byte here to account for.
+   */
+  async sweepTemporaryFiles(olderThan: Date, limit: number): Promise<number> {
+    if (this.driver.sweepTemporaryFiles === undefined) {
+      return 0;
+    }
+    return this.driver.sweepTemporaryFiles(olderThan, limit);
+  }
 
   async freeSpace(): Promise<FreeSpaceReport> {
     const freeBytes = this.driver.freeSpaceBytes

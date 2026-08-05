@@ -55,7 +55,18 @@ export function buildUser(overrides: Partial<User> = {}): User {
   );
 }
 
-/** An admin. Admins arrive by invitation (S-5) or from the E-4 seed, never from signup. */
+/**
+ * An admin. Admins arrive by invitation (S-5) or from the E-4 seed, never from signup.
+ *
+ * **Enrolled in two-factor by default**, because S-8 makes it mandatory for the role and
+ * `SessionResolverService` enforces that: an admin with `twofaEnabledAt === null` holds a
+ * session that reaches `/auth/2fa/setup`, `/auth/2fa/enable`, `/auth/me` and `/auth/logout`
+ * and is refused `TWOFA_REQUIRED` everywhere else. A factory that produced un-enrolled admins
+ * by default would hand every unrelated suite a caller who cannot legally do the thing that
+ * suite is about — and would quietly stop testing the admin path at all.
+ *
+ * Pass `twofaEnabledAt: null` explicitly to build the pre-enrolment state.
+ */
 export function buildAdminUser(overrides: Partial<User> = {}): User {
   const sequence = nextSequence();
 
@@ -63,6 +74,7 @@ export function buildAdminUser(overrides: Partial<User> = {}): User {
     role: Role.ADMIN,
     email: `admin${sequence}@example.invalid`,
     name: `Test Admin ${sequence}`,
+    twofaEnabledAt: FIXED_NOW,
     ...overrides,
   });
 }

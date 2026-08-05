@@ -1,8 +1,17 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { InjectRepository } from '@nestjs/typeorm';
+import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 
-import { ILike, In, IsNull, Not, Repository, type FindOptionsWhere } from 'typeorm';
+import {
+  DataSource,
+  ILike,
+  In,
+  IsNull,
+  Not,
+  Repository,
+  type EntityManager,
+  type FindOptionsWhere,
+} from 'typeorm';
 
 import {
   ErrorCode,
@@ -10,14 +19,19 @@ import {
   OwnershipException,
   paginate,
   paginationSkip,
+  sha256Hex,
   type ICurrentUser,
   type IPaginated,
 } from '@library/common';
+import { runInTransaction } from '@library/database';
 import { StorageService } from '@library/storage';
 
 import { AUDIT_RECORD_EVENT, AuditRecordEvent } from '@api/modules/audit/events/audit.event';
 import { Garment } from '@api/modules/garments/entities/garment.entity';
 import { PublishState } from '@api/modules/garments/enums/publish-state.enum';
+import { DeletionLogEntry } from '@api/modules/retention/entities/deletion-log-entry.entity';
+import { DeletionInitiator } from '@api/modules/retention/enums/deletion-initiator.enum';
+import { DeletionSubject } from '@api/modules/retention/enums/deletion-subject.enum';
 import type { ShortlistItemResponseDto } from '@api/modules/shortlist/dto/shortlist-response.dto';
 import { ShortlistItem } from '@api/modules/shortlist/entities/shortlist-item.entity';
 import { ShortlistService } from '@api/modules/shortlist/services/shortlist.service';
@@ -73,7 +87,9 @@ type ResultWhere = FindOptionsWhere<TryOnResult> | FindOptionsWhere<TryOnResult>
  * ### Deleting is permanent, and the copy says so
  *
  * C-31: the row is soft-deleted so the id can never be reused, and the **files are hard
- * deleted immediately**. The confirmation copy promises the image is gone, and it is.
+ * deleted immediately**. The confirmation copy promises the image is gone, and it is —
+ * and §4.18's third clause, a `deletion_log` row, is what makes that promise checkable
+ * rather than merely stated. See {@link remove}.
  */
 @Injectable()
 export class ResultsService {
@@ -87,6 +103,8 @@ export class ResultsService {
     @InjectRepository(ShortlistItem)
     private readonly verdicts: Repository<ShortlistItem>,
     private readonly shortlist: ShortlistService,
+    @InjectDataSource()
+    private readonly dataSource: DataSource,
     private readonly storage: StorageService,
     private readonly events: EventEmitter2,
   ) {}
@@ -217,30 +235,68 @@ export class ResultsService {
   }
 
   /**
-   * `DELETE /results/:resultId` — C-31.
+   * `DELETE /results/:resultId` — C-31, ARCHITECTURE §4.18.
    *
-   * Files first would risk a row pointing at nothing if the delete failed halfway;
-   * row first would risk an orphaned file. The row wins: an orphaned file is swept by
-   * the retention cron, while a row whose image is gone is a broken screen.
+   * > §4.18: "soft-delete the row, hard-delete the file and thumbnail immediately,
+   * > **write a `deletion_log` row**."
+   *
+   * All three, in that sentence's order. The third was missing, and its absence was the
+   * one that mattered: the confirmation copy promises the image is gone, the storage
+   * delete is best-effort, and there was no record anywhere to check the promise against.
+   * A failed file delete produced a soft-deleted row, a file still on disk, and nothing
+   * that knew about either. `DeletionSubject.TRYON_RESULT` was declared and never written.
+   *
+   * ### Why the storage delete still only logs on failure
+   *
+   * Because refusing the request would be worse for her. She asked for the render to go;
+   * the row goes, the id can never be reused, and the render leaves her history
+   * immediately. A 500 because the filesystem hiccuped would leave the render on screen
+   * and teach her the delete button does not work.
+   *
+   * What changes is that the failure is now **recorded** rather than logged and forgotten:
+   * `deletion_log.failureReason` names it, `storageKeysDeleted` counts what actually went,
+   * and the orphan sweep (§3.5 step 4) is the thing that eventually collects the file —
+   * which it can only do because the row is soft-deleted rather than hard-deleted, so the
+   * sweep's keep set still names the key and cannot race the successful path.
+   *
+   * ### Objects before rows, in one transaction
+   *
+   * The same order and the same reasoning as `PurgeService.purgeOne`: writing the log row
+   * outside the transaction puts two tables outside one commit (§2.9 rule 3), and
+   * `deletion_log` carries `no_update_deletion_log`, so a row written first cannot be
+   * completed later. The byte count is read with `head()` before the delete, because
+   * afterwards there is nothing left to measure.
    */
   async remove(user: ICurrentUser, resultId: string): Promise<void> {
     const result = await this.loadOwned(user.id, resultId);
+    const now = new Date();
 
-    await this.results.softDelete({ id: result.id });
+    const removal = await this.deleteRenderObjects([result.storageKey, result.thumbnailKey]);
 
-    for (const key of [result.storageKey, result.thumbnailKey]) {
-      if (key === null) {
-        continue;
-      }
-      try {
-        await this.storage.delete(key);
-      } catch (error: unknown) {
-        this.logger.warn(
-          `A render file outlived its row and is now orphaned; the retention sweep will ` +
-            `collect it. ${error instanceof Error ? error.message : String(error)}`,
-        );
-      }
-    }
+    await runInTransaction(
+      this.dataSource,
+      async (manager: EntityManager): Promise<void> => {
+        await manager.getRepository(TryOnResult).softDelete({ id: result.id });
+
+        await manager.getRepository(DeletionLogEntry).insert({
+          subjectType: DeletionSubject.TRYON_RESULT,
+          subjectId: result.id,
+          userId: user.id,
+          initiatedBy: DeletionInitiator.CONSUMER,
+          actorId: user.id,
+          // She asked and it was done in the same request; C-38's 24-hour SLA is about
+          // accounts, and a single render has no queue to wait in.
+          requestedAt: now,
+          completedAt: now,
+          rowsDeleted: { tryon_results: 1 },
+          storageKeysDeleted: removal.keysDeleted,
+          bytesReclaimed: String(removal.bytesReclaimed),
+          verificationHash: removal.verificationHash,
+          failureReason: removal.failureReason,
+        });
+      },
+      { label: 'results.remove' },
+    );
 
     this.events.emit(
       AUDIT_RECORD_EVENT,
@@ -254,6 +310,52 @@ export class ResultsService {
         targetLabel: result.garmentTitleSnapshot,
       }),
     );
+  }
+
+  /**
+   * Removes a render's objects and reports exactly what it accomplished.
+   *
+   * Never throws — see {@link remove} for why the request must still succeed — but every
+   * failure comes back in `failureReason`, so the `deletion_log` row records that the
+   * bytes may still exist rather than implying they do not. The reasons are truncated
+   * together to fit `deletion_log.failureReason` and carry no storage key (E-12).
+   */
+  private async deleteRenderObjects(keys: readonly (string | null)[]): Promise<{
+    keysDeleted: number;
+    bytesReclaimed: number;
+    verificationHash: string;
+    failureReason: string | null;
+  }> {
+    const removed: string[] = [];
+    const failures: string[] = [];
+    let bytesReclaimed = 0;
+
+    for (const key of keys) {
+      if (key === null || key === '') {
+        continue;
+      }
+      try {
+        const stored = await this.storage.head(key);
+        if (await this.storage.delete(key)) {
+          removed.push(key);
+          bytesReclaimed += stored?.byteSize ?? 0;
+        }
+      } catch (error: unknown) {
+        const reason = error instanceof Error ? error.message : String(error);
+        failures.push(reason);
+        this.logger.warn(
+          'A render file outlived its row and is now orphaned; the §3.5 step 4 sweep will ' +
+            `collect it and deletion_log records the failure. ${reason}`,
+        );
+      }
+    }
+
+    return {
+      keysDeleted: removed.length,
+      bytesReclaimed,
+      verificationHash: sha256Hex([...removed].sort().join('\n')),
+      failureReason: failures.length === 0 ? null : failures.join('; ').slice(0, 2_000),
+    };
   }
 
   /**

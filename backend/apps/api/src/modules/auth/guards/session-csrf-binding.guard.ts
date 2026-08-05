@@ -43,8 +43,13 @@ interface CsrfBoundRequest {
  * It never *replaces* guard 1. A request that failed the double-submit comparison
  * never reaches here. It also stays out of the way of anonymous callers: before
  * login there is no session to bind to, the token is minted under the anonymous
- * scope, and guard 1's comparison is the whole check — which is why `@SkipCsrf()`
- * exists on exactly `POST /auth/login` and `POST /auth/signup`.
+ * scope, and guard 1's comparison is the whole check.
+ *
+ * That anonymous path is what lets `POST /auth/login`, `POST /auth/signup` and
+ * `POST /invites/token/:token/accept` be CSRF-protected without holding a session:
+ * the form calls `GET /auth/csrf` first, guard 1 compares header against cookie, and
+ * this guard returns true because `request.user` is undefined. **None of the three
+ * carries `@SkipCsrf()`.**
  */
 @Injectable()
 export class SessionCsrfBindingGuard implements CanActivate {

@@ -38,10 +38,11 @@ const ACCEPT_THROTTLE = { default: { limit: 5, ttl: 60_000 } };
  * is the point of the link. `@Roles(Role.PUBLIC)` and an explicit `@Throttle()`
  * accompany it, both required by §2.6.
  *
- * **No `@SkipCsrf()`.** The §2.6 budget is two handlers — login and signup — and both
- * are already spent. This one does not need it: the acceptance form calls
- * `GET /auth/csrf` first and gets an anonymous-scope token, exactly as the login form
- * does before it has a session.
+ * **No `@SkipCsrf()`.** It does not need one: the acceptance form calls
+ * `GET /auth/csrf` first and gets an anonymous-scope token, exactly as the login and
+ * signup forms do before they have a session. Those two used to carry a skip on the
+ * argument that no such token existed — this controller is the standing proof that it
+ * does, and both have since been brought onto the same path.
  */
 @ApiTags('Invites')
 @Controller('invites')

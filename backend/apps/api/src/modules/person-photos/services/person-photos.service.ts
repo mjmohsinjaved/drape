@@ -385,11 +385,16 @@ export class PersonPhotosService {
       return photo;
     }
 
+    // Neither branch carries `details`. The mask rewrites the code and drops the
+    // details of the *masked* branch, so a `{ photoId }` on the not-found branch alone
+    // would have made the two responses different lengths — the mask defeated by the
+    // one field it does not rewrite. The id is already in the request; there is
+    // nothing for a client to learn from it here.
     const existsElsewhere = await this.photos.exists({ where: { id: photoId } });
     if (existsElsewhere) {
-      throw new OwnershipException(ErrorCode.PHOTO_NOT_OWNED, { details: { photoId } });
+      throw new OwnershipException(ErrorCode.PHOTO_NOT_OWNED);
     }
-    throw new NotFoundException(ErrorCode.PHOTO_NOT_FOUND, { details: { photoId } });
+    throw new NotFoundException(ErrorCode.PHOTO_NOT_FOUND);
   }
 
   /**

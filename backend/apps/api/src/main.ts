@@ -11,6 +11,7 @@ import helmet from 'helmet';
 import { CustomValidationPipe, StructuredLoggerService } from '@library/common';
 
 import { ApiModule } from '@api/api.module';
+import { registerBodyParsers } from '@api/bootstrap/body-parser.config';
 import { buildCorsOptions } from '@api/bootstrap/cors.config';
 import { registerGracefulShutdown } from '@api/bootstrap/graceful-shutdown';
 import { SWAGGER_PATH, setupSwagger, shouldExposeSwagger } from '@api/bootstrap/swagger.config';
@@ -59,7 +60,14 @@ async function bootstrap(): Promise<void> {
     bufferLogs: true,
     // CORS is configured explicitly below; never by the framework default.
     cors: false,
+    // Nest's default pair includes `express.urlencoded()`, which is the transport a
+    // cross-site auto-submitting form uses because it needs no preflight. Body parsing
+    // is registered explicitly below — JSON only. See `body-parser.config.ts`.
+    bodyParser: false,
   });
+
+  // 1a. The one body parser the API accepts.
+  registerBodyParsers(app);
 
   // 2. Structured logging (E-12). Buffered records are flushed into it.
   app.useLogger(app.get(StructuredLoggerService));

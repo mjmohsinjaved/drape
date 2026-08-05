@@ -47,9 +47,26 @@ export function setupSwagger(app: INestApplication, env: EnvironmentVariables): 
 }
 
 /**
- * Production hides the docs. Everywhere else they are served, because a contract you
- * cannot read is a contract nobody checks.
+ * Whether to mount the docs at all — **off unless `EXPOSE_API_DOCS` says otherwise**,
+ * and never in production.
+ *
+ * `SwaggerModule.setup()` registers raw Express middleware. It is not a route handler,
+ * so none of the four `APP_GUARD`s in §2.7 runs on it and `npm run check:guards`
+ * cannot see it: whoever reaches the port reads the whole contract. Deriving this from
+ * `NODE_ENV` alone — the previous rule — meant every non-production deployment,
+ * staging included, published the entire API surface anonymously.
+ *
+ * Two conditions, both required:
+ *
+ * 1. `EXPOSE_API_DOCS` is explicitly true. Default false, so a deployment that never
+ *    thought about it is closed.
+ * 2. `NODE_ENV` is not `production`, unchanged and kept deliberately: nothing about
+ *    the flag should make the production case reachable by a typo in an env file.
+ *
+ * **Any environment reachable over a network must put authentication in front of the
+ * mount** — reverse-proxy basic auth, an IP allow-list, or a private network. The API
+ * cannot do it, because the mount sits outside the guard chain by construction.
  */
 export function shouldExposeSwagger(env: EnvironmentVariables): boolean {
-  return env.NODE_ENV !== NodeEnv.PRODUCTION;
+  return env.EXPOSE_API_DOCS && env.NODE_ENV !== NodeEnv.PRODUCTION;
 }

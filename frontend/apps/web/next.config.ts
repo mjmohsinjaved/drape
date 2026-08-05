@@ -41,11 +41,36 @@ const API_ORIGIN = apiOrigin();
 /**
  * Content-Security-Policy.
  *
- * `script-src` carries `'unsafe-inline'` because the App Router emits inline bootstrap
- * and RSC-flight scripts. Tightening this to a per-request nonce requires generating the
- * nonce in `middleware.ts` and threading it through the document — deliberately deferred so
- * that exactly one component owns the header. Everything else is locked down:
- * no plugins, no framing, no base-tag hijack, forms may only post to our own origin.
+ * ### `script-src 'unsafe-inline'` — why it is still here
+ *
+ * Stated plainly, because a CSP that looks strict and is not is worse than one that is
+ * honest: **this policy does not stop injected script.** `'unsafe-inline'` is present
+ * because the App Router emits inline bootstrap and RSC-flight scripts, and `@repo/ui`'s
+ * `ThemeScript` emits a third to set the mode class before first paint.
+ *
+ * The supported alternative is a per-request nonce: `middleware.ts` generates one, sets
+ * `script-src 'nonce-…' 'strict-dynamic'` on the *request* headers, and Next stamps it onto
+ * its own inline scripts. It was not taken here, and the reason is not effort:
+ *
+ *  - `'strict-dynamic'` discards `'self'`, so *every* script must carry the nonce. A page
+ *    that renders without the middleware having run — anything statically prerendered —
+ *    silently ships scripts the browser then refuses, and the failure is a blank page in
+ *    production, not a failing test. This app prerenders the public catalog.
+ *  - The middleware matcher deliberately excludes `/_next` and any path with a file
+ *    extension, so moving the header there would drop the *whole* CSP from build output
+ *    and static assets. Two places would then own one policy.
+ *  - It cannot be verified in this environment: there is no live API and no browser, so a
+ *    broken nonce chain would be discovered by a user, not by the gates.
+ *
+ * Taking it on means: nonce in the middleware, `ThemeScript` accepting a nonce prop, the
+ * public routes moved to dynamic rendering (or `next.config` keeping a separate policy for
+ * static output), and a smoke test that loads a rendered page and asserts zero CSP
+ * violations. Until then the mitigation is that the app contains **no HTML or script
+ * sink** for an injected string to reach — `src/lib/html-sinks.test.ts` enforces that, and
+ * it is the check actually holding the line here.
+ *
+ * Everything else is locked down: no plugins, no framing, no base-tag hijack, forms may
+ * only post to our own origin, and `object-src`/`frame-src` are `'none'`.
  */
 const contentSecurityPolicy = [
   `default-src 'self'`,

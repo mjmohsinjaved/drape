@@ -34,10 +34,12 @@ interface RoleCheckedRequest {
  *
  * ### Fail closed
  *
- * A handler that declares **neither** `@Public()` **nor** `@Roles()` is denied and
- * logged at `error`. B-5's `scripts/check-route-guards.ts` is supposed to catch this
- * in CI; this is the runtime backstop, and it must be loud, because a silent pass
- * would be an unauthenticated hole in the API.
+ * A handler that declares no `@Roles()` is denied and logged at `error` — **including
+ * one that declares `@Public()`**. `@Public()` bypasses guard 3; it says nothing about
+ * who may call the route, so it cannot stand in for the contract. B-5's
+ * `scripts/check-route-guards.ts` is supposed to catch this in CI; this is the runtime
+ * backstop, and it must be loud, because a silent pass would be an unauthenticated
+ * hole in the API.
  *
  * Object-level ownership is **not** checked here. The guard chain authorises the
  * route; the service authorises the row (§9.2).
@@ -70,18 +72,17 @@ export class RolesGuard implements CanActivate {
     const route = describeRoute(context, request);
 
     if (allowedRoles === undefined || allowedRoles.length === 0) {
-      if (isPublic) {
-        // Tolerated but wrong: §2.6 requires @Public() routes to also declare
-        // @Roles(Role.PUBLIC) so the B-5 check can see the contract.
-        this.logger.warn(
-          `Route ${route} is @Public() but declares no @Roles(). ` +
-            'Add @Roles(Role.PUBLIC) — B-5 requires an explicit contract on every handler.',
-        );
-        return true;
-      }
-
+      // Denied whether or not `@Public()` is present. `@Public()` bypasses guard 3; it
+      // is not an authorisation contract, and it used to be enough on its own to make
+      // this guard log a warning and return true — which meant a stray class-level
+      // `@Public()` on an admin controller opened every route on it to anonymous
+      // callers, in a deployment where nobody reads warnings, while `check:guards`
+      // reported the same thing as a non-fatal warning and CI stayed green.
+      //
+      // Both ends now fail closed: the script fails the build, and this refuses the
+      // request.
       this.logger.error(
-        `DENIED: route ${route} declares neither @Public() nor @Roles(). ` +
+        `DENIED: route ${route} declares no @Roles()${isPublic ? ' (it is @Public(), which is not a role contract)' : ''}. ` +
           'Every route handler must carry exactly one @Roles() (ARCHITECTURE.md §2.6, B-5). ' +
           'Failing closed.',
       );

@@ -12,6 +12,7 @@ import { ShareLink } from './entities/share-link.entity';
 import { Vote } from './entities/vote.entity';
 import { ShareNotificationsListener } from './listeners/share-notifications.listener';
 import { PublicShareService } from './services/public-share.service';
+import { ShareAudienceValidator } from './services/share-audience.validator';
 import { ShareLinksService } from './services/share-links.service';
 import { ShareTokenService } from './services/share-token.service';
 
@@ -71,7 +72,16 @@ import { ShareTokenService } from './services/share-token.service';
     UsersModule,
   ],
   controllers: [ShareLinksController, PublicShareController],
-  providers: [ShareLinksService, PublicShareService, ShareTokenService, ShareNotificationsListener],
+  providers: [
+    ShareLinksService,
+    PublicShareService,
+    ShareTokenService,
+    ShareNotificationsListener,
+    // Registers itself with the `@Global()` `SignedUrlAudienceRegistry` at init, so
+    // `GET /files/:token` can ask whether a link is still live without this module and
+    // `modules/files` knowing about each other. See the class comment.
+    ShareAudienceValidator,
+  ],
   exports: [ShareLinksService],
 })
 export class ShareModule {}

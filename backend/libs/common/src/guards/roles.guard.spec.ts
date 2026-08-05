@@ -128,10 +128,33 @@ describe('RolesGuard — fail closed', () => {
     expect(() => activate({})).toThrow(ForbiddenException);
   });
 
-  it('allows @Public() with no @Roles(), but warns that §2.6 requires @Roles(Role.PUBLIC)', () => {
-    expect(activate({ isPublic: true })).toBe(true);
-    expect(warnSpy).toHaveBeenCalledTimes(1);
-    expect(String(warnSpy.mock.calls[0]?.[0])).toContain('@Roles(Role.PUBLIC)');
+  /**
+   * `@Public()` bypasses `SessionAuthGuard`. It says nothing about *who* may call the route,
+   * so it is not an authorisation contract and cannot stand in for one.
+   *
+   * This used to log a warning and return **true**, which paired badly with the B-5 script:
+   * that reported the same case as a non-fatal warning. So a `@Public()` with no `@Roles()` —
+   * including one inherited from a class-level `@Public()` on an admin controller — was open
+   * to anonymous callers *and* green in CI, with nothing louder than a warning in a log
+   * nobody reads. Both ends now refuse it.
+   */
+  it('DENIES @Public() with no @Roles() — @Public() is not a role contract', () => {
+    expect(() => activate({ isPublic: true })).toThrow(ForbiddenException);
+    expect(errorCodeOf({ isPublic: true })).toBe(ErrorCode.INSUFFICIENT_ROLE);
+  });
+
+  it('says why, at error level, rather than warning and carrying on', () => {
+    expect(() => activate({ isPublic: true })).toThrow();
+
+    expect(warnSpy).not.toHaveBeenCalled();
+    const message = String(errorSpy.mock.calls[0]?.[0]);
+    expect(message).toContain('DENIED');
+    expect(message).toContain('@Public()');
+    expect(message).toContain('Failing closed');
+  });
+
+  it('still lets an explicit @Roles(Role.PUBLIC) through — that IS the contract', () => {
+    expect(activate({ isPublic: true, roles: [Role.PUBLIC] })).toBe(true);
   });
 });
 

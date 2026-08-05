@@ -38,7 +38,13 @@ export interface CreateUploadTicketOptions {
   contentType: string;
   maxBytes: number;
   ttlSeconds: number;
-  subject?: string;
+  /**
+   * The userId the ticket is scoped to. **Required** — §3.5 has no ticket that anybody may
+   * redeem, and the optional form here used to be defaulted to `''` by the local driver,
+   * which is a ticket scoped to nobody rather than a ticket scoped to everybody only
+   * because `verifyUploadTicket` happened to compare it against `undefined`.
+   */
+  subject: string;
 }
 
 export interface StorageDriver {
@@ -70,4 +76,18 @@ export interface StorageDriver {
    * no meaningful answer and may omit it.
    */
   freeSpaceBytes?(): Promise<number>;
+
+  /**
+   * Optional beyond §3.1 — §3.2 requirement 4: "`.tmp` swept of files older than 6 hours by
+   * the retention cron".
+   *
+   * A `.tmp` file is a write that started and never renamed into place: an aborted upload,
+   * a process killed mid-stream. It is not addressable by any key, so no row anywhere names
+   * it and no other sweep can see it — and it may be most of a photograph. This is the only
+   * way to remove one, and it is on the driver because `.tmp` is a local-disk implementation
+   * detail. A bucket driver has no temporary directory and omits it.
+   *
+   * @returns the number of files removed.
+   */
+  sweepTemporaryFiles?(olderThan: Date, limit: number): Promise<number>;
 }

@@ -19,8 +19,12 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Locale, Role, UserStatus, type ICurrentUser } from '@library/common';
 import type { StorageService, StoredObject } from '@library/storage';
 
+import { EnquiryItem } from '@api/modules/enquiries/entities/enquiry-item.entity';
 import { Enquiry } from '@api/modules/enquiries/entities/enquiry.entity';
 import { EnquiryStatus } from '@api/modules/enquiries/enums/enquiry-status.enum';
+import { ModerationItem } from '@api/modules/moderation/entities/moderation-item.entity';
+import { ModerationSource } from '@api/modules/moderation/enums/moderation-source.enum';
+import { ModerationState } from '@api/modules/moderation/enums/moderation-state.enum';
 import type { NotificationsInboxService } from '@api/modules/notifications/services/notifications-inbox.service';
 import type { OutboxService } from '@api/modules/notifications/services/outbox.service';
 import { PersonPhoto } from '@api/modules/person-photos/entities/person-photo.entity';
@@ -237,27 +241,66 @@ function build(): Harness {
       lastHitAt: REQUESTED_AT,
     }),
   ]);
-  registry(Enquiry, [
-    Object.assign(new Enquiry(), {
-      id: nextId('b'),
+  const enquiry = Object.assign(new Enquiry(), {
+    id: nextId('b'),
+    createdAt: REQUESTED_AT,
+    updatedAt: REQUESTED_AT,
+    deletedAt: null,
+    reference: 'ENQ-2026-000137',
+    userId: CONSUMER_ID,
+    message: 'I would love to see the ivory anarkali.',
+    status: EnquiryStatus.NEW,
+    lostReason: null,
+    eventDate: null,
+    eventType: null,
+    budgetBand: null,
+    contactName: 'Ayesha Khan',
+    contactEmail: 'ayesha@example.com',
+    contactPhone: '+923001234567',
+    firstRespondedAt: null,
+    closedAt: null,
+    assignedTo: null,
+    totalValueSnapshot: null,
+  });
+  registry(Enquiry, [enquiry]);
+
+  // Her own words about one piece. §4.24 keeps the *commercial* columns; this is not one
+  // of them, and it survived deletion only because `enquiry_items` has no `userId`.
+  registry(EnquiryItem, [
+    Object.assign(new EnquiryItem(), {
+      id: nextId('d'),
       createdAt: REQUESTED_AT,
       updatedAt: REQUESTED_AT,
       deletedAt: null,
-      reference: 'ENQ-2026-000137',
+      enquiryId: enquiry.id,
+      garmentId: nextId('7'),
+      resultId: null,
+      rank: 1,
+      note: 'Not sure about the neckline on me.',
+      garmentTitleSnapshot: 'Anarkali in ivory',
+      garmentSkuSnapshot: 'AN-IVY-01',
+      garmentPriceSnapshot: null,
+    }),
+  ]);
+
+  // §4.29 — all four FKs are SET NULL, so nothing else in the cascade would ever take
+  // this row, and `blurredThumbnailKey` points at a derivative of her photograph.
+  registry(ModerationItem, [
+    Object.assign(new ModerationItem(), {
+      id: nextId('e'),
+      createdAt: REQUESTED_AT,
+      updatedAt: REQUESTED_AT,
+      deletedAt: null,
+      personPhotoId: photo.id,
       userId: CONSUMER_ID,
-      message: 'I would love to see the ivory anarkali.',
-      status: EnquiryStatus.NEW,
-      lostReason: null,
-      eventDate: null,
-      eventType: null,
-      budgetBand: null,
-      contactName: 'Ayesha Khan',
-      contactEmail: 'ayesha@example.com',
-      contactPhone: '+923001234567',
-      firstRespondedAt: null,
-      closedAt: null,
-      assignedTo: null,
-      totalValueSnapshot: null,
+      jobId: null,
+      source: ModerationSource.UPSTREAM,
+      reasonCode: 'NUDITY',
+      state: ModerationState.APPROVED,
+      blurredThumbnailKey: `thumbnails/person-blurred/${nextId('f')}-160.webp`,
+      reviewedBy: null,
+      reviewedAt: REQUESTED_AT,
+      decisionNote: null,
     }),
   ]);
 
@@ -409,8 +452,8 @@ describe('AccountDeletionService', () => {
       await harness.service.sweep(NOW);
 
       // Named keys: her photograph, its blurred derivative, both renders and their
-      // thumbnails.
-      expect(harness.deletedKeys).toHaveLength(6);
+      // thumbnails, and the blurred thumbnail her `moderation_items` row named.
+      expect(harness.deletedKeys).toHaveLength(7);
       expect(harness.deletedKeys.some((key) => key.startsWith('person-photos/'))).toBe(true);
       expect(harness.deletedKeys.some((key) => key.startsWith('renders/'))).toBe(true);
 
@@ -450,6 +493,45 @@ describe('AccountDeletionService', () => {
       expect(JSON.stringify(enquiries[0])).not.toContain('Ayesha Khan');
       expect(JSON.stringify(enquiries[0])).not.toContain('+923001234567');
     });
+
+    /**
+     * The commercial-record argument covers the enquiry. It does not cover a free-text
+     * note she wrote against one piece — her own sentence about her own body — which was
+     * surviving deletion only because `enquiry_items` is a child table with no `userId`
+     * and the cascade stopped at `enquiries`.
+     */
+    it('clears her per-item notes while keeping the commercial columns (§4.24)', async () => {
+      const harness = build();
+
+      await harness.service.sweep(NOW);
+
+      const items = harness.repositories.get(EnquiryItem)?.$rows ?? [];
+      expect(items).toHaveLength(1);
+      expect(items[0]).toMatchObject({
+        note: null,
+        rank: 1,
+        garmentTitleSnapshot: 'Anarkali in ivory',
+        garmentSkuSnapshot: 'AN-IVY-01',
+      });
+      expect(JSON.stringify(items[0])).not.toContain('neckline');
+    });
+
+    /**
+     * §4.29 — all four of `moderation_items`' FKs are `ON DELETE SET NULL`, so the
+     * database cascade could never take the row, and nothing in `purgeAccount` did
+     * either. What survived was a row whose `blurredThumbnailKey` pointed at a
+     * derivative of the photograph of a person who no longer exists.
+     */
+    it('deletes her moderation items and the blurred thumbnails they name (§4.29)', async () => {
+      const harness = build();
+      const item = harness.repositories.get(ModerationItem)?.$rows[0];
+      const blurredKey = (item as unknown as { blurredThumbnailKey: string }).blurredThumbnailKey;
+
+      await harness.service.sweep(NOW);
+
+      expect(rowsOf(harness, ModerationItem)).toHaveLength(0);
+      expect(harness.deletedKeys).toContain(blurredKey);
+    });
   });
 
   describe('the completion record (§4.31)', () => {
@@ -482,9 +564,11 @@ describe('AccountDeletionService', () => {
         tryon_results: 2,
         shortlist_items: 1,
         share_links: 1,
+        moderation_items: 1,
+        enquiry_item_notes_cleared: 1,
         users: 1,
       });
-      expect(completion.storageKeysDeleted).toBe(6);
+      expect(completion.storageKeysDeleted).toBe(7);
       expect(completion.verificationHash).toMatch(/^[0-9a-f]{64}$/);
       expect(completion.failureReason).toBeNull();
     });

@@ -34,9 +34,10 @@ import type { UseMutationResult } from '@tanstack/react-query';
  *
  * `onMutate` primes the double-submit cookie first (B-8). `GET /auth/csrf` is called once per
  * page load and concurrent callers share the one in-flight request, so this is free after the
- * first mutation. Login and signup carry `@SkipCsrf()` server-side and would work without it —
- * they still prime, because the cookie they end up holding is the one every later mutation on
- * the page needs.
+ * first mutation. **Login and signup depend on it**: the API enforces CSRF on those two routes
+ * like every other mutation — a cross-site form that could reach them would let an attacker sign
+ * a visitor into an account he controls — so the anonymous-scope token from `GET /auth/csrf` is
+ * what makes them work at all, not merely a head start on the cookie later mutations need.
  */
 async function primeCsrf(): Promise<void> {
   await ensureCsrf();

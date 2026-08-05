@@ -71,5 +71,70 @@ export const MAX_EXPORT_BYTES = 256 * 1024 * 1024;
 /** How long an export stays downloadable before the purge collects it. */
 export const EXPORT_RETENTION_HOURS = 48;
 
+/**
+ * Live archives one consumer may hold at a time.
+ *
+ * `POST /me/export` used to mint a new one on every call with no cap and nothing to
+ * collect them, so a consumer who pressed the button eleven times held eleven archives —
+ * each up to {@link MAX_EXPORT_RENDERS} full-resolution renders of her body, each live
+ * for {@link EXPORT_RETENTION_HOURS}. Three is enough that a download interrupted twice
+ * still has a working link, and few enough that "how much of her history is sitting in
+ * `exports/`" has an answer that does not depend on how many times she clicked.
+ *
+ * The oldest beyond the cap is deleted when a new one is written, so the bound holds
+ * immediately rather than at the next sweep.
+ */
+export const MAX_LIVE_EXPORTS_PER_CONSUMER = 3;
+
+/* -------------------------------------------------------------------------------------------------
+ * The orphan sweep — ARCHITECTURE §3.5 step 4 and §3.2 requirement 4
+ * ---------------------------------------------------------------------------------------------- */
+
+/**
+ * §3.5 step 4 — "an object with no owning row after 6 hours is swept by the retention
+ * cron". §3.2 requirement 4 uses the same six hours for `<root>/.tmp`.
+ *
+ * The delay is the whole safety argument. An object is written **before** the row that
+ * names it — `UploadTicketService` hands out a ticket, the bytes land, and `POST
+ * /person-photos` writes the row afterwards — so for a short window every legitimate
+ * upload looks exactly like an orphan. Six hours is several thousand times longer than
+ * that window and shorter than any retention promise, which is the property that makes
+ * the sweep both safe and worth having.
+ */
+export const ORPHAN_MIN_AGE_HOURS = 6;
+
+/**
+ * The orphan sweep runs hourly, at 25 past.
+ *
+ * Hourly rather than nightly because the thing being collected is a photograph nobody
+ * knows exists: it is invisible to `GET /me/data`, so she cannot delete it, and invisible
+ * to `PurgeService`, which iterates rows. Nightly would mean a leaked photograph sits for
+ * up to thirty hours instead of up to seven. Offset from the top of the hour so it does
+ * not contend with anything else that runs on a round number.
+ */
+export const ORPHAN_SWEEP_CRON = '25 * * * *';
+
+/**
+ * Objects one run will **examine** per namespace.
+ *
+ * A store with a million renders must not be listed in full on a timer — the run would
+ * hold memory and a connection for minutes and the next tick would start on top of it.
+ * The listing is bounded, the sweep is idempotent, and a backlog is drained over
+ * successive runs rather than in one heroic pass.
+ */
+export const ORPHAN_SWEEP_LIST_LIMIT = 2_000;
+
+/**
+ * Objects one run will **delete** per namespace.
+ *
+ * Deliberately far below {@link ORPHAN_SWEEP_LIST_LIMIT}: each delete writes a
+ * `deletion_log` row (§9.3's "verifiable"), so the bound is on rows written as much as on
+ * files removed. A run that hits this bound logs it, and the next run takes the rest.
+ */
+export const ORPHAN_SWEEP_DELETE_LIMIT = 200;
+
+/** Stale `.tmp` files one run will remove. Same reasoning as the delete limit. */
+export const TEMP_SWEEP_LIMIT = 500;
+
 /** Rows shown on each list inside `GET /me/data` (C-37) — one screen's worth, per the PRD. */
 export const MY_DATA_PAGE_SIZE = 100;

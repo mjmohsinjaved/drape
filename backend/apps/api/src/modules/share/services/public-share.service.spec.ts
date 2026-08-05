@@ -5,7 +5,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 
 import { AppException, ErrorCode } from '@library/common';
-import { StorageService } from '@library/storage';
+import { StorageService, type IssueOptions } from '@library/storage';
 
 import { SettingsService } from '@api/modules/settings';
 import { ShortlistItem } from '@api/modules/shortlist/entities/shortlist-item.entity';
@@ -64,6 +64,7 @@ describe('PublicShareService', () => {
     votes: InMemoryRepository<Vote>;
     events: jest.Mocked<EventEmitter2>;
     settings: jest.Mocked<SettingsService>;
+    storage: jest.Mocked<StorageService>;
     close: () => Promise<void>;
   }
 
@@ -114,8 +115,15 @@ describe('PublicShareService', () => {
       key === SETTINGS_KEYS.SHARING_ENABLED ? (options.sharingEnabled ?? true) : true,
     );
 
-    const storage = createMock<StorageService>(['signedUrl']);
+    const storage = createMock<StorageService>(['signedUrl', 'signedUrlWith']);
     storage.signedUrl.mockImplementation((key: string) => `https://api.test/files/${key}`);
+    // C-34: a share thumbnail is signed with an `aud` naming this link and a short TTL,
+    // so revocation reaches the images and not just the page. The double records both so
+    // the tests below can assert on them.
+    storage.signedUrlWith.mockImplementation(
+      (key: string, issue: IssueOptions) =>
+        `https://api.test/files/${key}?aud=${issue.audience ?? ''}&ttl=${issue.ttlSeconds ?? ''}`,
+    );
 
     const events = createMock<EventEmitter2>(['emit']);
 
@@ -139,6 +147,7 @@ describe('PublicShareService', () => {
       votes,
       events,
       settings,
+      storage,
       close: harness.close,
     };
   }
@@ -267,11 +276,46 @@ describe('PublicShareService', () => {
         garmentId: GARMENT_ID,
         title: 'Zarrin Bridal Lehenga',
         price: 185_000,
-        renderUrl: 'https://api.test/files/thumbnails/render/abc-320.webp',
       });
+      expect(shortlist.items[0]?.renderUrl).toContain('thumbnails/render/abc-320.webp');
       expect(harness.links.$rows[0]?.viewCount).toBe(1);
 
       await harness.close();
+    });
+
+    /**
+     * PRD C-34 — "share links are revocable at any time."
+     *
+     * A recipient has no session, so the thumbnail is signed with no `sub` — which is
+     * correct, and which used to mean it was a plain bearer URL with the *public*
+     * one-hour TTL, served `Cache-Control: public`. Revoking removed the page and left
+     * every image URL already handed out working for up to an hour, on a URL that the
+     * two-minute issue bucket makes a stable shared-cache key.
+     *
+     * Both halves are asserted: the `aud` that lets `GET /files/:token` refuse a revoked
+     * link on the next request, and the TTL that bounds a copy already in a cache.
+     */
+    it('binds every share thumbnail to the link, on a short TTL (C-34)', async () => {
+      const live = buildSharedLinkFixture({ userId: OWNER_ID });
+      const harness = await arrange({ links: [live.link] });
+
+      const { shortlist } = await harness.service.view(live.rawToken, VOTER_TOKEN);
+
+      expect(shortlist.items[0]?.renderUrl).toContain(`aud=share-link:${live.link.id}`);
+      // Not the 3600-second public class TTL an unbound thumbnail used to take.
+      expect(shortlist.items[0]?.renderUrl).toContain('ttl=300');
+
+      await harness.close();
+    });
+
+    it('never signs a share thumbnail through the unbound path', async () => {
+      const live = buildSharedLinkFixture({ userId: OWNER_ID });
+      const harness = await arrange({ links: [live.link] });
+
+      await harness.service.view(live.rawToken, VOTER_TOKEN);
+
+      expect(harness.storage.signedUrl).not.toHaveBeenCalled();
+      expect(harness.storage.signedUrlWith).toHaveBeenCalled();
     });
 
     it('mints a cookie for a visitor arriving without one, and keeps an existing one', async () => {

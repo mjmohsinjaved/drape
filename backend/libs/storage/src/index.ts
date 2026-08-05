@@ -17,11 +17,19 @@ export {
 
 export {
   SignedUrlService,
+  URL_EXPIRY_BUCKET_SECONDS,
   type IssueOptions,
   type SignedUrlPayload,
   type UploadTicketPayload,
   type VerifyOptions,
 } from './signed-url.service';
+
+export {
+  parseAudience,
+  SignedUrlAudienceRegistry,
+  type ParsedAudience,
+  type SignedUrlAudienceValidator,
+} from './signed-url-audience.registry';
 
 export {
   ImageService,
@@ -49,6 +57,9 @@ export {
   assertValidStorageKey,
   assertValidStoragePrefix,
   buildTryOnCacheKey,
+  EXPORT_CONTENT_TYPE,
+  EXPORT_EXTENSION,
+  exportIdFromKey,
   extensionOf,
   extForMimeType,
   IMAGE_EXTS,
@@ -63,6 +74,7 @@ export {
   mimeTypeForKey,
   mimeTypesMatch,
   normaliseMimeType,
+  parseOwnedKey,
   sha256,
   sniffMimeType,
   STORAGE_KEY_PATTERN,
@@ -73,6 +85,8 @@ export {
   tempFileName,
   THUMBNAIL_WIDTHS,
   type ImageExt,
+  type OwnedKeyNamespace,
+  type ParsedOwnedKey,
   type RasterImageExt,
   type ThumbnailKind,
   type ThumbnailWidth,

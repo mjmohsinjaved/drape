@@ -777,7 +777,7 @@ logged at `error` — the client never sees an internal message.
 | `@Roles(...roles: Role[])` | `roles` | The route's authorisation contract. `Role.PUBLIC \| Role.CONSUMER \| Role.ADMIN`. **Every route handler carries exactly one.** `scripts/check-route-guards.ts` walks the route table and fails CI on any handler without it (B-5). |
 | `@CurrentUser()` / `@CurrentUser('id')` | — | Param decorator returning `ICurrentUser` from `request.user`, or one property of it. Returns `undefined` on `@Public()` routes with no session. |
 | `@ResponseMessage('…')` | `responseMessage` | Sets `message` in the success envelope. |
-| `@SkipCsrf()` | `skipCsrf` | Bypasses `CsrfGuard`. Permitted on exactly two routes — `POST /api/v1/auth/login` and `POST /api/v1/auth/signup` — because no session-bound CSRF secret exists yet. Every use carries a comment naming the reason. |
+| `@SkipCsrf()` | `skipCsrf` | Bypasses `CsrfGuard`. Permitted **only** where the request's credential travels in the URL rather than in an ambient cookie, so a cross-site form cannot forge it: `PUT /api/v1/files/upload/:ticket` (§3.5 step 2) is the one such route. It is **not** permitted on `POST /auth/login` or `POST /auth/signup` — those forms fetch an anonymous-scope token from `GET /auth/csrf` first, exactly as `POST /invites/token/:token/accept` does, and skipping the guard there allows forced authentication (signing a victim into an attacker-controlled account). Every use carries a comment naming the reason. |
 
 `ICurrentUser`:
 
@@ -2869,6 +2869,7 @@ request.
 | `CORS_ORIGINS` | api | ✔ | `http://localhost:3000` | Comma-separated allow-list. **Never `*`, in any environment** (B-7). |
 | `TRUST_PROXY` | api | — | `1` | Hop count for correct client IPs behind a reverse proxy. |
 | `LOG_LEVEL` | api | — | `debug` | `debug \| info \| warn \| error`. |
+| `EXPOSE_API_DOCS` | api | — | `false` | Mounts `/api/docs` and `/api/docs-json`. **Defaults false everywhere**, and is ignored when `NODE_ENV=production`. The mount is raw Express middleware, so it sits outside the §2.7 guard chain and `check:guards` cannot see it — any network-reachable environment that enables it must put authentication in front of the mount. |
 | `DATABASE_URL` | api | ✔ | `postgresql://drape:drape@localhost:5432/drape` | Postgres connection (B-3). |
 | `DATABASE_SSL` | api | — | `false` | TLS to the database. |
 | `DATABASE_POOL_MAX` | api | — | `10` | Pool ceiling (20–50 in production). |

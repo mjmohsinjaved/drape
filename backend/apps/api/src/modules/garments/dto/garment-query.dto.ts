@@ -67,8 +67,16 @@ export class GarmentQueryDto extends PaginationQueryDto {
   @IsBoolean()
   flaggedForReview?: boolean;
 
+  /**
+   * Narrowed to the key union, not left as `string`.
+   *
+   * `@IsIn` is the runtime gate; the type is the compile-time one. `GarmentsService`
+   * interpolates this value into `ORDER BY` and re-asserts membership there, so the two
+   * together mean a new caller cannot reach the query builder with an arbitrary string
+   * without the compiler saying so first.
+   */
   @ApiPropertyOptional({ enum: GARMENT_SORT_KEYS, default: 'createdAt' })
   @IsOptional()
   @IsIn(GARMENT_SORT_KEYS)
-  override sortBy: string = 'createdAt';
+  override sortBy: GarmentSortKey = 'createdAt';
 }

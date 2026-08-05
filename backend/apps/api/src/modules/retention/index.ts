@@ -43,17 +43,17 @@ export {
   toDosDateTime,
   type ZipEntry,
 } from './utils/zip-archive';
-export {
-  EXPORT_CONTENT_TYPE,
-  EXPORT_EXTENSION,
-  EXPORT_PREFIX,
-  ExportKeys,
-  ExportPrefixes,
-  assertExportKeysAreValid,
-  exportIdFromKey,
-} from './utils/export-key.builder';
+// The export key builder used to live in `./utils/export-key.builder.ts`, flagged in its
+// own comment for the move it has now had: §3.3 says keys are built **only** by
+// `storage-key.builder.ts`, and `exports/**` is in that file's vocabulary now —
+// `StorageKeys.dataExport`, `StorageKeys.dataExportFor`, `StoragePrefixes.exportsOfUser`,
+// `exportIdFromKey`, `EXPORT_CONTENT_TYPE` and `EXPORT_EXTENSION`, all from
+// `@library/storage`. The §3.4 issuing table gained the row that went with it: `exports/**`
+// requires a `sub` and takes the render TTL, because an archive is a container full of
+// renders.
 
 export { type PurgeReport } from './services/purge.service';
+export { type NamespaceSweepReport, type OrphanSweepReport } from './services/orphan-sweep.service';
 // The policy — a date calculator, not a way to delete anything. See `retention-policy.module.ts`.
 export { RetentionPolicyModule } from './retention-policy.module';
 export {
@@ -65,6 +65,7 @@ export {
 export { overdueBefore, type AccountPurgeResult } from './services/account-deletion.service';
 export {
   DELETION_JOB_NAME,
+  ORPHAN_SWEEP_JOB_NAME,
   PURGE_JOB_NAME,
   RetentionProcessor,
 } from './processors/retention.processor';
@@ -79,7 +80,13 @@ export {
   EXPORT_RETENTION_HOURS,
   MAX_EXPORT_BYTES,
   MAX_EXPORT_RENDERS,
+  MAX_LIVE_EXPORTS_PER_CONSUMER,
   MY_DATA_PAGE_SIZE,
+  ORPHAN_MIN_AGE_HOURS,
+  ORPHAN_SWEEP_CRON,
+  ORPHAN_SWEEP_DELETE_LIMIT,
+  ORPHAN_SWEEP_LIST_LIMIT,
   PURGE_BATCH_SIZE,
   PURGE_CRON,
+  TEMP_SWEEP_LIMIT,
 } from './constants/retention.constants';

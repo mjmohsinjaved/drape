@@ -5,13 +5,15 @@ import sharp from 'sharp';
 
 import { ErrorCode } from '@library/common';
 
-import { TryOnConfig } from '../config/tryon.config';
+import { DEFAULT_MAX_RESPONSE_BYTES, TryOnConfig } from '../config/tryon.config';
+import { TRYON_FAILURE_POLICY } from '../services/tryon-failure.policy';
 import { fakeConfigService } from '../testing/tryon-harness';
 
 import { HttpTryOnProvider } from './http-tryon.provider';
 import { isTryOnProviderError, type TryOnGenerationRequest } from './tryon-provider.interface';
+import { isRetryableUpstreamCode } from './tryon-retry';
 
-import type { AxiosResponse } from 'axios';
+import type { AxiosResponse, CreateAxiosDefaults } from 'axios';
 
 /**
  * `HttpTryOnProvider` — the real TryOnCloud client.
@@ -29,12 +31,16 @@ const API_KEY = 'not-a-real-key-6f4a2b';
 
 describe('HttpTryOnProvider', () => {
   let post: jest.Mock;
+  /** What the provider asked axios for. The size bound lives here, so it is asserted here. */
+  let clientDefaults: CreateAxiosDefaults | undefined;
 
   function providerFor(overrides: Record<string, string | number> = {}): HttpTryOnProvider {
     post = jest.fn();
-    jest
-      .spyOn(axios, 'create')
-      .mockReturnValue({ post } as unknown as ReturnType<typeof axios.create>);
+    clientDefaults = undefined;
+    jest.spyOn(axios, 'create').mockImplementation((config?: CreateAxiosDefaults) => {
+      clientDefaults = config;
+      return { post } as unknown as ReturnType<typeof axios.create>;
+    });
 
     return new HttpTryOnProvider(
       new TryOnConfig(
@@ -69,12 +75,13 @@ describe('HttpTryOnProvider', () => {
     status: number,
     body: Buffer | string,
     contentType: string,
+    extraHeaders: Record<string, string> = {},
   ): AxiosResponse<ArrayBuffer> {
     const bytes = Buffer.isBuffer(body) ? body : Buffer.from(body);
     return {
       status,
       data: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
-      headers: { 'content-type': contentType },
+      headers: { 'content-type': contentType, ...extraHeaders },
       statusText: '',
       config: {},
     } as unknown as AxiosResponse<ArrayBuffer>;
@@ -207,6 +214,169 @@ describe('HttpTryOnProvider', () => {
       expect(isTryOnProviderError(error) && error.errorCode).toBe(
         ErrorCode.UPSTREAM_INVALID_RESPONSE,
       );
+    });
+  });
+
+  /**
+   * The response is bounded before it is classified.
+   *
+   * Every other test in this file inspects a body the process has already agreed to
+   * hold. These are about the step before that: a compromised or hostile TryOnCloud
+   * answering with a body designed to exhaust memory. axios buffers the whole thing
+   * before `readResponse` can look at a status or a content type, `decompress: true`
+   * would inflate a megabyte of gzip into gigabytes on the way, and three attempts
+   * would do it three times — so the bound has to exist at the client, not in the
+   * classification below it.
+   */
+  describe('bounding the response (E-11)', () => {
+    const CAP = 1024;
+
+    function cappedProvider(): HttpTryOnProvider {
+      return providerFor({ TRYON_MAX_RESPONSE_BYTES: CAP });
+    }
+
+    it('gives axios a byte cap and turns transparent decompression off', () => {
+      cappedProvider();
+
+      expect(clientDefaults?.maxContentLength).toBe(CAP);
+      // A gzip bomb is only a bomb once something inflates it.
+      expect(clientDefaults?.decompress).toBe(false);
+      // Neither may be left at the axios default of unlimited.
+      expect(clientDefaults?.maxBodyLength).toBeGreaterThan(0);
+      expect(clientDefaults?.maxBodyLength).not.toBe(Infinity);
+    });
+
+    it('leaves the request bound room for two images, so a real generation still fits', () => {
+      cappedProvider();
+
+      // The request carries the garment source *and* the person photo, both stored as
+      // uploaded. Bounding it at the response cap would reject a legitimate generation
+      // of two large pieces — a worse failure than the one being prevented.
+      expect(clientDefaults?.maxBodyLength).toBeGreaterThanOrEqual(CAP * 2);
+    });
+
+    it('defaults the cap rather than leaving it unlimited when the variable is unset', () => {
+      providerFor();
+
+      expect(clientDefaults?.maxContentLength).toBe(DEFAULT_MAX_RESPONSE_BYTES);
+      expect(clientDefaults?.maxBodyLength).toBeGreaterThanOrEqual(DEFAULT_MAX_RESPONSE_BYTES * 2);
+    });
+
+    it.each([
+      ['a non-numeric value', 'unlimited'],
+      // axios reads -1 and 0 as "no limit". A bound that fails open is the finding back.
+      ['the axios sentinel for unlimited', -1],
+      ['zero', 0],
+      ['a fraction', 1.5],
+    ])('falls back to the default rather than opening the bound for %s', (_case, raw) => {
+      providerFor({ TRYON_MAX_RESPONSE_BYTES: raw });
+
+      expect(clientDefaults?.maxContentLength).toBe(DEFAULT_MAX_RESPONSE_BYTES);
+    });
+
+    it('asks for identity encoding, so the bytes measured are the bytes on the wire', async () => {
+      const provider = cappedProvider();
+      post.mockResolvedValue(respond(200, await pngBytes(), 'image/png'));
+
+      await provider.generate(request);
+
+      const [, , config] = post.mock.calls[0] as [
+        string,
+        unknown,
+        { headers: Record<string, string> },
+      ];
+      expect(config.headers['Accept-Encoding']).toBe('identity');
+    });
+
+    it('refuses a body whose declared Content-Length exceeds the cap', async () => {
+      const provider = cappedProvider();
+      // The declaration alone is enough: a render is not 4 GB, whatever follows.
+      post.mockResolvedValue(
+        respond(200, await pngBytes(), 'image/png', { 'content-length': String(4 * 1024 ** 3) }),
+      );
+
+      const error = await errorFrom(provider);
+
+      expect(isTryOnProviderError(error) && error.errorCode).toBe(
+        ErrorCode.UPSTREAM_INVALID_RESPONSE,
+      );
+    });
+
+    it('refuses a body larger than the cap when no Content-Length is declared', async () => {
+      const provider = cappedProvider();
+      post.mockResolvedValue(respond(200, Buffer.alloc(CAP + 1, 0x89), 'image/png'));
+
+      const error = await errorFrom(provider);
+
+      expect(isTryOnProviderError(error) && error.errorCode).toBe(
+        ErrorCode.UPSTREAM_INVALID_RESPONSE,
+      );
+    });
+
+    it('still accepts a render that sits exactly on the cap', async () => {
+      const provider = providerFor({ TRYON_MAX_RESPONSE_BYTES: (await pngBytes()).length });
+      post.mockResolvedValue(respond(200, await pngBytes(), 'image/png'));
+
+      await expect(provider.generate(request)).resolves.toMatchObject({ width: 8, height: 12 });
+    });
+
+    it('reads axios cutting the stream off as malformed, not as a retryable outage', async () => {
+      const provider = cappedProvider();
+      post.mockRejectedValue(
+        Object.assign(new Error(`maxContentLength size of ${CAP} exceeded`), {
+          isAxiosError: true,
+          code: 'ERR_BAD_RESPONSE',
+        }),
+      );
+
+      const error = await errorFrom(provider);
+
+      expect(isTryOnProviderError(error) && error.errorCode).toBe(
+        ErrorCode.UPSTREAM_INVALID_RESPONSE,
+      );
+    });
+
+    it('spends one attempt on an oversized body, never TRYON_MAX_ATTEMPTS of them', async () => {
+      const provider = cappedProvider();
+      post.mockResolvedValue(respond(200, Buffer.alloc(CAP + 1, 0x89), 'image/png'));
+
+      await errorFrom(provider);
+
+      // Retrying a body sized to exhaust memory is the vulnerability, not the mitigation.
+      expect(post).toHaveBeenCalledTimes(1);
+    });
+
+    it('takes the §8.3 no-charge path: the code it fails with never reaches a charge', async () => {
+      const provider = cappedProvider();
+      post.mockResolvedValue(respond(200, Buffer.alloc(CAP + 1, 0x89), 'image/png'));
+
+      const error = await errorFrom(provider);
+      const code = isTryOnProviderError(error) ? error.errorCode : null;
+
+      // PRD §8.3: "failed jobs never consume quota or budget". The guarantee is
+      // structural — `QuotaPort.commitGeneration()` is reachable only from the
+      // SUCCEEDED branch of `TryOnService.run()` — and it holds for this failure
+      // because the failure is a taxonomy code, not a render. `tryon.service.spec.ts`
+      // walks every code in the table and asserts `quota.charges` stays empty.
+      expect(code).not.toBeNull();
+      expect(code === null ? undefined : TRYON_FAILURE_POLICY[code]).toBeDefined();
+      expect(code === null ? true : isRetryableUpstreamCode(code)).toBe(false);
+    });
+
+    it('never puts a byte of an oversized body into a log line (E-12)', async () => {
+      const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+      const provider = cappedProvider();
+      post.mockResolvedValue(
+        respond(200, Buffer.from(`SECRET-PERSON-BYTES${'x'.repeat(CAP)}`), 'image/png'),
+      );
+
+      await errorFrom(provider);
+
+      const logged = warn.mock.calls.map((call) => String(call[0])).join('\n');
+      expect(logged).not.toContain('SECRET-PERSON-BYTES');
+      expect(logged).toContain('job-0001');
+
+      warn.mockRestore();
     });
   });
 

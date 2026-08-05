@@ -36,8 +36,9 @@ export interface VisitorResponse {
  *
  * The vote route is a POST, so `CsrfGuard` applies to it like any other mutation. That
  * is deliberate and it costs a recipient nothing: the web app fetches `GET /auth/csrf`
- * — itself public — before posting. `@SkipCsrf()` is permitted on exactly two routes
- * in the whole API (§2.6) and this is not one of them.
+ * — itself public — before posting. `@SkipCsrf()` is permitted only where the
+ * credential is in the URL rather than in an ambient cookie (§2.6), and this is not
+ * such a route.
  *
  * ### The visitor cookie
  *

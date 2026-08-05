@@ -302,11 +302,16 @@ export class InvitesService {
    * **The method `auth` calls.** Validates a token and burns it, atomically.
    *
    * ```ts
-   * await runInTransaction(dataSource, async (manager) => {
-   *   const acceptance = await invites.consumeToken(rawToken, user.id, { manager });
-   *   //  → { inviteId, email, role, invitedBy, expiresAt }
+   * const acceptance = await runInTransaction(dataSource, async (manager) => {
+   *   return invites.consumeToken(rawToken, user.id, { manager });
+   *   //  → { inviteId, email, role, invitedBy, expiresAt, acceptedEvent }
    * });
+   * invites.announceAccepted(acceptance.acceptedEvent);   // after the commit
    * ```
+   *
+   * **Nothing is emitted here.** The `INVITE_ACCEPTED` event is returned on the
+   * result and the caller emits it once the transaction has committed — see
+   * {@link announceAccepted}.
    *
    * `auth` must create the account for `acceptance.email` and with
    * `acceptance.role` — both read from the row, never from the request body. That is
@@ -343,22 +348,38 @@ export class InvitesService {
       throw new ConflictException(ErrorCode.INVITE_ALREADY_CONSUMED);
     }
 
-    const event: InviteAcceptedEvent = {
-      inviteId: invite.id,
-      email: invite.email,
-      actorId: consumedByUserId,
-      occurredAt: now,
-      consumedByUserId,
-    };
-    this.events.emit(INVITE_EVENTS.ACCEPTED, event);
-
     return {
       inviteId: invite.id,
       email: invite.email,
       role: invite.role,
       invitedBy: invite.invitedBy,
       expiresAt: invite.expiresAt,
+      // Prepared, deliberately not emitted — see `announceAccepted`.
+      acceptedEvent: {
+        inviteId: invite.id,
+        email: invite.email,
+        actorId: consumedByUserId,
+        occurredAt: now,
+        consumedByUserId,
+      },
     };
+  }
+
+  /**
+   * Emits `INVITE_ACCEPTED`. **Call this after the transaction has committed.**
+   *
+   * `consumeToken` used to emit inline. It runs inside `auth`'s `runInTransaction`
+   * block, and `EventEmitter2` has no idea a transaction exists: the audit listener
+   * wrote its row the moment the token was burnt, so an account creation that failed
+   * afterwards rolled the burn back and left `INVITE_ACCEPTED` in the log for an
+   * acceptance that never happened. A-3's log is evidence; an entry for an event that
+   * did not occur is worse than a missing one.
+   *
+   * Separating the two makes the ordering explicit at the call site instead of
+   * implicit in this method.
+   */
+  announceAccepted(event: InviteAcceptedEvent): void {
+    this.events.emit(INVITE_EVENTS.ACCEPTED, event);
   }
 
   /* -----------------------------------------------------------------------------------------

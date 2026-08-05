@@ -11,7 +11,13 @@ import {
   slugify,
   type ICurrentUser,
 } from '@library/common';
-import { StorageService } from '@library/storage';
+import {
+  EXPORT_CONTENT_TYPE,
+  exportIdFromKey,
+  StorageKeys,
+  StoragePrefixes,
+  StorageService,
+} from '@library/storage';
 
 import { AUDIT_RECORD_EVENT, AuditRecordEvent } from '@api/modules/audit/events/audit.event';
 import { TryOnResult } from '@api/modules/results/entities/tryon-result.entity';
@@ -22,9 +28,9 @@ import {
   EXPORT_RETENTION_HOURS,
   MAX_EXPORT_BYTES,
   MAX_EXPORT_RENDERS,
+  MAX_LIVE_EXPORTS_PER_CONSUMER,
 } from '../constants/retention.constants';
 import { DataExportResponseDto, DataExportStatus } from '../dto/data-export-response.dto';
-import { EXPORT_CONTENT_TYPE, ExportKeys, exportIdFromKey } from '../utils/export-key.builder';
 import { buildZipArchive, type ZipEntry } from '../utils/zip-archive';
 
 /** How long a filename fragment derived from a garment title may be. */
@@ -81,6 +87,19 @@ interface ExportManifest {
  * when a row and an object disagree, and no second place her data is catalogued. The
  * key is composed from her session's `userId`, so `GET /me/export/:exportId` can only
  * ever address her own prefix.
+ *
+ * ### An archive expires, and the bytes expire with it
+ *
+ * The consequence of having no table is that nothing *iterates* archives, and for a while
+ * nothing collected them either: `findExport` reported `EXPIRED` and withheld the URL
+ * after {@link EXPORT_RETENTION_HOURS}, while the object stayed on disk indefinitely — a
+ * status the response told the truth about and the store did not.
+ *
+ * Two things close it, and both are needed. `OrphanSweepService` walks `exports/**` on the
+ * hourly retention cron and deletes anything past its retention window with a
+ * `DeletionSubject.EXPORT_ARCHIVE` row in `deletion_log`; and
+ * {@link enforceLiveExportCap} bounds how many can exist at once, because a sweep bounds
+ * how long an archive lives and only a cap bounds how many there are.
  */
 @Injectable()
 export class DataExportService {
@@ -180,7 +199,7 @@ export class DataExportService {
     }
 
     const archive = buildZipArchive(entries);
-    const key = ExportKeys.archive(user.id);
+    const key = StorageKeys.dataExport(user.id);
     await this.storage.put(key, archive, { contentType: EXPORT_CONTENT_TYPE });
 
     const exportId = exportIdFromKey(key);
@@ -189,6 +208,8 @@ export class DataExportService {
       // defect worth failing loudly on rather than returning an id nobody can use.
       throw new Error(`The export key "${key}" does not match the layout its reader expects.`);
     }
+
+    await this.enforceLiveExportCap(user.id, key);
 
     this.events.emit(
       AUDIT_RECORD_EVENT,
@@ -228,7 +249,7 @@ export class DataExportService {
     exportId: string,
     now: Date = new Date(),
   ): Promise<DataExportResponseDto> {
-    const key = ExportKeys.archiveFor(user.id, exportId);
+    const key = StorageKeys.dataExportFor(user.id, exportId);
     const stored = await this.storage.head(key);
 
     if (stored === null) {
@@ -268,6 +289,53 @@ export class DataExportService {
    * Internals
    * -------------------------------------------------------------------------------------- */
 
+  /**
+   * Keeps at most {@link MAX_LIVE_EXPORTS_PER_CONSUMER} archives in her prefix, newest first.
+   *
+   * `POST /me/export` used to mint an archive per call with no cap and nothing to collect
+   * them: eleven presses of the button left eleven live archives, each holding up to five
+   * hundred full-resolution renders of her body, each readable for
+   * {@link EXPORT_RETENTION_HOURS}. The orphan sweep now expires them on age, but a cap
+   * that only takes effect on the next cron run is not a cap — the peak is what matters,
+   * and the peak is here.
+   *
+   * Applied **after** the write, so the archive she just asked for is never the one
+   * evicted, and so a failure here cannot cost her the export. `newKey` is excluded
+   * explicitly rather than relying on its mtime: two archives written inside the same
+   * clock tick would otherwise be ordered arbitrarily.
+   *
+   * Never throws. Her export succeeded; an eviction that did not is a bounded amount of
+   * extra storage that the sweep will take within {@link EXPORT_RETENTION_HOURS}, and it
+   * is not a reason to fail a request that has already done what she asked.
+   */
+  private async enforceLiveExportCap(userId: string, newKey: string): Promise<void> {
+    try {
+      const archives = await this.storage.list(StoragePrefixes.exportsOfUser(userId));
+
+      const evictable = archives
+        .filter((object) => object.key !== newKey)
+        .sort((left, right) => right.lastModified.getTime() - left.lastModified.getTime())
+        .slice(MAX_LIVE_EXPORTS_PER_CONSUMER - 1);
+
+      for (const object of evictable) {
+        await this.storage.delete(object.key);
+      }
+
+      if (evictable.length > 0) {
+        this.logger.log(
+          `Removed ${evictable.length} superseded export archive(s); a consumer holds at most ` +
+            `${MAX_LIVE_EXPORTS_PER_CONSUMER} at a time (C-39, §9.3).`,
+        );
+      }
+    } catch (error: unknown) {
+      this.logger.warn(
+        'Superseded export archives could not be evicted; the retention sweep will collect ' +
+          `them within ${EXPORT_RETENTION_HOURS} hours. ` +
+          `${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
   private present(
     user: ICurrentUser,
     exportId: string,
@@ -275,7 +343,7 @@ export class DataExportService {
     createdAt: Date,
     counts: { renderCount: number; shortlistCount: number; truncated: boolean },
   ): DataExportResponseDto {
-    const key = ExportKeys.archiveFor(user.id, exportId);
+    const key = StorageKeys.dataExportFor(user.id, exportId);
 
     const dto = new DataExportResponseDto();
     dto.exportId = exportId;
