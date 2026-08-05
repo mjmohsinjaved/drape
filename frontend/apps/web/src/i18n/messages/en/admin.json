@@ -550,7 +550,10 @@
         "approved": "Test render approved",
         "approvedHint": "This piece can now be published.",
         "rejected": "Test render sent back"
-      }
+      },
+      "zoomIn": "Zoom in",
+      "zoomOut": "Zoom out",
+      "zoomReset": "Fit to screen"
     },
     "bulk": {
       "barLabel": "Actions for the selected pieces",

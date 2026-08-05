@@ -155,7 +155,7 @@
     "PHOTO_BLOCKED_BY_MODERATION": "Let's try a different photo — choose another and we'll carry on from here.",
     "PHOTO_NOT_FOUND": "That photo has already been removed. Pick another or add a new one.",
     "IMAGE_TOO_SMALL": "This image is too small to work from. Take it again with the camera app rather than a screenshot.",
-    "IMAGE_FORMAT_UNSUPPORTED": "We accept HEIC, WebP, PNG and JPEG.",
+    "IMAGE_FORMAT_UNSUPPORTED": "That file type won't upload. Pick a HEIC, WebP, PNG or JPEG photo instead.",
     "IMAGE_TOO_LARGE": "That file is too big. Pick a smaller one and we'll compress it for you.",
     "IMAGE_CORRUPT": "We couldn't read that file. Export it again from your gallery.",
     "UPLOAD_TICKET_INVALID": "That upload didn't complete. Choose the photo again and we'll start over.",

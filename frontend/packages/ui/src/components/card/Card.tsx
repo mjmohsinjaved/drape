@@ -72,8 +72,15 @@ export function CardHeader({
 }
 
 export interface CardTitleProps extends React.HTMLAttributes<HTMLHeadingElement> {
-  /** Heading level. Pick the one the document outline needs, not the one that looks right (D-20). */
-  as?: 'h2' | 'h3' | 'h4';
+  /**
+   * Heading level. Pick the one the document outline needs, not the one that looks right (D-20).
+   *
+   * `h1` is included because a few screens *are* a single card — quota exhaustion and budget
+   * exhaustion replace the whole try-on screen (§8.3) — and without it those pages had no `h1`
+   * at all. It is the exception, not the default: inside a page that already has an `h1`, a card
+   * title is `h2` or lower.
+   */
+  as?: 'h1' | 'h2' | 'h3' | 'h4';
 }
 
 export const CardTitle = React.forwardRef<HTMLHeadingElement, CardTitleProps>(function CardTitle(

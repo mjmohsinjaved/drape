@@ -33,13 +33,19 @@
   }
 
   /*
-   * Nastaliq needs vertical room. The face swap and the line-height multiplier come from the
-   * token layer; this is only the application point (§6.7). There are no other `[lang]` or
-   * `[dir]` selectors in the codebase — direction is handled by logical properties alone.
+   * Nastaliq's vertical room is handled entirely in the token layer (§6.1/§6.7): under
+   * `[lang='ur']`, `--leading-multiplier` becomes 1.85 and every `--leading-*` token is
+   * `calc(<latin value> * var(--leading-multiplier))`. `body` already sets
+   * `line-height: var(--leading-base)` in `@repo/ui/styles/globals.css`, so Urdu leading
+   * follows automatically.
+   *
+   * There used to be a `[lang='ur'] body { line-height: calc(var(--leading-multiplier, 1.85)) }`
+   * rule here. It applied the multiplier a *second* time — as a bare unitless ratio of 1.85,
+   * which is a smaller value than the token it overrode — so Urdu paragraphs rendered at two
+   * different leadings depending on whether they carried an explicit `text-*` utility (which
+   * brings its own `--leading-*`) or inherited from `body` (which this rule had captured).
+   * One source of truth is the token layer; this block no longer competes with it.
    */
-  [lang='ur'] body {
-    line-height: calc(var(--leading-multiplier, 1.85));
-  }
 }
 
 /*

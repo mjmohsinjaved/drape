@@ -275,7 +275,14 @@ export function TestRenderScreen({
 
       <div className="grid gap-4 lg:grid-cols-2">
         <AdminSection title={t('sourceTitle')} description={t('sourceDescription')}>
-          <Zoomable label={t('zoomSource')}>
+          {/* Without these three the zoom buttons fall back to `Zoomable`'s hardcoded English
+              defaults, so the admin console announced "Zoom in" under `ur` (C-41). */}
+          <Zoomable
+            label={t('zoomSource')}
+            zoomInLabel={t('zoomIn')}
+            zoomOutLabel={t('zoomOut')}
+            resetLabel={t('zoomReset')}
+          >
             <SignedImage
               src={render.sourceUrl}
               alt={t('sourceAlt', { title: garment.title })}
@@ -294,7 +301,12 @@ export function TestRenderScreen({
               {t('notRunYet')}
             </p>
           ) : (
-            <Zoomable label={t('zoomRender')}>
+            <Zoomable
+              label={t('zoomRender')}
+              zoomInLabel={t('zoomIn')}
+              zoomOutLabel={t('zoomOut')}
+              resetLabel={t('zoomReset')}
+            >
               <SignedImage
                 src={render.renderUrl}
                 alt={t('renderAlt', { title: garment.title })}

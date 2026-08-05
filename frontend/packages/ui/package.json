@@ -22,6 +22,8 @@
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix",
     "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "clean": "node -e \"const f=require('fs');for(const d of ['.turbo','coverage'])f.rmSync(d,{recursive:true,force:true})\""
   },
   "dependencies": {
@@ -66,7 +68,8 @@
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "tailwindcss": "^4.1.4",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "vitest": "^3.1.2"
   },
   "peerDependencies": {
     "next": "^15.0.0",

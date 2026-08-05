@@ -24,7 +24,8 @@
       "clear": "Clear filters",
       "groupByPhoto": "Group by the photo used",
       "groupByPhotoHint": "You've used more than one photo — see how a piece looked against each.",
-      "flatList": "Show as one list"
+      "flatList": "Show as one list",
+      "noVerdict": "Not decided yet"
     },
     "group": {
       "heading": "From your photo “{label}”",
@@ -119,7 +120,7 @@
     "detailTitle": "This try-on didn't load",
     "RESULT_NOT_FOUND": "That try-on is no longer here. The rest are in your try-ons.",
     "RESULT_NOT_OWNED": "That try-on is no longer here. The rest are in your try-ons.",
-    "SHORTLIST_ITEM_NOT_FOUND": "That piece isn't on your shortlist.",
+    "SHORTLIST_ITEM_NOT_FOUND": "That piece isn't on your shortlist. Open your shortlist to see what is there.",
     "GARMENT_NOT_FOUND": "That piece has left the collection. Your try-on is unaffected.",
     "FILE_TOKEN_EXPIRED": "This image link has expired. Reload the page to get a fresh one.",
     "FILE_TOKEN_INVALID": "This image link isn't valid. Reload the page.",

@@ -120,7 +120,12 @@ export function HistoryFilters({
             <option value="">{t('filters.any')}</option>
             {VERDICT_OPTIONS.map((option) => (
               <option key={option} value={option}>
-                {option === NO_VERDICT ? t('filters.any') : tVerdict(option)}
+                {/*
+                  `NO_VERDICT` used to render `filters.any` as well, so the list held two
+                  options reading "All" — one meaning "don't filter", the other meaning "only
+                  the ones I haven't judged". Indistinguishable by sight or by screen reader.
+                */}
+                {option === NO_VERDICT ? t('filters.noVerdict') : tVerdict(option)}
               </option>
             ))}
           </select>

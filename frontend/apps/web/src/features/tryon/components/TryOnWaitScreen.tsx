@@ -189,8 +189,9 @@ function FailureView({
 }) {
   const t = useTranslations('tryon');
 
-  if (isQuotaExhausted(code)) return <QuotaExhausted locale={locale} />;
-  if (isBudgetExhausted(code)) return <BudgetExhausted locale={locale} />;
+  // These two replace the whole screen, so their card title is the page's `h1`.
+  if (isQuotaExhausted(code)) return <QuotaExhausted locale={locale} headingLevel="h1" />;
+  if (isBudgetExhausted(code)) return <BudgetExhausted locale={locale} headingLevel="h1" />;
 
   return (
     <div className="mx-auto flex w-full max-w-prose flex-col gap-6 py-8">

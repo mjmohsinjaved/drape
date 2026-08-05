@@ -75,7 +75,8 @@
     "tryOnNote": "A try-on is an approximate guide for shortlisting. Fabric fall, embroidery detail and length will differ in person.",
     "signInToTryOn": "Sign in to try it on",
     "signInNote": "Browsing needs no account. Trying a piece on uses your own photo, so it does.",
-    "starting": "Starting your try-on"
+    "starting": "Starting your try-on",
+    "thumbnailLabel": "View photo {position}"
   },
   "pagination": {
     "label": "Collection pages",

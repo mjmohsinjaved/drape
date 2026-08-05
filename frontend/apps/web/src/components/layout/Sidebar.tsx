@@ -54,12 +54,22 @@ export function Sidebar({ locale, variant = 'fixed', onNavigate }: SidebarProps)
         <nav aria-label={t('label')} className="flex flex-col gap-4 p-3">
           {adminNavGroups.map((group) => (
             <div key={group.key} className="flex flex-col gap-1">
+              {/*
+                A group caption, not a page heading. It used to be an `<h2>`, which put two or
+                three h2s into the document *before* every admin screen's `<h1>` — the outline
+                read h2, h2, h2, h1. The caption still names the group for assistive tech, but it
+                does so through `aria-label` on the list it captions rather than by claiming a
+                level in the page's heading outline (D-20).
+              */}
               {!isCollapsed && (
-                <h2 className="px-3 pb-1 text-2xs font-semibold uppercase text-ink-subtle">
+                <p
+                  aria-hidden="true"
+                  className="px-3 pb-1 text-2xs font-semibold uppercase text-ink-subtle"
+                >
                   {t(`groups.${group.labelKey}`)}
-                </h2>
+                </p>
               )}
-              <ul className="flex flex-col gap-0.5">
+              <ul aria-label={t(`groups.${group.labelKey}`)} className="flex flex-col gap-0.5">
                 {group.items.map((item) => {
                   const Icon = item.icon;
                   const label = t(item.labelKey);

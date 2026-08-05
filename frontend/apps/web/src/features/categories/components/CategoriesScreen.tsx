@@ -206,14 +206,21 @@ export function CategoriesScreen({ initialTree }: CategoriesScreenProps) {
           {t('addCategory')}
         </Button>
       }
+      /*
+        Not a native `<label>`: Radix renders `Checkbox` as `<button role="checkbox">`, and a
+        button is not a labelable element — the wrapper supplied no accessible name and clicking
+        the text did not toggle anything. `aria-label` names the control; the `<span>` is the
+        visible echo of the same words.
+      */
       meta={
-        <label className="inline-flex min-h-11 items-center gap-2">
+        <span className="inline-flex min-h-11 items-center gap-2">
           <Checkbox
             checked={showArchived}
             onCheckedChange={(checked) => setShowArchived(checked === true)}
+            aria-label={t('showArchived')}
           />
-          <span>{t('showArchived')}</span>
-        </label>
+          <span aria-hidden="true">{t('showArchived')}</span>
+        </span>
       }
     />
   );

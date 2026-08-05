@@ -15,6 +15,13 @@ export interface QuotaExhaustedProps {
   locale: Locale;
   /** ISO instant the next monthly grant lands, from `GET /quota/me`. */
   resetsAt?: string | null;
+  /**
+   * `h2` when this sits inside a screen that already has an `h1` (the garment page, via
+   * `TryOnButton`); `h1` when it replaces the whole screen (`TryOnWaitScreen`). It used to take
+   * `CardTitle`'s `h3` default, which left the standalone case with no `h1` on the page at all
+   * and made the inline case jump a level (D-20).
+   */
+  headingLevel?: 'h1' | 'h2';
 }
 
 /**
@@ -27,14 +34,14 @@ export interface QuotaExhaustedProps {
  * her shortlist is saved, an enquiry can go tonight, and every try-on she already has costs
  * nothing to reopen (C-26).
  */
-export function QuotaExhausted({ locale, resetsAt }: QuotaExhaustedProps) {
+export function QuotaExhausted({ locale, resetsAt, headingLevel = 'h2' }: QuotaExhaustedProps) {
   const t = useTranslations('tryon.quota.exhausted');
   const format = useFormatter();
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{t('title')}</CardTitle>
+        <CardTitle as={headingLevel}>{t('title')}</CardTitle>
         <CardDescription>{t('description')}</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
@@ -62,19 +69,21 @@ export function QuotaExhausted({ locale, resetsAt }: QuotaExhaustedProps) {
 
 export interface BudgetExhaustedProps {
   locale: Locale;
+  /** See `QuotaExhaustedProps.headingLevel`. */
+  headingLevel?: 'h1' | 'h2';
 }
 
 /**
  * System budget exhaustion — §8.3's "Our fitting room is at capacity today". Same rule: the
  * catalog stays browsable and her shortlist is where she left it, so both are offered here.
  */
-export function BudgetExhausted({ locale }: BudgetExhaustedProps) {
+export function BudgetExhausted({ locale, headingLevel = 'h2' }: BudgetExhaustedProps) {
   const t = useTranslations('tryon.budget');
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{t('title')}</CardTitle>
+        <CardTitle as={headingLevel}>{t('title')}</CardTitle>
         <CardDescription>{t('description')}</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3 sm:flex-row">

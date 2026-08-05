@@ -208,7 +208,11 @@
 
   --color-ink: #f4ede4;
   --color-ink-muted: #b4a697; /* 8.1:1 */
-  --color-ink-subtle: #8a7d70; /* 4.8:1 */
+  /* 5.2:1 on canvas, 4.9:1 on surface, 4.5:1 on surface-raised. The §6.1 table quotes 4.8:1;
+     the value that shipped (#8a7d70) measured 4.73:1 on canvas and only 4.44:1 on a card, so it
+     fell under both its own documented floor and WCAG AA. Raised until it clears 4.5:1 on every
+     ground a placeholder or a piece of tertiary copy is actually set on (D-20). */
+  --color-ink-subtle: #918477;
 
   --color-line: #2e2721;
   --color-line-strong: #443a31;

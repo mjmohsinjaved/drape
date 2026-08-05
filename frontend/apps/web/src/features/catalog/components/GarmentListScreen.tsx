@@ -185,8 +185,13 @@ export function GarmentListScreen({ locale, initialPage, categories }: GarmentLi
 
   const handleTableKeyDown = (event: React.KeyboardEvent<HTMLTableSectionElement>): void => {
     if (rows.length === 0) return;
-    const target = event.target as HTMLElement;
-    if (target.closest('input, textarea, select, [contenteditable="true"]')) return;
+
+    // The D-19 row shortcuts belong to the table itself, never to a control inside it. The
+    // guard has to name every focusable thing this tbody contains, not just native form fields:
+    // the row checkbox is a Radix `<button role="checkbox">` and the garment title is an `<a>`,
+    // so a tag-name-only guard let `p` publish the *cursor* row while the checkbox had focus,
+    // and let `Enter` open the cursor row while a different row's link was focused.
+    if (event.target !== event.currentTarget) return;
 
     const garment = rows[cursor];
 
@@ -242,6 +247,11 @@ export function GarmentListScreen({ locale, initialPage, categories }: GarmentLi
         return;
       }
       event.preventDefault();
+      // `AdminShortcuts` also listens for `/` on `window` and opens the command palette. Both
+      // listeners are live on this screen, so without this the single keypress opened the
+      // palette *and* focused the search box underneath it. `document` fires before `window`,
+      // so stopping propagation here lets the screen's own search win where one exists.
+      event.stopPropagation();
       searchRef.current?.focus();
     };
 
@@ -524,7 +534,10 @@ export function GarmentListScreen({ locale, initialPage, categories }: GarmentLi
           tabIndex={0}
           onKeyDown={handleTableKeyDown}
           aria-label={t('rowsLabel')}
-          className="focus-visible:outline-none"
+          // The tbody is the only thing that takes focus for the j/k cursor, so its focus
+          // indicator is the only one a keyboard user gets on this table. `focus-ring` redraws
+          // the §6.1 ring; it must never be removed outright (D-10, D-20 / WCAG 2.4.7).
+          className="focus-ring"
         >
           {rows.map((garment, index) => (
             <TableRow

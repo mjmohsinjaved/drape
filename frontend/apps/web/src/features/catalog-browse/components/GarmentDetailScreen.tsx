@@ -104,6 +104,11 @@ export async function GarmentDetailScreen({
             images={gallery}
             ratio="garment"
             label={t('detail.galleryLabel', { title })}
+            // Each thumbnail is a tab whose only accessible name comes from here. Without it,
+            // `ImageGallery` falls back to a hardcoded `View image 2` — English under `ur` (C-41).
+            thumbnailLabel={(_image, position) =>
+              t('detail.thumbnailLabel', { position: position + 1 })
+            }
           />
         )}
 

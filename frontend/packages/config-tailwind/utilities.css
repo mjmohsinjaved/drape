@@ -152,10 +152,16 @@
  * Skeleton shimmer (D-8). Sits still under prefers-reduced-motion —
  * globals.css clamps every animation to 1ms.
  * ---------------------------------------------------------------- */
+/* The highlight is symmetric — transparent, light, transparent — so the gradient carries no
+   direction of its own and the sweep reads identically in `ltr` and `rtl`. It used to be angled
+   with `to var(--sheen-direction, right)`, but `--sheen-direction` was never declared anywhere,
+   so the fallback was the only value it ever had: a hard-coded physical side dressed up as a
+   token. `to inline-end` is not valid in `linear-gradient()`, and §6.7 rules out repairing it
+   with a `[dir='rtl']` override, so the honest fix is a gradient that does not need mirroring. */
 @utility skeleton-sheen {
   background-color: var(--color-skeleton);
   background-image: linear-gradient(
-    to var(--sheen-direction, right),
+    90deg,
     transparent 0%,
     color-mix(in oklab, var(--color-surface) 60%, transparent) 50%,
     transparent 100%

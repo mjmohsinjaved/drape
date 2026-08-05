@@ -87,12 +87,20 @@ export function PhotoUploader({ locale, isFirstPhoto, returnTo }: PhotoUploaderP
     <section className="flex flex-col gap-6">
       <h2 className="font-display text-2xl text-balance">{t('upload.title')}</h2>
 
+      {/*
+        The file input is driven entirely by the visible "Choose a photo" button below, which is
+        the control a user sees and the one that carries the name. `sr-only` hides it visually
+        but leaves it in the tab order, so a keyboard user met an invisible first tab stop and
+        then a second, visible one for the same action. `tabIndex={-1}` plus `aria-hidden` leaves
+        exactly one control per action (D-20).
+      */}
       <input
         ref={inputRef}
         type="file"
         accept={ACCEPTED_MIME_TYPES.join(',')}
         className="sr-only"
-        aria-label={t('upload.dropzoneLabel')}
+        tabIndex={-1}
+        aria-hidden="true"
         onChange={onFileChange}
       />
 

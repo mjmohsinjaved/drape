@@ -337,7 +337,10 @@ function FacetChip({
       aria-pressed={pressed}
       onClick={onClick}
       className={[
-        'inline-flex min-h-11 items-center gap-2 rounded-full px-4 text-sm',
+        // `touch-target` sets both min-inline-size and min-block-size to 44px. `min-h-11` alone
+        // fixed only the height, so a short facet — the size chips are "S", "M", "XS" — rendered
+        // about 40px wide and missed the D-10 floor on its narrow axis.
+        'touch-target inline-flex items-center justify-center gap-2 rounded-full px-4 text-sm',
         'transition-[background-color,color] duration-fast ease-out',
         'focus-visible:outline-none focus-visible:shadow-[var(--shadow-focus)]',
         pressed

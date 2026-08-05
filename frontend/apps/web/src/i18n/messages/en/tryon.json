@@ -130,7 +130,7 @@
     "UPSTREAM_RATE_LIMITED": "Taking longer than usual — hang tight.",
     "TRYON_PROVIDER_MISCONFIGURED": "The fitting room is briefly unavailable. Try again shortly.",
     "CANCELLED": "You stopped this try-on. Nothing was used from your monthly allowance.",
-    "IP_BLOCKED": "We can't complete that request.",
+    "IP_BLOCKED": "We can't complete that request. Contact the studio and we'll sort it out.",
     "AUTH_REQUIRED": "Sign in to try a piece on.",
     "SESSION_EXPIRED": "Your session has ended. Sign in again and we'll bring you back here.",
     "ACCOUNT_SUSPENDED": "This account is on hold. Contact the studio and we'll sort it out.",

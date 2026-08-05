@@ -25,7 +25,13 @@ function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   if (target.isContentEditable) return true;
   const tag = target.tagName;
-  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+
+  // Radix renders a select, a combobox and a checkbox as `<button role="…">`, none of which
+  // match a tag-name check. They all consume typed characters themselves — a Radix select
+  // type-aheads to an option on `/` — so a shortcut firing over them steals the keystroke.
+  const role = target.getAttribute('role');
+  return role === 'combobox' || role === 'listbox' || role === 'searchbox' || role === 'textbox';
 }
 
 export function AdminShortcuts() {

@@ -48,10 +48,15 @@ export function AdminShell({ locale, user, children, breadcrumbOverrides }: Admi
       <Topbar locale={locale} user={user} />
 
       <div className="flex flex-1">
-        {/* The rail is hidden below 1024 px, where `AdminMobileMenu` presents the same list. */}
-        <aside className="h-below-topbar sticky top-14 hidden lg:flex">
+        {/*
+          The rail is hidden below 1024 px, where `AdminMobileMenu` presents the same list.
+          A plain `<div>`, not an `<aside>`: its only child is `Sidebar`'s own `<nav>`, and
+          wrapping a navigation landmark in a complementary landmark announces one container
+          too many without adding anything to find.
+        */}
+        <div className="h-below-topbar sticky top-14 hidden lg:flex">
           <Sidebar locale={locale} />
-        </aside>
+        </div>
 
         <main id={MAIN_CONTENT_ID} className="min-w-0 flex-1 px-4 pb-16 pt-4">
           <div className="mx-auto flex w-full max-w-admin flex-col gap-4">
