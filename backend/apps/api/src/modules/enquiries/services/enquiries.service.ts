@@ -23,7 +23,7 @@ import {
   type ICurrentUser,
   type IPaginated,
 } from '@library/common';
-import { runInTransaction } from '@library/database';
+import { isUniqueViolation, runInTransaction } from '@library/database';
 import { StorageService } from '@library/storage';
 
 import { Garment } from '@api/modules/garments/entities/garment.entity';
@@ -45,7 +45,6 @@ import {
   enquiryReferenceYear,
   formatEnquiryReference,
 } from '../utils/enquiry-reference';
-import { isUniqueViolation } from '../utils/postgres-errors';
 
 import type { CreateEnquiryDto } from '../dto/create-enquiry.dto';
 import type { EnquiryQueryDto } from '../dto/enquiry-query.dto';
@@ -282,6 +281,10 @@ export class EnquiriesService {
     try {
       return await attempt();
     } catch (error: unknown) {
+      // `UQ_enquiries_reference` (§4.23) refusing the loser of a derived-number race is
+      // the mechanism, not a fault: both submissions counted `000137`, one commits and
+      // the other re-derives onto `000138`. Anything else — a dropped connection, a
+      // programming mistake — must surface rather than be retried into a second enquiry.
       if (!isUniqueViolation(error)) {
         throw error;
       }

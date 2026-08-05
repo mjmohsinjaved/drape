@@ -6,7 +6,8 @@ import {
   AppException,
   IS_PUBLIC_KEY,
   Locale,
-  Role,
+  isAdmin,
+  type Role,
   ROLES_KEY,
   RolesGuard,
   UserStatus,
@@ -87,13 +88,12 @@ export function readRouteContracts(controller: Type): RouteContract[] {
 /** A believable signed-in caller. Only `role` and `status` matter to `RolesGuard`. */
 export function sessionFor(role: Role, overrides: Partial<ICurrentUser> = {}): ICurrentUser {
   return {
-    id:
-      role === Role.ADMIN
-        ? 'a0000000-0000-4000-8000-00000000000a'
-        : 'c0000000-0000-4000-8000-00000000000c',
+    id: isAdmin(role)
+      ? 'a0000000-0000-4000-8000-00000000000a'
+      : 'c0000000-0000-4000-8000-00000000000c',
     role,
-    email: role === Role.ADMIN ? 'admin@example.invalid' : 'consumer@example.invalid',
-    name: role === Role.ADMIN ? 'Test Admin' : 'Test Consumer',
+    email: isAdmin(role) ? 'admin@example.invalid' : 'consumer@example.invalid',
+    name: isAdmin(role) ? 'Test Admin' : 'Test Consumer',
     status: UserStatus.ACTIVE,
     emailVerifiedAt: new Date('2026-08-01T00:00:00.000Z'),
     phoneVerifiedAt: new Date('2026-08-01T00:00:00.000Z'),

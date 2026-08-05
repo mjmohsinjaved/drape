@@ -53,7 +53,15 @@ export {
   exportIdFromKey,
 } from './utils/export-key.builder';
 
-export { purgeDateFor, type PurgeReport } from './services/purge.service';
+export { type PurgeReport } from './services/purge.service';
+// The policy — a date calculator, not a way to delete anything. See `retention-policy.module.ts`.
+export { RetentionPolicyModule } from './retention-policy.module';
+export {
+  purgeDateFor,
+  RetentionPolicy,
+  retentionAnchorOf,
+  type RetentionAnchor,
+} from './services/retention-policy.service';
 export { overdueBefore, type AccountPurgeResult } from './services/account-deletion.service';
 export {
   DELETION_JOB_NAME,

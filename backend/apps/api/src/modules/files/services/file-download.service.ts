@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 
-import { ErrorCode, Role, StorageException, type ICurrentUser } from '@library/common';
+import { ErrorCode, isAdmin, StorageException, type ICurrentUser } from '@library/common';
 import { SignedUrlService, StorageService } from '@library/storage';
 
 import { AUDIT_RECORD_EVENT, AuditRecordEvent } from '@api/modules/audit/events/audit.event';
@@ -98,7 +98,7 @@ export class FileDownloadService {
     if (!key.startsWith(BLURRED_MODERATION_PREFIX) || requester === undefined) {
       return;
     }
-    if (requester.role !== Role.ADMIN) {
+    if (!isAdmin(requester.role)) {
       // Only an admin ever holds one of these tokens; if a consumer does, the subject check
       // already let it through because it was issued to her — log it and move on.
       this.logger.warn('A non-admin session read a blurred moderation thumbnail.');

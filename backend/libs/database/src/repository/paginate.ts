@@ -1,15 +1,14 @@
+import {
+  buildPaginationMeta,
+  DEFAULT_LIMIT,
+  DEFAULT_SORT_BY,
+  MAX_LIMIT,
+  MIN_LIMIT,
+  MIN_PAGE,
+} from '@library/common';
 import type { IPaginated, PaginationQueryDto } from '@library/common';
 
 import type { ObjectLiteral, SelectQueryBuilder } from 'typeorm';
-
-/** Floor for `limit`, mirroring `PaginationQueryDto` (§2.8). */
-const MIN_LIMIT = 1;
-/** Ceiling for `limit`, mirroring `PaginationQueryDto` (§2.8). A client cannot exceed it. */
-const MAX_LIMIT = 100;
-/** Applied when `page` is absent or nonsensical. */
-const DEFAULT_PAGE = 1;
-/** Applied when `limit` is absent or nonsensical. */
-const DEFAULT_LIMIT = 20;
 
 /**
  * Optional ordering support. Omit it entirely and `paginate` will page a query builder that
@@ -51,7 +50,7 @@ export async function paginate<T extends ObjectLiteral>(
 ): Promise<IPaginated<T>> {
   const page = normalisePage(query.page);
   const limit = normaliseLimit(query.limit);
-  const sortBy = query.sortBy ?? 'createdAt';
+  const sortBy = query.sortBy ?? DEFAULT_SORT_BY;
   const sortOrder = query.sortOrder === 'ASC' ? 'ASC' : 'DESC';
 
   if (options.sortableColumns !== undefined) {
@@ -63,17 +62,10 @@ export async function paginate<T extends ObjectLiteral>(
     .take(limit)
     .getManyAndCount();
 
-  return {
-    items,
-    meta: {
-      page,
-      limit,
-      total,
-      totalPages: total === 0 ? 0 : Math.ceil(total / limit),
-      sortBy,
-      sortOrder,
-    },
-  };
+  // `buildPaginationMeta` is the one place `totalPages` is derived (§2.8). A second copy
+  // of `Math.ceil(total / limit)` here would be a second answer to "how many pages" the
+  // day the rule gains an edge case.
+  return { items, meta: buildPaginationMeta({ page, limit, sortBy, sortOrder }, total) };
 }
 
 /**
@@ -105,8 +97,17 @@ function applyOrdering<T extends ObjectLiteral>(
   }
 }
 
+/**
+ * The bounds come from `PaginationQueryDto` itself (§2.8), not from copies.
+ *
+ * They used to be re-declared here with a comment saying they "mirror" the DTO — which
+ * is to say, they were a second set of numbers that had to be kept in step by hand.
+ * Raising `MAX_LIMIT` on the DTO would have left this paginator silently clamping every
+ * page to the old ceiling, and the endpoint would have accepted a `limit` it then
+ * ignored.
+ */
 function normalisePage(value: number | undefined): number {
-  return Number.isInteger(value) && (value as number) >= 1 ? (value as number) : DEFAULT_PAGE;
+  return Number.isInteger(value) && (value as number) >= MIN_PAGE ? (value as number) : MIN_PAGE;
 }
 
 function normaliseLimit(value: number | undefined): number {

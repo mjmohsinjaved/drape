@@ -1,7 +1,7 @@
 import { createInMemoryRepository, type InMemoryRepository } from '../../../../test/fixtures';
 import { SERIALIZATION_FAILURE } from '../utils/postgres-errors';
 
-import type { DataSource, EntityManager, ObjectLiteral } from 'typeorm';
+import type { DataSource, EntityManager, ObjectLiteral, SelectQueryBuilder } from 'typeorm';
 
 /**
  * Test doubles for the two append-only ledgers.
@@ -42,9 +42,97 @@ export function createLedgerRepository<T extends ObjectLiteral & { id: string }>
   });
 
   // The fixture's proxy only traps `get`, so this lands on the underlying object.
-  Object.assign(repository, { sum });
+  // `jest.fn` so a test can assert *how many* scans a code path costs, which is the whole
+  // point of folding the aggregates into one query (PRD §9.1).
+  const createQueryBuilder = jest.fn(periodTotalsQueryBuilder(repository));
+
+  Object.assign(repository, { sum, createQueryBuilder });
 
   return repository;
+}
+
+/** One grouped row, exactly as `getRawMany()` hands it back. */
+interface PeriodTotalsRow {
+  reason: string;
+  delta: number;
+  trailingDelta: number;
+}
+
+/**
+ * A query-builder double for the **one** aggregate shape `BudgetService` builds:
+ *
+ * ```sql
+ * SELECT reason, SUM(delta), SUM(delta) FILTER (WHERE "createdAt" >= :since)
+ * FROM usage_ledger WHERE period = :period GROUP BY reason
+ * ```
+ *
+ * The shared fixture refuses `createQueryBuilder()` on purpose — emulating one in general would
+ * give a test false confidence about ownership and visibility predicates, which is where the
+ * S-10 and §9.2 rules live. This is not a general emulation: it answers that single shape, from
+ * the `:period` and `:since` **parameters** rather than by parsing SQL, and throws if a caller
+ * builds anything else. The predicate it stands in for is `period = :period` and nothing more,
+ * so there is no authorisation logic here to get wrong.
+ *
+ * Written here rather than in `apps/api/test/fixtures` for the same reason `sum` is: this is the
+ * module whose services depend on it.
+ */
+function periodTotalsQueryBuilder<T extends ObjectLiteral & { id: string }>(
+  repository: InMemoryRepository<T>,
+): () => SelectQueryBuilder<T> {
+  return (): SelectQueryBuilder<T> => {
+    let grouped = false;
+    const parameters: Record<string, unknown> = {};
+
+    const builder = {
+      select: (): unknown => builder,
+      addSelect: (): unknown => builder,
+      where: (_condition: string, params?: Record<string, unknown>): unknown => {
+        Object.assign(parameters, params ?? {});
+        return builder;
+      },
+      andWhere: (_condition: string, params?: Record<string, unknown>): unknown => {
+        Object.assign(parameters, params ?? {});
+        return builder;
+      },
+      groupBy: (): unknown => {
+        grouped = true;
+        return builder;
+      },
+      getRawMany: (): Promise<PeriodTotalsRow[]> => {
+        if (!grouped || typeof parameters.period !== 'string') {
+          throw new Error(
+            'The ledger query-builder fixture only answers "SUM(delta) GROUP BY reason" for a ' +
+              'single :period. Extend it deliberately if a second shape is introduced.',
+          );
+        }
+
+        const since = parameters.since instanceof Date ? parameters.since : null;
+        const totals = new Map<string, PeriodTotalsRow>();
+
+        for (const row of repository.$rows) {
+          if (row.period !== parameters.period || row.deletedAt != null) {
+            continue;
+          }
+          const reason = String(row.reason);
+          const current = totals.get(reason) ?? { reason, delta: 0, trailingDelta: 0 };
+          const delta = Number(row.delta ?? 0);
+          const createdAt: unknown = row.createdAt;
+          const inWindow =
+            since !== null && createdAt instanceof Date && createdAt.getTime() >= since.getTime();
+
+          totals.set(reason, {
+            reason,
+            delta: current.delta + delta,
+            trailingDelta: current.trailingDelta + (inWindow ? delta : 0),
+          });
+        }
+
+        return Promise.resolve([...totals.values()]);
+      },
+    };
+
+    return builder as unknown as SelectQueryBuilder<T>;
+  };
 }
 
 /** Live counters, so a test can assert "one transaction", not "probably a transaction". */

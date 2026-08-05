@@ -3,14 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 
-import {
-  DataSource,
-  In,
-  MoreThanOrEqual,
-  Repository,
-  type EntityManager,
-  type FindOptionsWhere,
-} from 'typeorm';
+import { DataSource, In, Repository, type EntityManager } from 'typeorm';
 
 import {
   currentPeriod,
@@ -18,6 +11,7 @@ import {
   ErrorCode,
   METRICS,
   MetricsService,
+  MILLISECONDS_PER_DAY,
   paginate,
   paginationSkip,
   periodResetsAt,
@@ -41,10 +35,16 @@ import {
   BUDGET_GRANT_REASONS,
   BUDGET_SPEND_REASONS,
   BUDGET_STATES,
+  TRAILING_WINDOW_DAYS,
   budgetStateFor,
   burnPercent,
   crossedThreshold,
+  projectBudgetExhaustion,
+  sumDeltas as sumLedgerDeltas,
+  trailingDailyRate as trailingDailyRateOf,
   type BudgetState,
+  type BudgetThresholds,
+  type LedgerRow,
 } from '../utils/ledger-math';
 import { isSerializationFailure } from '../utils/postgres-errors';
 
@@ -57,8 +57,37 @@ import type {
 } from '../dto/usage-response.dto';
 
 const GENERATION_COST = 1;
-const TRAILING_WINDOW_DAYS = 7;
-const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
+
+/**
+ * One period's `usage_ledger`, folded to one row per reason — **the result of a single scan.**
+ *
+ * Every derived number this service reports (`remaining`, `limit`, `used`, the A-33 splits, the
+ * trailing burn) is a sum over a subset of the same rows, so asking the database for them
+ * separately meant three to four growing scans of an append-only table on a path the guard chain
+ * walks for *every* generation (PRD §9.1: p95 cache hit under 400 ms). `GROUP BY reason` with a
+ * conditional aggregate for the trailing window answers all of them in one pass, and the
+ * arithmetic that turns the grouped rows into a snapshot is the same pure `ledger-math` used by
+ * the unit tests — so collapsing the queries did not move the derivation anywhere new.
+ *
+ * The derived-balance rule (§4.0 rule 10) is untouched: `remaining` is still `SUM(delta)` over
+ * every row of the period and there is still no stored balance column.
+ */
+interface PeriodTotals {
+  /** One `{ delta, reason, period }` per distinct reason present — a `ledger-math` input. */
+  readonly byReason: readonly LedgerRow<UsageReason>[];
+  /** The same rows restricted to the trailing window, from the conditional aggregate. */
+  readonly trailingByReason: readonly LedgerRow<UsageReason>[];
+}
+
+interface RawPeriodTotalsRow {
+  reason: UsageReason;
+  delta: string | number | null;
+  trailingDelta: string | number | null;
+}
+
+function toNumber(value: string | number | null): number {
+  return value === null ? 0 : Number(value);
+}
 
 /** The derived platform position for a period (A-29, §4.27). */
 export interface BudgetSnapshot {
@@ -172,15 +201,7 @@ export class BudgetService {
 
   /** The A-29 position for a period, deriving the lazy grant if it has not run yet. */
   async getSnapshot(now: Date = new Date()): Promise<BudgetSnapshot> {
-    const period = this.periodFor(now);
-    await this.reconcileMonthlyGrant(period);
-
-    const snapshot = await this.deriveSnapshot(this.ledger, period);
-
-    this.metrics.gauge(METRICS.BUDGET_REMAINING, snapshot.remaining, { period });
-    this.metrics.gauge(METRICS.BUDGET_BURN_PERCENT, snapshot.percentUsed, { period });
-
-    return snapshot;
+    return (await this.reconciledPosition(now)).snapshot;
   }
 
   /** The A-29 position, as the DTO. */
@@ -210,30 +231,31 @@ export class BudgetService {
     return snapshot;
   }
 
-  /** `GET /admin/usage` — the A-33 dashboard. */
+  /**
+   * `GET /admin/usage` — the A-33 dashboard.
+   *
+   * The three splits, the trailing burn and the snapshot itself all come out of the one
+   * {@link readTotals} scan the reconciliation already paid for; none of them is a second query.
+   */
   async overview(now: Date = new Date()): Promise<AdminUsageResponseDto> {
-    const budget = await this.getSnapshot(now);
-    const period = budget.period;
+    const { snapshot: budget, totals } = await this.reconciledPosition(now);
 
-    const [consumerGenerations, testRenders, trailingSpend] = await Promise.all([
-      this.spendOf(this.ledger, { period, reason: UsageReason.CONSUMER_GENERATION }),
-      this.spendOf(this.ledger, { period, reason: UsageReason.TEST_RENDER }),
-      this.spendOf(this.ledger, {
-        period,
-        reason: In(BUDGET_SPEND_REASONS),
-        createdAt: MoreThanOrEqual(
-          new Date(now.getTime() - TRAILING_WINDOW_DAYS * MILLISECONDS_PER_DAY),
-        ),
-      }),
-    ]);
+    const trailingSpend = -sumLedgerDeltas(
+      totals.trailingByReason,
+      budget.period,
+      BUDGET_SPEND_REASONS,
+    );
+    const rate = trailingDailyRateOf(trailingSpend, TRAILING_WINDOW_DAYS);
 
-    const trailingDailyRate = Math.round((trailingSpend / TRAILING_WINDOW_DAYS) * 10) / 10;
     const overview: UsageOverview = {
       budget,
-      consumerGenerations,
-      testRenders,
-      trailingDailyRate,
-      projectedExhaustionAt: this.projectExhaustion(budget, trailingDailyRate, now),
+      consumerGenerations: this.spendOf(totals, budget.period, [UsageReason.CONSUMER_GENERATION]),
+      testRenders: this.spendOf(totals, budget.period, [UsageReason.TEST_RENDER]),
+      trailingDailyRate: rate,
+      projectedExhaustionAt: projectBudgetExhaustion(
+        { remaining: budget.remaining, trailingDailyRate: rate, resetsAt: budget.resetsAt },
+        now,
+      ).projectedExhaustionAt,
     };
 
     return toAdminUsage(overview);
@@ -272,9 +294,22 @@ export class BudgetService {
     input: ConsumeBudgetInput,
   ): Promise<BudgetChargeResult> {
     const repository = manager.getRepository(UsageLedgerEntry);
+    const now = new Date();
 
-    await this.reconcileMonthlyGrantWithin(manager, input.period);
-    const before = await this.deriveSnapshot(repository, input.period);
+    const [initial, policy] = await Promise.all([
+      this.readTotals(repository, input.period, now),
+      this.settings.getBudgetPolicy(),
+    ]);
+    const totals = (await this.grantWithin(
+      repository,
+      input.period,
+      initial,
+      policy.monthlyGenerations,
+    ))
+      ? await this.readTotals(repository, input.period, now)
+      : initial;
+
+    const before = this.deriveSnapshot(totals, input.period, policy);
 
     if (before.state === BUDGET_STATES.EXHAUSTED) {
       this.metrics.increment(METRICS.BUDGET_EXHAUSTED, { period: before.period });
@@ -332,11 +367,12 @@ export class BudgetService {
     });
 
     if (charge === null || charge.delta >= 0) {
-      const snapshot = await this.deriveSnapshot(repository, this.periodFor());
+      const snapshot = await this.readSnapshot(repository, this.periodFor());
       return { refunded: false, snapshot };
     }
 
-    const remaining = (await this.sumDeltas(repository, { period: charge.period })) - charge.delta;
+    const totals = await this.readTotals(repository, charge.period, new Date());
+    const remaining = sumLedgerDeltas(totals.byReason, charge.period) - charge.delta;
 
     await repository.insert({
       delta: -charge.delta,
@@ -349,7 +385,7 @@ export class BudgetService {
       note: (input.reason ?? 'Refund').slice(0, 200) + ` — job ${input.jobId}`,
     });
 
-    const snapshot = await this.deriveSnapshot(repository, charge.period);
+    const snapshot = await this.readSnapshot(repository, charge.period);
     return { refunded: true, snapshot };
   }
 
@@ -387,13 +423,13 @@ export class BudgetService {
    */
   async adjust(actor: ICurrentUser, dto: AdjustLedgerDto): Promise<BudgetSnapshotResponseDto> {
     const period = this.periodFor();
-    await this.reconcileMonthlyGrant(period);
+    await this.reconciledPosition(new Date());
 
     const snapshot = await this.runSerializable(
       'budget.adjust',
       async (manager: EntityManager): Promise<BudgetSnapshot> => {
         const repository = manager.getRepository(UsageLedgerEntry);
-        const before = await this.deriveSnapshot(repository, period);
+        const before = await this.readSnapshot(repository, period);
 
         if (before.remaining + dto.delta < 0) {
           throw new ValidationException(ErrorCode.QUOTA_ADJUSTMENT_INVALID, {
@@ -451,21 +487,91 @@ export class BudgetService {
   }
 
   /**
-   * Brings the period's granted budget in line with `budget.monthlyGenerations`.
+   * **One scan of `usage_ledger` per period, and everything derived from it.**
    *
-   * The cheap `sum` outside the transaction is the common case — the grant is already
-   * correct and nothing is written. Only a genuine difference opens a `SERIALIZABLE`
-   * transaction, and a concurrent writer that beat us there aborts this one with
-   * `40001`, which means the reconciliation happened and is swallowed.
+   * `SUM(delta) … GROUP BY reason`, plus a conditional aggregate for the trailing window.
+   * One pass over the period's rows answers `remaining`, `limit`, the monthly grant total, the
+   * A-33 splits and the seven-day burn — the numbers that used to cost three separate scans on
+   * the guard-chain path and four on the dashboard. The grouped result is at most one row per
+   * `UsageReason`, and the arithmetic that folds those rows is `ledger-math`'s, unchanged: the
+   * queries were collapsed, the derivation was not moved.
+   *
+   * The soft-delete predicate is the query builder's own — `usage_ledger` is append-only, but
+   * the condition is not dropped just because nothing exercises it.
    */
-  private async reconcileMonthlyGrant(period: string): Promise<void> {
-    const [granted, policy] = await Promise.all([
-      this.sumDeltas(this.ledger, { period, reason: UsageReason.MONTHLY_BUDGET_GRANT }),
+  private async readTotals(
+    repository: Repository<UsageLedgerEntry>,
+    period: string,
+    now: Date,
+  ): Promise<PeriodTotals> {
+    const since = new Date(now.getTime() - TRAILING_WINDOW_DAYS * MILLISECONDS_PER_DAY);
+
+    const rows = await repository
+      .createQueryBuilder('usage')
+      .select('usage.reason', 'reason')
+      .addSelect('SUM(usage.delta)', 'delta')
+      .addSelect('SUM(usage.delta) FILTER (WHERE usage.createdAt >= :since)', 'trailingDelta')
+      .where('usage.period = :period', { period, since })
+      .groupBy('usage.reason')
+      .getRawMany<RawPeriodTotalsRow>();
+
+    return {
+      byReason: rows.map((row) => ({ period, reason: row.reason, delta: toNumber(row.delta) })),
+      trailingByReason: rows.map((row) => ({
+        period,
+        reason: row.reason,
+        delta: toNumber(row.trailingDelta),
+      })),
+    };
+  }
+
+  /**
+   * The A-29 position **plus the totals it was derived from**, so a caller that needs both
+   * (`overview`) does not pay for a second scan to get the second half.
+   *
+   * The lazy grant is reconciled first. The cheap common case — the grant already matches the
+   * setting — reuses the totals just read and writes nothing; only a genuine difference opens a
+   * `SERIALIZABLE` transaction and costs a re-read.
+   */
+  private async reconciledPosition(
+    now: Date,
+  ): Promise<{ snapshot: BudgetSnapshot; totals: PeriodTotals }> {
+    const period = this.periodFor(now);
+
+    const [initial, policy] = await Promise.all([
+      this.readTotals(this.ledger, period, now),
       this.settings.getBudgetPolicy(),
     ]);
 
-    if (granted === policy.monthlyGenerations) {
-      return;
+    const totals = (await this.reconcileMonthlyGrant(period, initial, policy.monthlyGenerations))
+      ? await this.readTotals(this.ledger, period, now)
+      : initial;
+
+    const snapshot = this.deriveSnapshot(totals, period, policy);
+
+    this.metrics.gauge(METRICS.BUDGET_REMAINING, snapshot.remaining, { period });
+    this.metrics.gauge(METRICS.BUDGET_BURN_PERCENT, snapshot.percentUsed, { period });
+
+    return { snapshot, totals };
+  }
+
+  /**
+   * Brings the period's granted budget in line with `budget.monthlyGenerations`.
+   *
+   * The grant total comes from the scan the caller already paid for — the common case is that it
+   * already matches and nothing is written. Only a genuine difference opens a `SERIALIZABLE`
+   * transaction, and a concurrent writer that beat us there aborts this one with `40001`, which
+   * means the reconciliation happened and is swallowed.
+   *
+   * @returns `true` when a row was (or may have been) written, so the caller must re-read.
+   */
+  private async reconcileMonthlyGrant(
+    period: string,
+    totals: PeriodTotals,
+    monthlyGenerations: number,
+  ): Promise<boolean> {
+    if (this.monthlyGrantOf(totals, period) === monthlyGenerations) {
+      return false;
     }
 
     try {
@@ -478,23 +584,40 @@ export class BudgetService {
       }
       this.logger.debug(`Concurrent budget grant for period ${period}; the other writer won.`);
     }
+
+    return true;
   }
 
   private async reconcileMonthlyGrantWithin(manager: EntityManager, period: string): Promise<void> {
     const repository = manager.getRepository(UsageLedgerEntry);
 
-    const granted = await this.sumDeltas(repository, {
-      period,
-      reason: UsageReason.MONTHLY_BUDGET_GRANT,
-    });
-    const policy = await this.settings.getBudgetPolicy();
-    const difference = policy.monthlyGenerations - granted;
+    const [totals, policy] = await Promise.all([
+      this.readTotals(repository, period, new Date()),
+      this.settings.getBudgetPolicy(),
+    ]);
+
+    await this.grantWithin(repository, period, totals, policy.monthlyGenerations);
+  }
+
+  /**
+   * Appends the difference between the granted total and the setting, inside whatever
+   * transaction the repository belongs to.
+   *
+   * @returns `true` when a row was written, so the caller's totals are stale.
+   */
+  private async grantWithin(
+    repository: Repository<UsageLedgerEntry>,
+    period: string,
+    totals: PeriodTotals,
+    monthlyGenerations: number,
+  ): Promise<boolean> {
+    const difference = monthlyGenerations - this.monthlyGrantOf(totals, period);
 
     if (difference === 0) {
-      return;
+      return false;
     }
 
-    const remaining = (await this.sumDeltas(repository, { period })) + difference;
+    const remaining = sumLedgerDeltas(totals.byReason, period) + difference;
     await repository.insert({
       delta: difference,
       reason: UsageReason.MONTHLY_BUDGET_GRANT,
@@ -505,23 +628,39 @@ export class BudgetService {
       actorId: null,
       note: null,
     });
+
+    return true;
+  }
+
+  /** {@link readTotals} plus the policy, folded straight into a snapshot. One scan. */
+  private async readSnapshot(
+    repository: Repository<UsageLedgerEntry>,
+    period: string,
+    now: Date = new Date(),
+  ): Promise<BudgetSnapshot> {
+    const [totals, policy] = await Promise.all([
+      this.readTotals(repository, period, now),
+      this.settings.getBudgetPolicy(),
+    ]);
+
+    return this.deriveSnapshot(totals, period, policy);
   }
 
   /**
    * The derivation. `remaining` is `SUM(delta)` over every row of the period — the
    * authoritative number §4.27 names — and `used` is computed back from the granted
    * total rather than summed independently, so the two can never disagree.
+   *
+   * Pure, and over the grouped rows rather than the repository: the sums are `ledger-math`'s,
+   * which is what keeps the E-5 arithmetic tests testing the arithmetic this method uses.
    */
-  private async deriveSnapshot(
-    repository: Repository<UsageLedgerEntry>,
+  private deriveSnapshot(
+    totals: PeriodTotals,
     period: string,
-  ): Promise<BudgetSnapshot> {
-    const [remaining, limit, policy] = await Promise.all([
-      this.sumDeltas(repository, { period }),
-      this.sumDeltas(repository, { period, reason: In(BUDGET_GRANT_REASONS) }),
-      this.settings.getBudgetPolicy(),
-    ]);
-
+    policy: BudgetThresholds,
+  ): BudgetSnapshot {
+    const remaining = sumLedgerDeltas(totals.byReason, period);
+    const limit = sumLedgerDeltas(totals.byReason, period, BUDGET_GRANT_REASONS);
     const used = limit - remaining;
 
     return {
@@ -538,36 +677,13 @@ export class BudgetService {
   }
 
   /** Spend as a positive number, for the A-33 splits. */
-  private async spendOf(
-    repository: Repository<UsageLedgerEntry>,
-    where: FindOptionsWhere<UsageLedgerEntry>,
-  ): Promise<number> {
-    return -(await this.sumDeltas(repository, where));
+  private spendOf(totals: PeriodTotals, period: string, reasons: readonly UsageReason[]): number {
+    const spent = sumLedgerDeltas(totals.byReason, period, reasons);
+    return spent === 0 ? 0 : -spent;
   }
 
-  private async sumDeltas(
-    repository: Repository<UsageLedgerEntry>,
-    where: FindOptionsWhere<UsageLedgerEntry>,
-  ): Promise<number> {
-    return (await repository.sum('delta', where)) ?? 0;
-  }
-
-  /** A-33 — when the budget runs out at the trailing rate, or `null` if it does not. */
-  private projectExhaustion(
-    budget: BudgetSnapshot,
-    trailingDailyRate: number,
-    now: Date,
-  ): Date | null {
-    if (trailingDailyRate <= 0 || budget.remaining <= 0) {
-      return null;
-    }
-
-    const daysLeft = budget.remaining / trailingDailyRate;
-    const projected = new Date(now.getTime() + daysLeft * MILLISECONDS_PER_DAY);
-
-    // Past the boundary the budget resets anyway, so "projected exhaustion" would be
-    // predicting an event the calendar prevents.
-    return projected >= budget.resetsAt ? null : projected;
+  private monthlyGrantOf(totals: PeriodTotals, period: string): number {
+    return sumLedgerDeltas(totals.byReason, period, [UsageReason.MONTHLY_BUDGET_GRANT]);
   }
 
   private thresholdEvent(snapshot: BudgetSnapshot): BudgetThresholdEvent {

@@ -4,7 +4,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 
 import { DataSource, type EntityManager } from 'typeorm';
 
-import { Locale, Role } from '@library/common';
+import { isAdmin, Locale } from '@library/common';
 import { runInTransaction } from '@library/database';
 
 import { InvitesService } from '@api/modules/invites/services/invites.service';
@@ -105,7 +105,7 @@ export class InviteAcceptanceService {
       { label: 'auth.acceptInvitation' },
     );
 
-    if (user.role === Role.ADMIN) {
+    if (isAdmin(user.role)) {
       // S-8: mandatory for admins, and impossible to enrol before the account exists.
       // The session below is what lets the console send them straight to `/auth/2fa/setup`.
       this.logger.warn(

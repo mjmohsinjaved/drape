@@ -375,6 +375,59 @@ describe('TryOnService — the §8.1 request path', () => {
       expect(context.quota.charges).toHaveLength(1);
     });
 
+    it('copies the existing thumbnail instead of re-encoding one (PRD §9.1)', async () => {
+      context = await createTryOnContext();
+
+      await context.tryOn.create(DTO, CONSUMER);
+      context.storage.copy.mockClear();
+      context.images.toWebpThumbnail.mockClear();
+
+      const second = await context.tryOn.create(
+        { ...DTO, idempotencyKey: 'idem-0000-0002' },
+        CONSUMER,
+      );
+
+      expect(second.cacheHit).toBe(true);
+      // Two file copies — the render and its thumbnail — and no sharp. Re-encoding a
+      // full-size PNG is hundreds of milliseconds of CPU on the path §9.1 gives 400 ms to,
+      // to produce a file that already exists byte for byte.
+      expect(context.storage.copy).toHaveBeenCalledTimes(2);
+      expect(context.images.toWebpThumbnail).not.toHaveBeenCalled();
+
+      const results = context.harness.repository<TryOnResult>(TryOnResult).$rows;
+      const [original, copied] = results;
+      expect(copied?.thumbnailKey).not.toBeNull();
+      // Her own object, not a pointer at his: C-31 hard-deletes a result's thumbnail.
+      expect(copied?.thumbnailKey).not.toBe(original?.thumbnailKey);
+      expect(
+        context.storage.objects
+          .get(copied?.thumbnailKey ?? '')
+          ?.equals(context.storage.objects.get(original?.thumbnailKey ?? '') as Buffer),
+      ).toBe(true);
+    });
+
+    it('falls back to re-deriving when no thumbnail exists for those bytes', async () => {
+      context = await createTryOnContext();
+
+      await context.tryOn.create(DTO, CONSUMER);
+
+      // The source thumbnail went missing — an older row, a failed thumbnail at
+      // generation time, a swept file. The grid must still get one.
+      const [original] = context.harness.repository<TryOnResult>(TryOnResult).$rows;
+      context.storage.objects.delete(original?.thumbnailKey ?? '');
+      context.images.toWebpThumbnail.mockClear();
+
+      const second = await context.tryOn.create(
+        { ...DTO, idempotencyKey: 'idem-0000-0002' },
+        CONSUMER,
+      );
+
+      expect(second.cacheHit).toBe(true);
+      const results = context.harness.repository<TryOnResult>(TryOnResult).$rows;
+      expect(results[1]?.thumbnailKey).not.toBeNull();
+      expect(context.images.toWebpThumbnail).toHaveBeenCalledTimes(1);
+    });
+
     it('increments hitCount so the E-13 cache-hit rate is real', async () => {
       context = await createTryOnContext();
 

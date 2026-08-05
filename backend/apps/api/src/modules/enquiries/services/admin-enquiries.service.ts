@@ -17,7 +17,7 @@ import {
 import {
   ErrorCode,
   NotFoundException,
-  Role,
+  isAdmin,
   ValidationException,
   paginate,
   paginationSkip,
@@ -384,7 +384,7 @@ export class AdminEnquiriesService {
     if (assignee === null) {
       throw new NotFoundException(ErrorCode.USER_NOT_FOUND);
     }
-    if (assignee.role !== Role.ADMIN) {
+    if (!isAdmin(assignee.role)) {
       throw new ValidationException(ErrorCode.SETTINGS_VALUE_INVALID, {
         message: 'Enquiries can only be assigned to an admin.',
         errors: [{ field: 'assignedTo', message: 'Not an admin account.', code: 'NOT_ADMIN' }],

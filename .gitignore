@@ -41,6 +41,9 @@ Thumbs.db
 # generated contract artefacts are committed intentionally:
 # backend/openapi.json is tracked so CI can diff the contract (PRD B-4, E-16)
 
-# never store uploaded media in the repo — STORAGE_ROOT lives outside it
-storage/
-uploads/
+# Never store uploaded media in the repo — STORAGE_ROOT lives outside it.
+# These MUST stay anchored with a leading slash. Unanchored, `storage/` matches a
+# directory of that name at any depth, which silently excluded the whole of
+# `backend/libs/storage/` — the @library/storage source — from version control.
+/storage/
+/uploads/

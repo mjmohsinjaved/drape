@@ -17,6 +17,8 @@ import {
   ErrorCode,
   ERROR_CODE_SPECS,
   NotFoundException,
+  slugify,
+  suffixedSlug,
   ValidationException,
   type ICurrentUser,
   type IPaginated,
@@ -45,7 +47,7 @@ import { Garment } from '../entities/garment.entity';
 import { GarmentMode } from '../enums/garment-mode.enum';
 import { PublishState } from '../enums/publish-state.enum';
 import { toGarmentResponse } from '../mappers/garment.mapper';
-import { MAX_GARMENT_SLUG_LENGTH, slugify, suffixedSlug } from '../utils/slug.util';
+import { MAX_GARMENT_SLUG_LENGTH } from '../utils/slug.util';
 
 import { evaluatePublishGate, isAllowedPublishTransition } from './garment-publish.gate';
 

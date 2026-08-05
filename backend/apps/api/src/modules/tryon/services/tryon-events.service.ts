@@ -1,6 +1,8 @@
-import { Injectable, Logger, type MessageEvent } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 
-import { Subject, interval, map, merge, of, takeWhile, type Observable } from 'rxjs';
+import { of, type Observable } from 'rxjs';
+
+import { ReplayableEventBus, type BusMessageEvent } from './replayable-event-bus';
 
 /** §5.11 — the four stages that drive the C-19 staged microcopy. */
 export type TryOnStage = 'QUEUED' | 'UPLOADING' | 'GENERATING' | 'FINISHING';
@@ -44,12 +46,8 @@ const HEARTBEAT_INTERVAL_MS = 15_000;
  */
 const TERMINAL_RETENTION_MS = 10 * 60 * 1000;
 
-interface TerminalRecord {
-  readonly event: MessageEvent;
-  readonly at: number;
-}
-
-function isTerminalEvent(event: MessageEvent): boolean {
+/** §5.11 — the two events that end a job's stream. */
+function isTerminalEvent(event: BusMessageEvent<TryOnEventName>): boolean {
   return event.type === 'succeeded' || event.type === 'failed';
 }
 
@@ -63,18 +61,14 @@ function isTerminalEvent(event: MessageEvent): boolean {
  * `TryOnService` publishes stages as it works; the controller hands the observable to
  * `@Sse()` and Nest serialises it.
  *
- * ### The three things that are easy to get wrong here
+ * ### Where the mechanism lives
  *
- * **The envelope must not wrap it.** `ResponseTransformInterceptor` returns early for
- * any handler carrying Nest's `sse` metadata and for any response that has already
- * committed to `text/event-stream`, so an `@Sse()` route is never JSON-wrapped. The
- * controller therefore adds no `@ResponseMessage()` and returns the raw observable.
- *
- * **A disconnect must not leak.** The stream is `merge(events, heartbeat)` piped
- * through `takeWhile(notTerminal, inclusive)`. When the client goes away Nest
- * unsubscribes, which tears down the heartbeat interval with it — there is no timer
- * owned by this service and no listener to remove by hand. `activeStreamCount` exists
- * so a test can assert exactly that.
+ * The buffering, the heartbeat, the terminal replay and the leak-free teardown are
+ * {@link ReplayableEventBus}'s — shared with the A-12 batch bus, which had a
+ * line-for-line copy of all of it. What this class owns is the §5.11 *vocabulary*: four
+ * event names, three payload shapes, and a terminal predicate and retention window that
+ * are deliberately its own (a seven-second try-on and a minutes-long batch do not want
+ * the same reconnection window).
  *
  * **A finished job must still answer.** A client that reconnects after the terminal
  * event gets it replayed from {@link TERMINAL_RETENTION_MS}-bounded memory rather than
@@ -82,20 +76,15 @@ function isTerminalEvent(event: MessageEvent): boolean {
  * documented polling fallback and reads the row.
  */
 @Injectable()
-export class TryOnEventsService {
-  private readonly logger = new Logger(TryOnEventsService.name);
-
-  private readonly channels = new Map<string, Subject<MessageEvent>>();
-
-  private readonly terminals = new Map<string, TerminalRecord>();
-
-  /** Live subscriber count, for the leak test and for `tryon.in_flight`. */
-  get activeStreamCount(): number {
-    let total = 0;
-    for (const subject of this.channels.values()) {
-      total += subject.observed ? 1 : 0;
-    }
-    return total;
+export class TryOnEventsService extends ReplayableEventBus<TryOnEventName> {
+  constructor() {
+    super({
+      isTerminal: isTerminalEvent,
+      terminalRetentionMs: TERMINAL_RETENTION_MS,
+      heartbeatIntervalMs: HEARTBEAT_INTERVAL_MS,
+      logger: new Logger(TryOnEventsService.name),
+      subjectNoun: 'job',
+    });
   }
 
   /** §5.11 `stage` — drives the staged microcopy of the seven-second wait. */
@@ -121,82 +110,13 @@ export class TryOnEventsService {
    * This service holds no authorisation logic and must not be given any: it would be
    * the wrong place for it and would be reachable only after the check anyway.
    */
-  stream(jobId: string): Observable<MessageEvent> {
+  stream(jobId: string): Observable<BusMessageEvent<TryOnEventName>> {
     const replay = this.replayableTerminal(jobId);
-    if (replay !== null) {
-      return of(replay);
-    }
 
-    const channel = this.channelFor(jobId);
-    const heartbeat: Observable<MessageEvent> = interval(HEARTBEAT_INTERVAL_MS).pipe(
-      map((): MessageEvent => ({ type: 'heartbeat', data: {} })),
-    );
-
-    return merge(channel.asObservable(), heartbeat).pipe(
-      // `inclusive` — emit the terminal event, then complete, which closes the
-      // connection (§5.11: "the stream closes after a terminal event").
-      takeWhile((event) => !isTerminalEvent(event), true),
-    );
+    return replay !== null ? of(replay) : this.liveStream(jobId);
   }
 
-  /** Drops a job's channel and its replayable terminal. Called when a job is pruned. */
-  forget(jobId: string): void {
-    this.channels.get(jobId)?.complete();
-    this.channels.delete(jobId);
-    this.terminals.delete(jobId);
-  }
-
-  private publish(jobId: string, event: MessageEvent): void {
-    if (isTerminalEvent(event)) {
-      this.sweepTerminals();
-      this.terminals.set(jobId, { event, at: Date.now() });
-    }
-
-    const channel = this.channels.get(jobId);
-    if (channel === undefined) {
-      // Nobody is listening yet — normal for a fast cache hit, where the result is in
-      // the POST response before any client opens a stream. The terminal record above
-      // is what a late subscriber will read.
-      return;
-    }
-
-    channel.next(event);
-
-    if (isTerminalEvent(event)) {
-      channel.complete();
-      this.channels.delete(jobId);
-      this.logger.debug(`Closed the stream for a finished job.`);
-    }
-  }
-
-  private channelFor(jobId: string): Subject<MessageEvent> {
-    const existing = this.channels.get(jobId);
-    if (existing !== undefined) {
-      return existing;
-    }
-    const created = new Subject<MessageEvent>();
-    this.channels.set(jobId, created);
-    return created;
-  }
-
-  private replayableTerminal(jobId: string): MessageEvent | null {
-    const record = this.terminals.get(jobId);
-    if (record === undefined) {
-      return null;
-    }
-    if (Date.now() - record.at > TERMINAL_RETENTION_MS) {
-      this.terminals.delete(jobId);
-      return null;
-    }
-    return record.event;
-  }
-
-  private sweepTerminals(): void {
-    const cutoff = Date.now() - TERMINAL_RETENTION_MS;
-    for (const [jobId, record] of this.terminals) {
-      if (record.at < cutoff) {
-        this.terminals.delete(jobId);
-      }
-    }
+  protected heartbeat(): BusMessageEvent<TryOnEventName> {
+    return { type: 'heartbeat', data: {} };
   }
 }

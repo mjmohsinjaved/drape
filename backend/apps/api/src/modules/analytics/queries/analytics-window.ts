@@ -1,11 +1,9 @@
-import { ErrorCode, ValidationException } from '@library/common';
+import { ErrorCode, MILLISECONDS_PER_DAY, ValidationException } from '@library/common';
 
 import {
   DEFAULT_ANALYTICS_WINDOW_DAYS,
   MAX_ANALYTICS_WINDOW_DAYS,
 } from '../constants/analytics.constants';
-
-const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
 
 /** A resolved, bounded reporting window. Every analytics query takes one. */
 export interface AnalyticsWindow {

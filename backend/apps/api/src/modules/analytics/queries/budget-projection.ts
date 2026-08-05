@@ -1,7 +1,13 @@
-const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
+import { MILLISECONDS_PER_DAY, TRAILING_WINDOW_DAYS } from '@library/common';
 
-/** A-33 — the trailing window the burn rate is measured over. */
-export const TRAILING_WINDOW_DAYS = 7;
+/**
+ * A-33 — the trailing window the burn rate is measured over.
+ *
+ * Re-exported from `@library/common` rather than declared: `BudgetService` measures the
+ * same window when it writes the ledger-derived rate, and a panel that projected from a
+ * different number of days than the ledger averaged over would be quietly wrong.
+ */
+export { TRAILING_WINDOW_DAYS };
 
 /** What {@link projectBudgetExhaustion} needs, and nothing more. */
 export interface BudgetProjectionInput {

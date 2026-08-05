@@ -8,6 +8,7 @@ import { DataSource, Repository, type EntityManager } from 'typeorm';
 import {
   ConflictException,
   ErrorCode,
+  MILLISECONDS_PER_HOUR,
   NotFoundException,
   sha256Hex,
   UserStatus,
@@ -61,8 +62,6 @@ import type {
 import type { DeleteConsumerDto, DeletionReceiptResponseDto } from '../dto/delete-consumer.dto';
 import type { SetQuotaOverrideDto } from '../dto/set-quota-override.dto';
 import type { SuspendConsumerDto } from '../dto/suspend-consumer.dto';
-
-const MILLISECONDS_PER_HOUR = 60 * 60 * 1000;
 
 /**
  * `verification_hash` at request time.

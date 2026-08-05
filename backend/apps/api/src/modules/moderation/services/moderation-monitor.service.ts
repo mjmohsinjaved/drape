@@ -1,6 +1,8 @@
 import { Injectable, Logger, type OnModuleDestroy } from '@nestjs/common';
 import { Interval } from '@nestjs/schedule';
 
+import { MILLISECONDS_PER_HOUR } from '@library/common';
+
 import { AlertingService } from '@api/modules/notifications/services/alerting.service';
 
 import {
@@ -15,7 +17,6 @@ import {
 import { AbuseService } from './abuse.service';
 import { ModerationQueueService } from './moderation-queue.service';
 
-const MILLISECONDS_PER_HOUR = 60 * 60 * 1000;
 const MILLISECONDS_PER_MINUTE = 60_000;
 
 /** What one sweep found. Returned so a test drives it without waiting on a timer. */

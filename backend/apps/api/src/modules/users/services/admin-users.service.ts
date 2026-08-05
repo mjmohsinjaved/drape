@@ -9,6 +9,7 @@ import {
   ErrorCode,
   ForbiddenException,
   NotFoundException,
+  isAdmin,
   Role,
   UserStatus,
   type ICurrentUser,
@@ -132,7 +133,7 @@ export class AdminUsersService {
   ): Promise<AdminUserResponseDto> {
     const target = await this.requireAdmin(userId);
 
-    if (dto.role === Role.ADMIN) {
+    if (isAdmin(dto.role)) {
       return toAdminUserResponse(target);
     }
 
@@ -259,7 +260,7 @@ export class AdminUsersService {
    */
   private async requireAdmin(userId: string): Promise<User> {
     const user = await this.selectUser(userId);
-    if (user === null || user.role !== Role.ADMIN) {
+    if (user === null || !isAdmin(user.role)) {
       throw new NotFoundException(ErrorCode.USER_NOT_FOUND);
     }
     return user;

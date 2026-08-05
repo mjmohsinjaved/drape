@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 
@@ -17,12 +16,12 @@ import {
 } from '@api/modules/person-photos/events/person-photo.events';
 import { AUDIT_ACTIONS, AUDIT_TARGET_TYPES } from '@api/shared/constants/audit-actions.constant';
 
-import { DEFAULT_PHOTO_RETENTION_DAYS, PURGE_BATCH_SIZE } from '../constants/retention.constants';
+import { PURGE_BATCH_SIZE } from '../constants/retention.constants';
 import { DeletionLogEntry } from '../entities/deletion-log-entry.entity';
 import { DeletionInitiator } from '../enums/deletion-initiator.enum';
 import { DeletionSubject } from '../enums/deletion-subject.enum';
 
-const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
+import { RetentionPolicy } from './retention-policy.service';
 
 /** What one purge run accomplished. */
 export interface PurgeReport {
@@ -94,7 +93,7 @@ export class PurgeService {
     @InjectDataSource()
     private readonly dataSource: DataSource,
     private readonly storage: StorageService,
-    private readonly config: ConfigService,
+    private readonly policy: RetentionPolicy,
     private readonly events: EventEmitter2,
   ) {}
 
@@ -198,7 +197,11 @@ export class PurgeService {
    * outcome §9.3 does not permit.
    */
   private async recomputePurgeDates(): Promise<number> {
-    const days = this.retentionDays();
+    // Interpolated into SQL below, so it comes from the one place that proves it is a
+    // positive integer first — `RetentionPolicy`, which `PersonPhotosService` also uses
+    // when it writes the column. Two readings of `PHOTO_RETENTION_DAYS` is how a value
+    // of `0` used to mean "keep for 30 days" here and "already expired" there.
+    const days = this.policy.retentionDays();
 
     const result = await this.photos
       .createQueryBuilder()
@@ -337,22 +340,4 @@ export class PurgeService {
       verificationHash: sha256Hex([...removed].sort().join('\n')),
     };
   }
-
-  private retentionDays(): number {
-    const configured = this.config.get<number>('PHOTO_RETENTION_DAYS');
-    const days = configured ?? DEFAULT_PHOTO_RETENTION_DAYS;
-    // Interpolated into SQL, so it is proved to be an integer first. A retention policy
-    // is a number from the environment and this is the one place it becomes a literal.
-    return Number.isInteger(days) && days > 0 ? days : DEFAULT_PHOTO_RETENTION_DAYS;
-  }
 }
-
-/**
- * The policy the recompute applies, as a pure function — §9.3, §4.16.
- *
- * The `UPDATE` above expresses it in SQL because it has to run over a whole table at
- * once; this is the same rule in TypeScript, so a test can state what "30 days after
- * last account activity" means without a database.
- */
-export const purgeDateFor = (lastActiveAt: Date, retentionDays: number): Date =>
-  new Date(lastActiveAt.getTime() + retentionDays * MILLISECONDS_PER_DAY);

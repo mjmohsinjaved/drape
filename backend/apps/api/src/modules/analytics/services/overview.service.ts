@@ -3,6 +3,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 
 import { IsNull, LessThan, Repository } from 'typeorm';
 
+import { MILLISECONDS_PER_HOUR } from '@library/common';
+
 import { Enquiry } from '@api/modules/enquiries/entities/enquiry.entity';
 import { EnquiryStatus } from '@api/modules/enquiries/enums/enquiry-status.enum';
 import { Garment } from '@api/modules/garments/entities/garment.entity';
@@ -15,8 +17,6 @@ import { AdminOverviewResponseDto } from '../dto/analytics-response.dto';
 import { UsageAnalyticsService } from './usage-analytics.service';
 
 import type { AnalyticsWindow } from '../queries/analytics-window';
-
-const MILLISECONDS_PER_HOUR = 60 * 60 * 1000;
 
 /**
  * **The A-1 landing view — ARCHITECTURE §5.18.**

@@ -37,7 +37,9 @@ import { type ConsentsService } from '@api/modules/consents/services/consents.se
 import { TryOnResult } from '@api/modules/results/entities/tryon-result.entity';
 import { DeletionLogEntry } from '@api/modules/retention/entities/deletion-log-entry.entity';
 import { DeletionSubject } from '@api/modules/retention/enums/deletion-subject.enum';
+import { RetentionPolicy } from '@api/modules/retention/services/retention-policy.service';
 import { type SettingsService } from '@api/modules/settings';
+import { User } from '@api/modules/users/entities/user.entity';
 import { AUDIT_ACTIONS } from '@api/shared/constants/audit-actions.constant';
 
 import { createInMemoryRepository, createMock } from '../../../../test/fixtures';
@@ -48,7 +50,7 @@ import { PERSON_PHOTO_EVENTS, type PersonPhotoRemovedEvent } from '../events/per
 import { PersonPhotosService } from './person-photos.service';
 
 import type { InMemoryRepository } from '../../../../test/fixtures';
-import type { DataSource, EntityManager } from 'typeorm';
+import type { DataSource, EntityManager, Repository } from 'typeorm';
 
 const OWNER = '11111111-2222-4333-8444-555555555555';
 const OTHER = '99999999-8888-4777-8666-555555555555';
@@ -313,6 +315,14 @@ function build(
   const config = createMock<ConfigService>(['get']);
   config.get.mockReturnValue(30);
 
+  // The real policy, not a stub: `purgeAfter` is §9.3's promise to the consumer, and
+  // the point of the consolidation is that upload and purge now compute it the same way.
+  const users = createMock<Repository<User>>(['findOne']);
+  users.findOne.mockResolvedValue(
+    Object.assign(new User(), { id: OWNER, createdAt: NOW, lastActiveAt: NOW }),
+  );
+  const retention = new RetentionPolicy(config, users);
+
   const events = new EventEmitter2();
   const removed: PersonPhotoRemovedEvent[] = [];
   events.on(PERSON_PHOTO_EVENTS.REMOVED, (event: PersonPhotoRemovedEvent) => {
@@ -326,7 +336,7 @@ function build(
     imageProcessor,
     settings,
     consents,
-    config,
+    retention,
     new MetricsService(),
     events,
   );

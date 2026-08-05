@@ -497,6 +497,45 @@ describe('BudgetService — admin adjustment', () => {
   });
 });
 
+describe('BudgetService — what the guard chain pays for (PRD §9.1)', () => {
+  it('reads usage_ledger exactly once per budget check', async () => {
+    // §8.1 step 3 runs on *every* generation, against a table that grows forever, inside a
+    // p95 budget of 400 ms for a cache hit. `remaining`, `limit` and the monthly grant total
+    // used to be three separate aggregates; they are one grouped scan.
+    const { service, ledger } = build({ rows: ledgerAt(1000, 10) });
+    const scans = jest.mocked(ledger.createQueryBuilder);
+    scans.mockClear();
+
+    await service.assertBudgetAvailable(NOW);
+
+    expect(scans).toHaveBeenCalledTimes(1);
+  });
+
+  it('re-reads only when the lazy grant actually wrote a row', async () => {
+    const { service, ledger } = build({ rows: ledgerAt(1000, 10), monthlyGenerations: 1500 });
+    const scans = jest.mocked(ledger.createQueryBuilder);
+    scans.mockClear();
+
+    await service.getSnapshot(NOW);
+
+    // One to notice the grant is stale, one inside the reconciling transaction, one after.
+    expect(scans.mock.calls.length).toBeGreaterThan(1);
+    expect(ledger.$rows.at(-1)).toMatchObject({ delta: 500 });
+  });
+
+  it('answers the whole A-33 dashboard from the same single scan', async () => {
+    const { service, ledger } = build({ rows: ledgerAt(1000, 10) });
+    const scans = jest.mocked(ledger.createQueryBuilder);
+    scans.mockClear();
+
+    await service.overview(NOW);
+
+    // The splits and the trailing burn are conditional aggregates over the rows the
+    // snapshot already read — not three more queries.
+    expect(scans).toHaveBeenCalledTimes(1);
+  });
+});
+
 /** Runs a manager-taking method through the service's own transactional wrapper. */
 async function inTransaction<T>(
   service: BudgetService,

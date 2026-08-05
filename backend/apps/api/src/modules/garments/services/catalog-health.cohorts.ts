@@ -1,5 +1,9 @@
+import { MILLISECONDS_PER_DAY } from '@library/common';
+
 import { PublishState } from '../enums/publish-state.enum';
 import { TestRenderState } from '../enums/test-render-state.enum';
+
+import { hasApprovedTestRender } from './garment-publish.gate';
 
 import type { Garment } from '../entities/garment.entity';
 
@@ -135,8 +139,13 @@ export interface CatalogHealthCohort {
 /**
  * A-11 / E-10 — no approved test render, so the piece cannot be published at all.
  *
- * Both columns, exactly as `hasApprovedTestRender()` requires them: state alone would
- * let a half-applied migration or a hand-edited row read as healthy.
+ * The predicate is the **negation of `hasApprovedTestRender()` itself**, imported from
+ * the publish gate rather than re-derived. It used to be spelled out here with a comment
+ * saying "exactly as `hasApprovedTestRender()` requires them", which is the shape of a
+ * bug waiting for the gate to gain a third condition: the panel would go on reporting a
+ * garment as healthy that the gate refuses to publish, and an admin would be told the
+ * work list is empty while nothing could be published. The SQL half still spells both
+ * columns out because it has to run in PostgreSQL — the spec pins the two together.
  */
 const missingTestRender: CatalogHealthCohort = {
   id: 'missingTestRender',
@@ -145,8 +154,7 @@ const missingTestRender: CatalogHealthCohort = {
   sql: (alias) =>
     `(${alias}.testRenderState <> '${TestRenderState.APPROVED}' ` +
     `OR ${alias}.testRenderApprovedAt IS NULL)`,
-  matches: (garment) =>
-    garment.testRenderState !== TestRenderState.APPROVED || garment.testRenderApprovedAt === null,
+  matches: (garment) => !hasApprovedTestRender(garment),
 };
 
 /**
@@ -256,5 +264,5 @@ export function catalogHealthCohort(id: CatalogHealthCohortId): CatalogHealthCoh
 
 /** The instant before which a try-on counts as stale, from a reference "now". */
 export function staleTryOnCutoff(now: Date): Date {
-  return new Date(now.getTime() - STALE_TRY_ON_DAYS * 24 * 60 * 60 * 1000);
+  return new Date(now.getTime() - STALE_TRY_ON_DAYS * MILLISECONDS_PER_DAY);
 }

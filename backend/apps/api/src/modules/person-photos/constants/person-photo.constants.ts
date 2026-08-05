@@ -44,5 +44,7 @@ export const BLURRED_THUMBNAIL_WIDTH = 160;
 /** `label` is `varchar(60)` (§4.16). */
 export const MAX_PHOTO_LABEL_LENGTH = 60;
 
-/** Fallback when `PHOTO_RETENTION_DAYS` is absent — §9.3 says 30 days. */
-export const DEFAULT_PHOTO_RETENTION_DAYS = 30;
+// `DEFAULT_PHOTO_RETENTION_DAYS` is deliberately not here. §9.3 retention is one policy,
+// owned by `modules/retention` and read through `RetentionPolicy` — a second declaration
+// of the fallback is a second answer to "how long is a photograph kept", and the two
+// disagreed about `PHOTO_RETENTION_DAYS=0`.

@@ -52,6 +52,7 @@ export {
   type MetricTagKey,
   type MetricTags,
 } from './constants/metrics.constant';
+export { GENERATION_COST, TRAILING_WINDOW_DAYS } from './constants/quota.constant';
 export {
   hasRoleAtLeast,
   isAdmin,
@@ -66,6 +67,7 @@ export {
   UserStatus,
   type UserRole,
 } from './constants/roles.constant';
+export { MILLISECONDS_PER_DAY, MILLISECONDS_PER_HOUR } from './constants/time.constant';
 
 // ── decorators ────────────────────────────────────────────────────────────────
 export {
@@ -203,6 +205,7 @@ export {
 } from './pipes/custom-validation.pipe';
 
 // ── utils ─────────────────────────────────────────────────────────────────────
+export { computeBackoffMs, type BackoffPolicy } from './utils/backoff.util';
 export {
   base64UrlDecode,
   base64UrlEncode,
@@ -277,3 +280,4 @@ export {
   redactObject,
   redactString,
 } from './utils/redact.util';
+export { slugify, suffixedSlug } from './utils/slug.util';

@@ -1,6 +1,8 @@
-import { Injectable, Logger, type MessageEvent } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 
-import { Subject, concat, interval, map, merge, of, takeWhile, type Observable } from 'rxjs';
+import { concat, of, type Observable } from 'rxjs';
+
+import { ReplayableEventBus, type BusMessageEvent } from './replayable-event-bus';
 
 import type {
   TestRenderBatchItemDto,
@@ -49,35 +51,26 @@ const HEARTBEAT_INTERVAL_MS = 15_000;
  */
 const TERMINAL_RETENTION_MS = 30 * 60 * 1000;
 
-interface TerminalRecord {
-  readonly event: MessageEvent;
-  readonly at: number;
-}
-
-function isTerminalEvent(event: MessageEvent): boolean {
+/** §5.11 — the one event that ends a batch's stream. */
+function isTerminalEvent(event: BusMessageEvent<BatchEventName>): boolean {
   return event.type === 'completed';
 }
 
 /**
  * **The A-12 batch SSE bus — ARCHITECTURE §5.11, PRD §8.2, D-16.**
  *
- * The catalogue-side twin of {@link TryOnEventsService}: same shape, same three
- * hazards, different vocabulary. A bulk test render runs at concurrency one (§8.2), so
+ * The catalogue-side twin of `TryOnEventsService`: same mechanism, different vocabulary.
+ * A bulk test render runs at concurrency one (§8.2), so
  * a fifty-item batch is minutes of work and an admin watching it needs to be told what
  * happened rather than asked to poll for it.
  *
- * ### The three things that are easy to get wrong here
+ * ### Where the mechanism lives
  *
- * **The envelope must not wrap it.** `ResponseTransformInterceptor` returns early for
- * any handler carrying Nest's `sse` metadata, which `@Sse()` sets, and for any response
- * that has already committed to `text/event-stream`. The controller therefore adds no
- * `@ResponseMessage()` and returns the raw observable.
- *
- * **A disconnect must not leak.** The stream is `merge(events, heartbeat)` piped
- * through `takeWhile(notTerminal, inclusive)`. When the client goes away Nest
- * unsubscribes, which tears down the heartbeat interval with it — there is no timer
- * owned by this service and no listener to remove by hand. `activeStreamCount` exists
- * so a test can assert exactly that.
+ * The buffering, the heartbeat, the terminal replay and the leak-free teardown are
+ * {@link ReplayableEventBus}'s, shared with `TryOnEventsService`. What this class owns is
+ * the batch *vocabulary* and the opening snapshot below — plus the two values that
+ * genuinely differ and stay parameters: `completed` is the only terminal event here, and
+ * a batch that runs for minutes keeps its terminal frame three times as long as a job.
  *
  * **A finished batch must still answer.** A client that connects after the last item
  * gets `completed` replayed from {@link TERMINAL_RETENTION_MS}-bounded memory rather
@@ -93,20 +86,15 @@ function isTerminalEvent(event: MessageEvent): boolean {
  * `item: null` before anything live arrives.
  */
 @Injectable()
-export class TestRenderBatchEventsService {
-  private readonly logger = new Logger(TestRenderBatchEventsService.name);
-
-  private readonly channels = new Map<string, Subject<MessageEvent>>();
-
-  private readonly terminals = new Map<string, TerminalRecord>();
-
-  /** Live subscriber count, for the leak test. */
-  get activeStreamCount(): number {
-    let total = 0;
-    for (const subject of this.channels.values()) {
-      total += subject.observed ? 1 : 0;
-    }
-    return total;
+export class TestRenderBatchEventsService extends ReplayableEventBus<BatchEventName> {
+  constructor() {
+    super({
+      isTerminal: isTerminalEvent,
+      terminalRetentionMs: TERMINAL_RETENTION_MS,
+      heartbeatIntervalMs: HEARTBEAT_INTERVAL_MS,
+      logger: new Logger(TestRenderBatchEventsService.name),
+      subjectNoun: 'batch',
+    });
   }
 
   /** §5.11 `progress` — the batch summary plus the item that changed (D-16). */
@@ -159,7 +147,10 @@ export class TestRenderBatchEventsService {
    * @param snapshot the batch as it stands right now, emitted first. See the note on
    * the class for why.
    */
-  stream(batchId: string, snapshot: TestRenderBatchResponseDto): Observable<MessageEvent> {
+  stream(
+    batchId: string,
+    snapshot: TestRenderBatchResponseDto,
+  ): Observable<BusMessageEvent<BatchEventName>> {
     const opening = this.openingEvent(batchId, snapshot);
 
     // Already finished: say so and close, rather than hold a connection open for a
@@ -173,29 +164,17 @@ export class TestRenderBatchEventsService {
       return concat(of(opening), of(replay));
     }
 
-    const channel = this.channelFor(batchId);
-    const heartbeat: Observable<MessageEvent> = interval(HEARTBEAT_INTERVAL_MS).pipe(
-      map((): MessageEvent => ({ type: 'heartbeat', data: {} })),
-    );
-
-    return concat(
-      of(opening),
-      merge(channel.asObservable(), heartbeat).pipe(
-        // `inclusive` — emit the terminal event, then complete, which closes the
-        // connection (§5.11: "the stream closes after a terminal event").
-        takeWhile((event) => !isTerminalEvent(event), true),
-      ),
-    );
+    return concat(of(opening), this.liveStream(batchId));
   }
 
-  /** Drops a batch's channel and its replayable terminal. */
-  forget(batchId: string): void {
-    this.channels.get(batchId)?.complete();
-    this.channels.delete(batchId);
-    this.terminals.delete(batchId);
+  protected heartbeat(): BusMessageEvent<BatchEventName> {
+    return { type: 'heartbeat', data: {} };
   }
 
-  private openingEvent(batchId: string, snapshot: TestRenderBatchResponseDto): MessageEvent {
+  private openingEvent(
+    batchId: string,
+    snapshot: TestRenderBatchResponseDto,
+  ): BusMessageEvent<BatchEventName> {
     const data: BatchProgressEventData = {
       batchId,
       total: snapshot.total,
@@ -206,58 +185,5 @@ export class TestRenderBatchEventsService {
       item: null,
     };
     return { type: 'progress', id: batchId, data };
-  }
-
-  private publish(batchId: string, event: MessageEvent): void {
-    if (isTerminalEvent(event)) {
-      this.sweepTerminals();
-      this.terminals.set(batchId, { event, at: Date.now() });
-    }
-
-    const channel = this.channels.get(batchId);
-    if (channel === undefined) {
-      // Nobody is watching — normal for a batch queued from one tab and left to run.
-      // The terminal record above is what a late subscriber will read.
-      return;
-    }
-
-    channel.next(event);
-
-    if (isTerminalEvent(event)) {
-      channel.complete();
-      this.channels.delete(batchId);
-      this.logger.debug('Closed the stream for a finished batch.');
-    }
-  }
-
-  private channelFor(batchId: string): Subject<MessageEvent> {
-    const existing = this.channels.get(batchId);
-    if (existing !== undefined) {
-      return existing;
-    }
-    const created = new Subject<MessageEvent>();
-    this.channels.set(batchId, created);
-    return created;
-  }
-
-  private replayableTerminal(batchId: string): MessageEvent | null {
-    const record = this.terminals.get(batchId);
-    if (record === undefined) {
-      return null;
-    }
-    if (Date.now() - record.at > TERMINAL_RETENTION_MS) {
-      this.terminals.delete(batchId);
-      return null;
-    }
-    return record.event;
-  }
-
-  private sweepTerminals(): void {
-    const cutoff = Date.now() - TERMINAL_RETENTION_MS;
-    for (const [batchId, record] of this.terminals) {
-      if (record.at < cutoff) {
-        this.terminals.delete(batchId);
-      }
-    }
   }
 }

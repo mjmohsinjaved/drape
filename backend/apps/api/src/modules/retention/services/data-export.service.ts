@@ -4,7 +4,13 @@ import { InjectRepository } from '@nestjs/typeorm';
 
 import { Repository } from 'typeorm';
 
-import { ErrorCode, NotFoundException, type ICurrentUser } from '@library/common';
+import {
+  ErrorCode,
+  MILLISECONDS_PER_HOUR,
+  NotFoundException,
+  slugify,
+  type ICurrentUser,
+} from '@library/common';
 import { StorageService } from '@library/storage';
 
 import { AUDIT_RECORD_EVENT, AuditRecordEvent } from '@api/modules/audit/events/audit.event';
@@ -21,7 +27,8 @@ import { DataExportResponseDto, DataExportStatus } from '../dto/data-export-resp
 import { EXPORT_CONTENT_TYPE, ExportKeys, exportIdFromKey } from '../utils/export-key.builder';
 import { buildZipArchive, type ZipEntry } from '../utils/zip-archive';
 
-const MILLISECONDS_PER_HOUR = 60 * 60 * 1000;
+/** How long a filename fragment derived from a garment title may be. */
+const MAX_RENDER_FILENAME_STEM = 60;
 
 /** The manifest written at the root of every archive. */
 interface ExportManifest {
@@ -127,7 +134,7 @@ export class DataExportService {
       }
 
       entries.push({
-        name: `renders/${slugify(render.garmentTitleSnapshot)}-${render.id}.png`,
+        name: `renders/${renderFilenameStem(render.garmentTitleSnapshot)}-${render.id}.png`,
         data,
         modifiedAt: render.createdAt,
       });
@@ -305,12 +312,6 @@ export class DataExportService {
 }
 
 /** A filename-safe fragment of a garment title. Never a path — `zip-archive` re-checks. */
-function slugify(title: string): string {
-  return (
-    title
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '')
-      .slice(0, 60) || 'render'
-  );
+function renderFilenameStem(title: string): string {
+  return slugify(title, MAX_RENDER_FILENAME_STEM) || 'render';
 }

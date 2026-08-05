@@ -3,6 +3,8 @@ import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Cron, Interval } from '@nestjs/schedule';
 
+import { MILLISECONDS_PER_HOUR } from '@library/common';
+
 import { AUDIT_RECORD_EVENT, AuditRecordEvent } from '@api/modules/audit/events/audit.event';
 import { AlertingService } from '@api/modules/notifications/services/alerting.service';
 import { AUDIT_ACTIONS, AUDIT_TARGET_TYPES } from '@api/shared/constants/audit-actions.constant';
@@ -15,8 +17,6 @@ import {
 } from '../constants/retention.constants';
 import { AccountDeletionService, overdueBefore } from '../services/account-deletion.service';
 import { PurgeService } from '../services/purge.service';
-
-const MILLISECONDS_PER_HOUR = 60 * 60 * 1000;
 
 /** Names used in the E-14 alert copy and in the audit rows. */
 export const PURGE_JOB_NAME = 'photo-retention-purge';

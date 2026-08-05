@@ -240,16 +240,22 @@ describe('redactObject', () => {
 });
 
 describe('maskEmail / maskPhone', () => {
-  it('keeps the domain, drops the local part', () => {
-    expect(maskEmail('ayesha@example.com')).toBe('a***@example.com');
+  it('masks the domain as well as the local part', () => {
+    expect(maskEmail('ayesha@example.com')).toBe('a***a@e***e.com');
   });
 
-  it('falls back to the placeholder for a non-address', () => {
-    expect(maskEmail('not-an-address')).toBe('[EMAIL]');
+  it('uses a fixed-width mask, so nothing leaks the length of what it hides', () => {
+    expect(maskEmail('a@example.com')).toBe('***@e***e.com');
+    expect(maskEmail('averyverylongaddress@example.com')).toBe('a***s@e***e.com');
   });
 
-  it('keeps only the last two digits of a phone number', () => {
-    expect(maskPhone('+92 300 1234567')).toBe('***67');
-    expect(maskPhone('12')).toBe('[PHONE]');
+  it('collapses a non-address to the bare mask', () => {
+    expect(maskEmail('not-an-address')).toBe('***');
+  });
+
+  it('keeps a dialling prefix and the last three digits of a phone number', () => {
+    expect(maskPhone('+92 300 1234567')).toBe('+92***567');
+    expect(maskPhone('03001234567')).toBe('03***567');
+    expect(maskPhone('12')).toBe('***');
   });
 });

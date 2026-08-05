@@ -8,6 +8,7 @@ import { DataSource, IsNull, Not, Repository, type EntityManager } from 'typeorm
 import {
   ConflictException,
   ErrorCode,
+  MILLISECONDS_PER_DAY,
   NotFoundException,
   randomToken,
   Role,
@@ -41,8 +42,6 @@ import type {
 
 /** 32 random bytes, base64url. Long enough that guessing is not a strategy. */
 const INVITE_TOKEN_BYTES = 32;
-
-const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
 
 /** The columns a list or lookup reads. `tokenHash` is never among them. */
 const INVITE_COLUMNS = [

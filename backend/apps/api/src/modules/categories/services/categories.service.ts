@@ -8,6 +8,8 @@ import {
   ConflictException,
   ErrorCode,
   NotFoundException,
+  slugify,
+  suffixedSlug,
   ValidationException,
   type ICurrentUser,
 } from '@library/common';
@@ -24,7 +26,7 @@ import {
 import { AdminCategoryResponseDto, PublicCategoryResponseDto } from '../dto/category-response.dto';
 import { Category } from '../entities/category.entity';
 import { toAdminCategory, toPublicCategory, type CategoryNode } from '../mappers/category.mapper';
-import { MAX_CATEGORY_SLUG_LENGTH, slugify, suffixedSlug } from '../utils/slug.util';
+import { MAX_CATEGORY_SLUG_LENGTH } from '../utils/slug.util';
 
 import type { AdminCategoryQueryDto } from '../dto/category-response.dto';
 import type { CreateCategoryDto } from '../dto/create-category.dto';

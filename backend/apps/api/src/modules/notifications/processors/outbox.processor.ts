@@ -4,6 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 
 import { LessThan, LessThanOrEqual, Repository } from 'typeorm';
 
+import { computeBackoffMs } from '@library/common';
 import { NotificationsService, type NotificationLocale, TemplateId } from '@library/notifications';
 
 import { User } from '@api/modules/users/entities/user.entity';
@@ -380,10 +381,19 @@ export class OutboxProcessor implements OnModuleDestroy {
   }
 }
 
-/** `base * 2^(attempts - 1)`, capped. Attempt 1 waits 30 s, attempt 4 waits four minutes. */
+/**
+ * `base * 2^(attempts - 1)`, capped. Attempt 1 waits 30 s, attempt 4 waits four minutes.
+ *
+ * No jitter, deliberately: the drain is a single in-process `@Interval`, so there is no
+ * second caller to collide with, and a deterministic delay is one a test can assert
+ * exactly. The schedule itself is `@library/common`'s — this function only supplies the
+ * outbox's numbers.
+ */
 export function backoffMs(attempts: number): number {
-  const exponent = Math.max(0, attempts - 1);
-  return Math.min(OUTBOX_BACKOFF_BASE_MS * 2 ** exponent, OUTBOX_BACKOFF_MAX_MS);
+  return computeBackoffMs(
+    { backoffBaseMs: OUTBOX_BACKOFF_BASE_MS, backoffMaxMs: OUTBOX_BACKOFF_MAX_MS },
+    attempts,
+  );
 }
 
 function describe(error: unknown): string {

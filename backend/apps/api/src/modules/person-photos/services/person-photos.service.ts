@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 
@@ -24,15 +23,12 @@ import { ConsentsService } from '@api/modules/consents/services/consents.service
 import { DeletionLogEntry } from '@api/modules/retention/entities/deletion-log-entry.entity';
 import { DeletionInitiator } from '@api/modules/retention/enums/deletion-initiator.enum';
 import { DeletionSubject } from '@api/modules/retention/enums/deletion-subject.enum';
+import { RetentionPolicy } from '@api/modules/retention/services/retention-policy.service';
 import { SettingsService } from '@api/modules/settings';
 import { AUDIT_ACTIONS, AUDIT_TARGET_TYPES } from '@api/shared/constants/audit-actions.constant';
 import { SETTINGS_KEYS } from '@api/shared/constants/settings-keys.constant';
 
-import {
-  BLURRED_THUMBNAIL_WIDTH,
-  DEFAULT_PHOTO_RETENTION_DAYS,
-  MAX_PHOTO_BYTES,
-} from '../constants/person-photo.constants';
+import { BLURRED_THUMBNAIL_WIDTH, MAX_PHOTO_BYTES } from '../constants/person-photo.constants';
 import { PersonPhoto } from '../entities/person-photo.entity';
 import { PhotoModerationState } from '../enums/photo-moderation-state.enum';
 import { PERSON_PHOTO_EVENTS, type PersonPhotoRemovedEvent } from '../events/person-photo.events';
@@ -42,8 +38,6 @@ import { validatePersonPhoto } from '../validators/person-photo.validator';
 import type { CreatePersonPhotoDto } from '../dto/create-person-photo.dto';
 import type { PersonPhotoResponseDto } from '../dto/person-photo-response.dto';
 import type { UpdatePersonPhotoDto } from '../dto/update-person-photo.dto';
-
-const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
 
 /** What a storage removal actually accomplished, for the §9.3 deletion log. */
 interface StorageRemoval {
@@ -121,7 +115,11 @@ export class PersonPhotosService {
     private readonly imageProcessor: ImageService,
     private readonly settings: SettingsService,
     private readonly consents: ConsentsService,
-    private readonly config: ConfigService,
+    // §9.3 retention is one policy, owned by `modules/retention`. This service used to
+    // read `PHOTO_RETENTION_DAYS` itself and multiply by it unvalidated, so
+    // `PHOTO_RETENTION_DAYS=0` wrote `purgeAfter = now` on every upload while the purge
+    // cron — which *did* validate — was still keeping photographs for thirty days.
+    private readonly retention: RetentionPolicy,
     private readonly metrics: MetricsService,
     private readonly events: EventEmitter2,
   ) {}
@@ -175,6 +173,10 @@ export class PersonPhotosService {
 
     const blurredThumbnailKey = await this.writeBlurredThumbnail(buffer);
     const activate = dto.activate ?? (await this.countPhotos(actor.id)) === 0;
+    // §4.16 — `COALESCE(users.lastActiveAt, users.createdAt) + PHOTO_RETENTION_DAYS`,
+    // read from her row rather than from `Date.now()`, so the value written here is the
+    // one the nightly recompute derives instead of a row it has to correct.
+    const purgeAfter = await this.retention.purgeDateForUser(actor.id);
 
     const draft = this.photos.create({
       userId: actor.id,
@@ -186,7 +188,7 @@ export class PersonPhotosService {
       isActive: false,
       label: dto.label ?? null,
       uploadedAt: new Date(),
-      purgeAfter: this.purgeAfter(),
+      purgeAfter,
       moderationState: PhotoModerationState.PENDING,
       width: metadata.width,
       height: metadata.height,
@@ -479,12 +481,6 @@ export class PersonPhotosService {
       this.logger.warn('Could not generate a blurred moderation thumbnail for a new photo.');
       return null;
     }
-  }
-
-  /** §9.3 — `users.lastActiveAt + PHOTO_RETENTION_DAYS`. She is active right now. */
-  private purgeAfter(): Date {
-    const days = this.config.get<number>('PHOTO_RETENTION_DAYS') ?? DEFAULT_PHOTO_RETENTION_DAYS;
-    return new Date(Date.now() + days * MILLISECONDS_PER_DAY);
   }
 
   /**

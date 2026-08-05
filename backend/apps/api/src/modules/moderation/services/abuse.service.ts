@@ -7,6 +7,7 @@ import { In, IsNull, MoreThan, Repository } from 'typeorm';
 import {
   ConflictException,
   ErrorCode,
+  MILLISECONDS_PER_HOUR,
   NotFoundException,
   RequestContext,
   UserStatus,
@@ -31,8 +32,6 @@ import {
 } from '../dto/abuse.dto';
 import { IpBlock } from '../entities/ip-block.entity';
 import { toIpBlockResponse } from '../mappers/moderation.mapper';
-
-const MILLISECONDS_PER_HOUR = 60 * 60 * 1000;
 
 /** One row of the grouped `auth_attempts` aggregate. Postgres returns counts as strings. */
 interface AuthFailureRow {

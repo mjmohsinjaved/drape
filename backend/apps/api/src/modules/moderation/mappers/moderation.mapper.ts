@@ -1,3 +1,5 @@
+import { MILLISECONDS_PER_HOUR } from '@library/common';
+
 import type { PhotoModerationState } from '@api/modules/person-photos/enums/photo-moderation-state.enum';
 
 import { IpBlockResponseDto } from '../dto/abuse.dto';
@@ -6,8 +8,6 @@ import { ModerationState } from '../enums/moderation-state.enum';
 
 import type { IpBlock } from '../entities/ip-block.entity';
 import type { ModerationItem } from '../entities/moderation-item.entity';
-
-const MILLISECONDS_PER_HOUR = 60 * 60 * 1000;
 
 /**
  * Signs a **blurred** thumbnail key for one admin — §3.4, A-34.

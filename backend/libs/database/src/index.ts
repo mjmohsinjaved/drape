@@ -42,3 +42,13 @@ export { runInTransaction, type RunInTransactionOptions } from './transaction/tr
 
 // Pagination (§2.8) — the only shape a list endpoint returns.
 export { paginate, type PaginateOptions } from './repository/paginate';
+
+// PostgreSQL error classification. The one place that knows a driver error may be wrapped.
+export {
+  DEADLOCK_DETECTED,
+  isSerializationFailure,
+  isUniqueViolation,
+  SERIALIZATION_FAILURE,
+  sqlStateOf,
+  UNIQUE_VIOLATION,
+} from './errors/postgres-errors';

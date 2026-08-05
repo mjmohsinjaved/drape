@@ -6,9 +6,9 @@ import {
   ConflictException,
   ErrorCode,
   ForbiddenException,
+  isAdmin,
   Locale,
   NotFoundException,
-  Role,
   UserStatus,
   ValidationException,
   type ICurrentUser,
@@ -265,7 +265,7 @@ export class AuthService {
       route: AUTH_ROUTES.LOGIN,
     });
 
-    if (user.role === Role.ADMIN && !twofaRequired) {
+    if (isAdmin(user.role) && !twofaRequired) {
       // S-8 makes 2FA mandatory for admins. The API cannot refuse the session
       // outright — an admin with no second factor yet (the E-4 seed, or an invite
       // accepted moments ago) would have no way to enrol one. `GET /auth/me` reports
@@ -819,7 +819,7 @@ export class AuthService {
     const now = new Date();
     const user = await this.requireUser(caller.id);
 
-    if (user.role === Role.ADMIN) {
+    if (isAdmin(user.role)) {
       throw new ForbiddenException(ErrorCode.TWOFA_REQUIRED_FOR_ROLE);
     }
 

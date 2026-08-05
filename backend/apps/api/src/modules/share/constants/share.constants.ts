@@ -1,3 +1,5 @@
+import { MILLISECONDS_PER_DAY } from '@library/common';
+
 /**
  * The numbers behind a share link — PRD C-33, C-34, ARCHITECTURE §4.21, §4.22.
  */
@@ -10,8 +12,8 @@
  */
 export const SHARE_LINK_TTL_DAYS = 30;
 
-/** Milliseconds in a day, for the expiry arithmetic. */
-export const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
+/** Milliseconds in a day, for the expiry arithmetic — `@library/common`'s, re-exported. */
+export { MILLISECONDS_PER_DAY };
 
 /**
  * 32 bytes — 256 bits — of CSPRNG output per token, base64url encoded to 43

@@ -28,4 +28,4 @@ export {
   type CategoryNode,
   type SignUrl,
 } from './mappers/category.mapper';
-export { MAX_CATEGORY_SLUG_LENGTH, slugify, suffixedSlug } from './utils/slug.util';
+export { MAX_CATEGORY_SLUG_LENGTH } from './utils/slug.util';

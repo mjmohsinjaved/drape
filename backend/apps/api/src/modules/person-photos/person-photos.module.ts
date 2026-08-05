@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { ConsentsModule } from '@api/modules/consents/consents.module';
 import { DeletionLogEntry } from '@api/modules/retention/entities/deletion-log-entry.entity';
+import { RetentionPolicyModule } from '@api/modules/retention/retention-policy.module';
 import { SettingsModule } from '@api/modules/settings';
 
 import { PersonPhotosController } from './controllers/person-photos.controller';
@@ -30,6 +31,13 @@ import { PersonPhotosService } from './services/person-photos.service';
  * | --- | --- |
  * | `ConsentsModule` | `assertConsentIsCurrent()` — C-11's hard gate, before a photo row exists |
  * | `SettingsModule` | `photos.maxPerConsumer` (C-16, default 5) |
+ * | `RetentionPolicyModule` | `purgeAfter` — §9.3's window, read and validated in one place |
+ *
+ * `RetentionPolicyModule` is a deliberately narrow slice of `RetentionModule`, which
+ * exports nothing: it computes a date and cannot delete anything. This module used to
+ * read `PHOTO_RETENTION_DAYS` itself, unvalidated and anchored on `Date.now()`, which
+ * meant a misconfigured `0` wrote every new photograph as already expired while the purge
+ * cron — which validated the same variable — was still honouring thirty days.
  *
  * `StorageModule` and `ConfigModule` are `@Global()` in the composition root, so
  * neither is imported here.
@@ -64,6 +72,7 @@ import { PersonPhotosService } from './services/person-photos.service';
     TypeOrmModule.forFeature([PersonPhoto, DeletionLogEntry]),
     ConsentsModule,
     SettingsModule,
+    RetentionPolicyModule,
   ],
   controllers: [PersonPhotosController],
   providers: [PersonPhotosService],

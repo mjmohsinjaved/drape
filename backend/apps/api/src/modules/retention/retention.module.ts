@@ -18,6 +18,7 @@ import { MeDataController } from './controllers/me-data.controller';
 import { DeletionLogEntry } from './entities/deletion-log-entry.entity';
 import { RenderDeletedListener } from './listeners/render-deleted.listener';
 import { RetentionProcessor } from './processors/retention.processor';
+import { RetentionPolicyModule } from './retention-policy.module';
 import { AccountDeletionService } from './services/account-deletion.service';
 import { DataExportService } from './services/data-export.service';
 import { MyDataService } from './services/my-data.service';
@@ -66,6 +67,10 @@ import { PurgeService } from './services/purge.service';
  * - **`ConsentsModule`** — C-37 asks for "the consent she granted with its date", and
  *   whether it is still current is `PolicyService`'s question, not a comparison this
  *   module should reimplement.
+ * - **`RetentionPolicyModule`** — `PHOTO_RETENTION_DAYS`, read and validated in one
+ *   place. `PurgeService` interpolates the number into SQL and `PersonPhotosService`
+ *   multiplies by it at upload; when they read the environment separately, a nonsense
+ *   value meant two different things and every new photograph was born expired.
  *
  * ### Nothing is exported
  *
@@ -73,6 +78,10 @@ import { PurgeService } from './services/purge.service';
  * (A-20, in `users`, which writes the request row this module executes). A service
  * exported from here would be a second way to delete an account that skipped the
  * `deletion_log` row — and that row is the whole of §9.3's "verifiable".
+ *
+ * `RetentionPolicy` is the exception that proves it, and it is why it lives in a module
+ * of its own rather than being exported from here: it computes a date and can delete
+ * nothing.
  */
 @Module({
   imports: [
@@ -91,6 +100,7 @@ import { PurgeService } from './services/purge.service';
     ]),
     NotificationsModule,
     ConsentsModule,
+    RetentionPolicyModule,
   ],
   controllers: [MeDataController],
   providers: [

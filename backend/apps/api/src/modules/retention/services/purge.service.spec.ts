@@ -22,16 +22,18 @@ import { PersonPhoto } from '@api/modules/person-photos/entities/person-photo.en
 import { PhotoModerationState } from '@api/modules/person-photos/enums/photo-moderation-state.enum';
 import { PERSON_PHOTO_EVENTS } from '@api/modules/person-photos/events/person-photo.events';
 import { TryOnResult } from '@api/modules/results/entities/tryon-result.entity';
+import { type User } from '@api/modules/users/entities/user.entity';
 
 import { createInMemoryRepository, createMock } from '../../../../test/fixtures';
 import { DeletionLogEntry } from '../entities/deletion-log-entry.entity';
 import { DeletionInitiator } from '../enums/deletion-initiator.enum';
 import { DeletionSubject } from '../enums/deletion-subject.enum';
 
-import { PurgeService, purgeDateFor } from './purge.service';
+import { PurgeService } from './purge.service';
+import { purgeDateFor, RetentionPolicy } from './retention-policy.service';
 
 import type { InMemoryRepository } from '../../../../test/fixtures';
-import type { DataSource, EntityManager } from 'typeorm';
+import type { DataSource, EntityManager, Repository } from 'typeorm';
 
 const NOW = new Date('2026-08-15T12:00:00.000Z');
 const LONG_AGO = new Date('2026-06-01T00:00:00.000Z');
@@ -102,11 +104,19 @@ interface Harness {
   readonly storage: jest.Mocked<StorageService>;
   readonly events: EventEmitter2;
   readonly deletedKeys: string[];
+  readonly policy: RetentionPolicy;
 }
 
-function build(rows: { photos?: PersonPhoto[]; renders?: TryOnResult[] } = {}): Harness {
-  const photos = createInMemoryRepository<PersonPhoto>({ rows: rows.photos ?? [] });
-  const renders = createInMemoryRepository<TryOnResult>({ rows: rows.renders ?? [] });
+interface BuildOptions {
+  photos?: PersonPhoto[];
+  renders?: TryOnResult[];
+  /** What `PHOTO_RETENTION_DAYS` reads as. Omit for the §7 default. */
+  retentionDays?: number;
+}
+
+function build(options: BuildOptions = {}): Harness {
+  const photos = createInMemoryRepository<PersonPhoto>({ rows: options.photos ?? [] });
+  const renders = createInMemoryRepository<TryOnResult>({ rows: options.renders ?? [] });
   const deletionLog = createInMemoryRepository<DeletionLogEntry>();
 
   // `recomputePurgeDates` is one correlated UPDATE; the in-memory repository does not
@@ -162,12 +172,16 @@ function build(rows: { photos?: PersonPhoto[]; renders?: TryOnResult[] } = {}): 
   } as unknown as DataSource;
 
   const config = createMock<ConfigService>(['get']);
-  config.get.mockReturnValue(30);
+  config.get.mockReturnValue(options.retentionDays ?? 30);
+
+  const users = createMock<Repository<User>>(['findOne']);
+  users.findOne.mockResolvedValue(null);
+  const policy = new RetentionPolicy(config, users);
 
   const events = new EventEmitter2();
-  const service = new PurgeService(photos, dataSource, storage, config, events);
+  const service = new PurgeService(photos, dataSource, storage, policy, events);
 
-  return { service, photos, renders, deletionLog, storage, events, deletedKeys };
+  return { service, policy, photos, renders, deletionLog, storage, events, deletedKeys };
 }
 
 describe('PurgeService', () => {
@@ -315,16 +329,49 @@ describe('PurgeService', () => {
   });
 
   describe('the retention policy itself', () => {
-    it('is last activity plus the retention window, not upload plus the window (§4.16)', () => {
-      const lastActive = new Date('2026-08-01T00:00:00.000Z');
+    const createdAt = new Date('2026-01-01T00:00:00.000Z');
 
-      expect(purgeDateFor(lastActive, 30)).toEqual(new Date('2026-08-31T00:00:00.000Z'));
+    it('is last activity plus the retention window, not upload plus the window (§4.16)', () => {
+      const lastActiveAt = new Date('2026-08-01T00:00:00.000Z');
+
+      expect(purgeDateFor({ lastActiveAt, createdAt }, 30)).toEqual(
+        new Date('2026-08-31T00:00:00.000Z'),
+      );
       // A consumer who returns every week is never purged from under herself — which is
       // exactly why §4.16 says the cron recomputes this column rather than trusting the
       // value written at upload.
-      expect(purgeDateFor(new Date('2026-08-08T00:00:00.000Z'), 30)).toEqual(
-        new Date('2026-09-07T00:00:00.000Z'),
+      expect(
+        purgeDateFor({ lastActiveAt: new Date('2026-08-08T00:00:00.000Z'), createdAt }, 30),
+      ).toEqual(new Date('2026-09-07T00:00:00.000Z'));
+    });
+
+    it('falls back to createdAt, exactly as the recompute SQL COALESCEs (§4.16)', () => {
+      // Signed up, never returned. The pure twin used to take a bare `Date` and had no
+      // fallback at all, so it disagreed with its own `UPDATE` on precisely the account
+      // where the fallback decides whether the photograph ever expires.
+      expect(purgeDateFor({ lastActiveAt: null, createdAt }, 30)).toEqual(
+        new Date('2026-01-31T00:00:00.000Z'),
       );
+    });
+
+    it('clamps a nonsense PHOTO_RETENTION_DAYS to the §7 default, everywhere at once', () => {
+      // The defect this consolidation closes: `PurgeService` clamped `0` to 30 days while
+      // `PersonPhotosService` multiplied by it and wrote `purgeAfter = now`, so every new
+      // photograph was already due on the next nightly run.
+      for (const configured of [0, -1, 7.5, Number.NaN]) {
+        expect(build({ retentionDays: configured }).policy.retentionDays()).toBe(30);
+      }
+      expect(build({ retentionDays: 14 }).policy.retentionDays()).toBe(14);
+    });
+
+    it('never dates a photograph in the past, however PHOTO_RETENTION_DAYS is set', async () => {
+      const now = new Date('2026-08-15T12:00:00.000Z');
+      const purgeAfter = await build({ retentionDays: 0 }).policy.purgeDateForUser(
+        CONSUMER_ID,
+        now,
+      );
+
+      expect(purgeAfter.getTime()).toBeGreaterThan(now.getTime());
     });
   });
 });

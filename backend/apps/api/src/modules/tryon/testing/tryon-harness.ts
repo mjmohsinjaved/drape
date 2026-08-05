@@ -355,6 +355,8 @@ export interface TryOnTestContext {
   readonly quota: SpyQuotaPort;
   readonly photos: FakePersonPhotoPort;
   readonly storage: FakeStorage;
+  /** The sharp double. A cache hit must never reach it — see PRD §9.1. */
+  readonly images: { toWebpThumbnail: jest.Mock };
   readonly config: TryOnConfig;
   readonly consents: { resolveStatus: jest.Mock };
   readonly settings: { getBoolean: jest.Mock; getString: jest.Mock };
@@ -493,6 +495,7 @@ export async function createTryOnContext(
     quota,
     photos,
     storage,
+    images,
     config,
     consents,
     settings,

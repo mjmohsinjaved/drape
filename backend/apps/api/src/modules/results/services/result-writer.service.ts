@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { Repository } from 'typeorm';
+import { IsNull, Not, Repository } from 'typeorm';
 
 import { ImageService, StorageKeys, StorageService } from '@library/storage';
 
@@ -101,11 +101,43 @@ export class ResultWriterService {
   }
 
   /**
-   * Gives an already-copied render (a §3.7 cache hit) its own thumbnail.
+   * Gives an already-copied render (a §3.7 cache hit) its own thumbnail — **by copying the
+   * thumbnail that already exists for those exact bytes**, not by re-encoding them.
    *
-   * The bytes are read back rather than passed in because the copy happened at the
-   * storage layer, which is the cheap way to duplicate a render — one read to build a
-   * 320px webp is still an order of magnitude less than a generation.
+   * ### Why this is the 400 ms path
+   *
+   * A cache hit is the request PRD §9.1 puts a p95 of 400 ms on. Deriving the thumbnail again
+   * meant reading a full-size render back off disk and running it through sharp — hundreds of
+   * milliseconds of CPU, on the one path with no CPU to spare, to produce a file that is byte
+   * for byte the one already sitting next to the canonical render. `cacheKey` identifies the
+   * generated PNG, so any live `tryon_results` row carrying the same key has a thumbnail built
+   * from the same pixels. A storage-level copy is a file operation.
+   *
+   * ### Why it is a copy and not a shared key
+   *
+   * The same reason the render itself is copied (§3.7): C-31 hard-deletes a result's thumbnail
+   * along with its render, so one consumer's "delete permanently" would otherwise blank a
+   * thumbnail in someone else's history. Soft-deleted rows are excluded by TypeORM's default
+   * predicate, which matters here for exactly that reason — their files are already gone.
+   *
+   * The re-derive stays as the fallback: a genuinely missing source thumbnail (an older row
+   * written before this path existed, a failed thumbnail at generation time, a swept file)
+   * still produces one, just slowly.
+   */
+  async thumbnailForCachedRender(input: {
+    cacheKey: string;
+    storageKey: string;
+  }): Promise<string | null> {
+    const copied = await this.copyExistingThumbnail(input.cacheKey);
+
+    return copied ?? this.thumbnailForStoredRender(input.storageKey);
+  }
+
+  /**
+   * Re-derives a thumbnail from the stored render's bytes.
+   *
+   * The slow path — see {@link thumbnailForCachedRender}, which avoids it whenever an
+   * equivalent thumbnail already exists.
    */
   async thumbnailForStoredRender(storageKey: string): Promise<string | null> {
     try {
@@ -143,6 +175,43 @@ export class ResultWriterService {
     });
 
     return this.results.save(result);
+  }
+
+  /**
+   * The `IDX_tryon_results_cacheKey` lookup plus one storage copy, or `null` when there is
+   * nothing to copy.
+   *
+   * Never throws: every failure here is a reason to fall back to the re-derive, not a reason to
+   * fail a render the consumer can already see.
+   */
+  private async copyExistingThumbnail(cacheKey: string): Promise<string | null> {
+    if (cacheKey === '') {
+      return null;
+    }
+
+    try {
+      const source = await this.results.findOne({
+        where: { cacheKey, thumbnailKey: Not(IsNull()) },
+        select: { id: true, thumbnailKey: true },
+        order: { createdAt: 'ASC' },
+      });
+
+      if (source?.thumbnailKey == null) {
+        return null;
+      }
+
+      const stored = await this.storage.copy(
+        source.thumbnailKey,
+        StorageKeys.thumbnail('render', RENDER_THUMBNAIL_WIDTH),
+      );
+      return stored.key;
+    } catch (error: unknown) {
+      this.logger.debug(
+        `Could not copy an existing thumbnail for a cached render; re-deriving it. ` +
+          `${error instanceof Error ? error.message : String(error)}`,
+      );
+      return null;
+    }
   }
 
   private async writeThumbnail(png: Buffer): Promise<string | null> {

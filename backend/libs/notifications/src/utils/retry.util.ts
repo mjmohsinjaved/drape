@@ -1,3 +1,5 @@
+import { computeBackoffMs, type BackoffPolicy } from '@library/common';
+
 import {
   NotificationTimeoutError,
   toNotificationError,
@@ -10,14 +12,12 @@ import {
  * Every external call in this library goes through `runWithRetry`. Nothing else starts a timer or
  * counts attempts.
  */
-export interface RetryPolicy {
+export interface RetryPolicy extends BackoffPolicy {
   /** Inclusive of the first try. Must be >= 1. */
   readonly maxAttempts: number;
   /** Per-attempt deadline. Must be >= 1. */
   readonly timeoutMs: number;
-  readonly backoffBaseMs: number;
-  readonly backoffMaxMs: number;
-  /** 0–1. Proportion of the delay added at random. */
+  /** 0–1. Proportion of the delay added at random. Required here: provider calls race. */
   readonly jitterRatio: number;
 }
 
@@ -56,20 +56,13 @@ export function sleep(ms: number): Promise<void> {
   });
 }
 
-/** Exponential backoff with jitter, capped. `attempt` is 1-based. */
-export function computeBackoffMs(
-  policy: RetryPolicy,
-  attempt: number,
-  random = Math.random,
-): number {
-  if (policy.backoffBaseMs <= 0) {
-    return 0;
-  }
-  const exponential = policy.backoffBaseMs * 2 ** Math.max(0, attempt - 1);
-  const capped = Math.min(exponential, policy.backoffMaxMs);
-  const jitter = capped * Math.max(0, policy.jitterRatio) * random();
-  return Math.round(capped + jitter);
-}
+/**
+ * Exponential backoff with jitter, capped — `@library/common`'s implementation.
+ *
+ * Re-exported rather than reimplemented: a {@link RetryPolicy} already satisfies
+ * `BackoffPolicy`, and the schedule a retry loop waits on is not a notifications fact.
+ */
+export { computeBackoffMs } from '@library/common';
 
 /**
  * Races `operation` against a deadline.

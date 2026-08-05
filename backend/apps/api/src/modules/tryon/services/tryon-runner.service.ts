@@ -282,7 +282,13 @@ export class TryOnRunnerService {
     const copied = await this.cache.copyForUser(cached, request.userId);
     const render: StoredRender = {
       storageKey: copied.storageKey,
-      thumbnailKey: await this.results.thumbnailForStoredRender(copied.storageKey),
+      // Two file copies, no image encoding. The render *and* its thumbnail already exist for
+      // these exact bytes; re-running sharp over a full-size PNG here was hundreds of
+      // milliseconds of CPU on the one path §9.1 gives a 400 ms p95 to.
+      thumbnailKey: await this.results.thumbnailForCachedRender({
+        cacheKey: cached.cacheKey,
+        storageKey: copied.storageKey,
+      }),
       width: copied.width,
       height: copied.height,
       byteSize: copied.byteSize,

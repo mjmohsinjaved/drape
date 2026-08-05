@@ -34,7 +34,9 @@ export function toAuthUserDto(user: AuthUser): AuthUserDto {
     emailVerifiedAt: toIso(user.emailVerifiedAt),
     phoneVerifiedAt: toIso(user.phoneVerifiedAt),
     // Masked even for the owner: this response is rendered in a browser and copied
-    // into support tickets, and the last four digits are enough to recognise it.
+    // into support tickets, and `+92***567` is enough to recognise a number without
+    // reproducing it. One masking policy for the whole codebase (`@library/common`) —
+    // a response body must not be masked more weakly than a log line (E-12).
     phone: user.phone === null ? null : maskPhone(user.phone),
     locale: user.locale,
     twofaEnabled: user.twofaEnabledAt !== null,

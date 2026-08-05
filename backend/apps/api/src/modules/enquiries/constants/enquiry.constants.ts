@@ -12,8 +12,8 @@
  */
 export const ENQUIRY_STALE_AFTER_HOURS = 24;
 
-/** Milliseconds in an hour. */
-export const MILLISECONDS_PER_HOUR = 60 * 60 * 1000;
+/** Milliseconds in an hour — `@library/common`'s, so there is only ever one. */
+export { MILLISECONDS_PER_HOUR } from '@library/common';
 
 /**
  * How many pieces the A-23 WhatsApp message names.

@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 
 import { Repository, type EntityManager } from 'typeorm';
 
+import { isUniqueViolation } from '@library/database';
 import { TEMPLATE_REGISTRY, type TemplateId, type TemplatePropsMap } from '@library/notifications';
 
 import { Locale } from '@api/modules/users/enums/locale.enum';
@@ -12,7 +13,6 @@ import { NotificationOutboxEntry } from '../entities/notification-outbox-entry.e
 import { NotificationChannel } from '../enums/notification-channel.enum';
 import { NotificationStatus } from '../enums/notification-status.enum';
 import { toStoredPayload } from '../utils/outbox-payload';
-import { isUniqueViolation } from '../utils/postgres-errors';
 
 /**
  * What a feature module hands over instead of calling a provider.
@@ -145,6 +145,10 @@ export class OutboxService {
       const saved = await this.outbox.save(this.outbox.create(this.draft(input)));
       return { id: saved.id, deduplicated: false };
     } catch (error: unknown) {
+      // `UQ_notifications_outbox_dedupe` (§4.32) refusing the second alert *is* the
+      // deduplication — a flag in memory would forget across a restart and a `SELECT`
+      // first would race. Every other failure is a real failure and must surface, or a
+      // dropped connection would be reported as "already enqueued".
       if (!isUniqueViolation(error)) {
         throw error;
       }

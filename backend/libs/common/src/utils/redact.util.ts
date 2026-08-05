@@ -177,19 +177,65 @@ export function redactString(value: string): string {
     : redacted;
 }
 
-/** Replaces the local part of an email with `*`, keeping the domain for triage. */
-export function maskEmail(email: string): string {
-  const at = email.lastIndexOf('@');
-  if (at <= 0) {
-    return EMAIL_PLACEHOLDER;
+/* ---------------------------------------------------------------------------------------------
+ * Recipient masking — the single policy
+ * ------------------------------------------------------------------------------------------ */
+
+/**
+ * The mask written in place of the hidden characters of an address or a number.
+ *
+ * Fixed at three characters whatever it hides, so the mask does not leak the length of
+ * the original. This is the **only** masking policy in the codebase:
+ * `@library/notifications` re-exports these two functions rather than defining its own,
+ * because a masker that differs by import path means the same address is redacted two
+ * different ways depending on which file reached for which barrel (E-12).
+ */
+const MASK = '***';
+
+function maskLabel(value: string): string {
+  if (value.length < 2) {
+    return MASK;
   }
-  return `${email[0]}***@${email.slice(at + 1)}`;
+  return `${value[0]}${MASK}${value[value.length - 1]}`;
 }
 
-/** Keeps only the last two digits of a phone number. */
-export function maskPhone(phone: string): string {
-  const digits = phone.replace(/\D/g, '');
-  return digits.length < 4 ? PHONE_PLACEHOLDER : `***${digits.slice(-2)}`;
+/**
+ * `alice@example.com` → `a***e@e***e.com`. Anything unparseable collapses to `***`.
+ *
+ * The **domain is masked too**. A domain left in the clear is an organisation named in a
+ * log line, and on a small tenant it narrows the account to a handful of people; the TLD
+ * survives because it carries no identity and keeps the line readable during triage.
+ */
+export function maskEmail(value: string): string {
+  const trimmed = value.trim();
+  const at = trimmed.lastIndexOf('@');
+  if (at <= 0 || at === trimmed.length - 1) {
+    return MASK;
+  }
+
+  const local = trimmed.slice(0, at);
+  const domain = trimmed.slice(at + 1);
+  const labels = domain.split('.');
+  if (labels.length < 2 || labels.some((label) => label.length === 0)) {
+    return `${maskLabel(local)}@${MASK}`;
+  }
+
+  const tld = labels[labels.length - 1];
+  const masked = labels.slice(0, -1).map(maskLabel).join('.');
+  return `${maskLabel(local)}@${masked}.${tld}`;
+}
+
+/** `+923001234567` → `+92***567`. Anything with too few digits collapses to `***`. */
+export function maskPhone(value: string): string {
+  const trimmed = value.trim();
+  const hasPlus = trimmed.startsWith('+');
+  const digits = trimmed.replace(/\D/g, '');
+  if (digits.length < 6) {
+    return MASK;
+  }
+  const head = digits.slice(0, 2);
+  const tail = digits.slice(-3);
+  return `${hasPlus ? '+' : ''}${head}${MASK}${tail}`;
 }
 
 /**

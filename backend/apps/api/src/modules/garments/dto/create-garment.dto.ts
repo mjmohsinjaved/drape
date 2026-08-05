@@ -23,7 +23,21 @@ import { EmbellishmentWeight } from '../enums/embellishment-weight.enum';
 import { GarmentMode } from '../enums/garment-mode.enum';
 import { MAX_GARMENT_SLUG_LENGTH } from '../utils/slug.util';
 
-/** `decimal(18,2)` — the schema ceiling, not a business one (§2.1). */
+/**
+ * The largest price a garment may carry — PKR 9,999,999,999.99.
+ *
+ * **Not** the `decimal(18,2)` schema ceiling, which this constant used to claim it was:
+ * that is `MAX_MONEY` in `@library/common` (9,999,999,999,999,999.99), six orders of
+ * magnitude larger. The two disagreed and only one of them could be describing the
+ * column, so the false claim is gone and the number stays — the tighter bound is the
+ * safe one, and it is deliberate. Ten billion rupees is already a thousand times the
+ * most expensive piece a bridal house will ever list, so anything above it is a typo or
+ * a broken import, and validation should say so at the edge rather than let a
+ * mis-keyed price reach a catalogue page.
+ *
+ * `isValidMoney()` in `@library/common` is still what decides whether a value *fits the
+ * column*; this is the narrower question of whether it is a plausible price.
+ */
 export const MAX_PRICE = 9_999_999_999.99;
 
 /** Bounds on the free-form text arrays, so one payload cannot carry a novel. */

@@ -16,7 +16,9 @@ import {
   crossedThreshold,
   deriveBudgetBalance,
   deriveQuotaBalance,
+  projectBudgetExhaustion,
   sumDeltas,
+  trailingDailyRate,
   type LedgerRow,
 } from './ledger-math';
 
@@ -229,5 +231,69 @@ describe('crossedThreshold — E-14 fires on the crossing, not the state', () =>
 
   it('is false for a threshold of zero — an unconfigured limit alerts on nothing', () => {
     expect(crossedThreshold(0, 1, 0)).toBe(false);
+  });
+});
+
+/* -------------------------------------------------------------------------------------------------
+ * A-33 — the burn rate and its projection
+ *
+ * These two used to exist twice: once in `modules/analytics` and once as a private helper on
+ * `BudgetService`. A chart and an alert that disagree about when the money runs out is a bug
+ * nobody notices until the month it matters, so there is now one implementation — here, next to
+ * `burnPercent`, because the projection is a property of the budget, not of the view that draws it.
+ * ---------------------------------------------------------------------------------------------- */
+
+describe('trailingDailyRate — A-33', () => {
+  it('divides the trailing spend by the window, to one decimal place', () => {
+    expect(trailingDailyRate(1_400)).toBe(200);
+    expect(trailingDailyRate(35)).toBe(5);
+    expect(trailingDailyRate(77)).toBe(11);
+  });
+
+  it('is zero for no spend and for a non-positive window', () => {
+    expect(trailingDailyRate(0)).toBe(0);
+    expect(trailingDailyRate(700, 0)).toBe(0);
+  });
+
+  it('never reports a negative rate — a ledger cannot burn backwards', () => {
+    expect(trailingDailyRate(-70)).toBe(0);
+  });
+});
+
+describe('projectBudgetExhaustion — A-33', () => {
+  const NOW = new Date('2026-08-15T12:00:00.000Z');
+  const RESETS_AT = new Date('2026-09-01T00:00:00.000Z');
+
+  it('projects a date when the rate reaches the ceiling inside the period', () => {
+    const projection = projectBudgetExhaustion(
+      { remaining: 40, trailingDailyRate: 10, resetsAt: RESETS_AT },
+      NOW,
+    );
+
+    expect(projection.daysRemaining).toBe(4);
+    expect(projection.projectedExhaustionAt).toEqual(
+      new Date(NOW.getTime() + 4 * 24 * 60 * 60 * 1000),
+    );
+  });
+
+  it('answers null at a zero rate — "at this rate, never" is the honest answer', () => {
+    expect(
+      projectBudgetExhaustion({ remaining: 2_000, trailingDailyRate: 0, resetsAt: RESETS_AT }, NOW),
+    ).toEqual({ trailingDailyRate: 0, projectedExhaustionAt: null, daysRemaining: null });
+  });
+
+  it('answers null when the budget is already spent', () => {
+    expect(
+      projectBudgetExhaustion({ remaining: 0, trailingDailyRate: 180, resetsAt: RESETS_AT }, NOW)
+        .projectedExhaustionAt,
+    ).toBeNull();
+  });
+
+  it('answers null past the period boundary — the grant lands first', () => {
+    // 923 remaining at 11/day is 84 days: the calendar prevents the event.
+    expect(
+      projectBudgetExhaustion({ remaining: 923, trailingDailyRate: 11, resetsAt: RESETS_AT }, NOW)
+        .projectedExhaustionAt,
+    ).toBeNull();
   });
 });

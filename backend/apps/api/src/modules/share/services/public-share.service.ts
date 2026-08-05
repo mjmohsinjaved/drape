@@ -10,7 +10,7 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@library/common';
-import { runInTransaction } from '@library/database';
+import { isUniqueViolation, runInTransaction } from '@library/database';
 import { StorageService } from '@library/storage';
 
 import { SettingsService } from '@api/modules/settings';
@@ -23,7 +23,6 @@ import { Vote } from '../entities/vote.entity';
 import { SHARE_COMMENT_LEFT_EVENT, ShareCommentLeftEvent } from '../events/share.events';
 import { toSharedGarment, toVoteResponse } from '../mappers/share.mapper';
 import { publicShareScope, SHARED_ITEM_ALIAS } from '../queries/public-share.scope';
-import { isUniqueViolation } from '../utils/postgres-errors';
 
 import { ShareTokenService } from './share-token.service';
 

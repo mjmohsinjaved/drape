@@ -8,6 +8,7 @@ import { DataSource, IsNull, Repository, type EntityManager } from 'typeorm';
 import {
   ConflictException,
   ErrorCode,
+  MILLISECONDS_PER_HOUR,
   NotFoundException,
   sha256Hex,
   UserStatus,
@@ -37,8 +38,6 @@ import { DeletionSubject } from '../enums/deletion-subject.enum';
 import { ExportPrefixes } from '../utils/export-key.builder';
 
 import type { DeletionReceiptResponseDto } from '../dto/deletion-receipt.dto';
-
-const MILLISECONDS_PER_HOUR = 60 * 60 * 1000;
 
 /**
  * `verification_hash` at request time — §4.31.
