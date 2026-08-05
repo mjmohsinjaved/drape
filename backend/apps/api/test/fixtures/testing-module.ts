@@ -2,7 +2,11 @@ import type { InjectionToken, ModuleMetadata, Provider, Type } from '@nestjs/com
 import { Test, type TestingModule } from '@nestjs/testing';
 import { getDataSourceToken, getEntityManagerToken, getRepositoryToken } from '@nestjs/typeorm';
 
-import { createInMemoryRepository, type InMemoryRepository } from './in-memory-repository';
+import {
+  createInMemoryRepository,
+  type InMemoryRepository,
+  type UniqueIndexSpec,
+} from './in-memory-repository';
 
 import type { EntityManager, ObjectLiteral, QueryRunner } from 'typeorm';
 
@@ -36,6 +40,14 @@ export interface RepositoryFixtureSpec {
   readonly entity: EntityClass;
   /** Rows present before the test runs. */
   readonly rows?: readonly (ObjectLiteral & { id: string })[];
+  /**
+   * Partial unique indexes to enforce, as the migration declares them.
+   *
+   * Declare one whenever the code under test *depends* on the database refusing a
+   * duplicate — the §8.4 idempotency path catches `23505` and turns it into an answer, and
+   * without the index that whole branch is unreachable from a test.
+   */
+  readonly uniqueIndexes?: readonly UniqueIndexSpec<ObjectLiteral & { id: string }>[];
 }
 
 export interface TestingModuleOptions {
@@ -141,7 +153,10 @@ export async function createTestingModule(
 
   const repositories = new Map<EntityClass, InMemoryRepository<ObjectLiteral & { id: string }>>();
   for (const spec of specs) {
-    repositories.set(spec.entity, createInMemoryRepository({ rows: spec.rows }));
+    repositories.set(
+      spec.entity,
+      createInMemoryRepository({ rows: spec.rows, uniqueIndexes: spec.uniqueIndexes }),
+    );
   }
 
   const lookup = (entity: EntityClass): InMemoryRepository<ObjectLiteral & { id: string }> => {

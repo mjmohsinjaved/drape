@@ -10,7 +10,6 @@ import { JobOrigin } from '../enums/job-origin.enum';
 import { JobStatus } from '../enums/job-status.enum';
 
 import { TestRenderService } from './test-render.service';
-import { TryOnRunnerService } from './tryon-runner.service';
 
 /** How often the queue is checked. Well under a generation, so a batch never idles. */
 const TICK_MS = 2_000;
@@ -51,7 +50,6 @@ export class TestRenderProcessor {
     @InjectRepository(TryOnJob)
     private readonly jobs: Repository<TryOnJob>,
     private readonly testRenders: TestRenderService,
-    private readonly runner: TryOnRunnerService,
     private readonly config: TryOnConfig,
   ) {}
 
@@ -77,46 +75,65 @@ export class TestRenderProcessor {
       return;
     }
 
-    const job = await this.jobs.findOne({
-      where: {
-        status: JobStatus.QUEUED,
-        origin: JobOrigin.TEST_RENDER,
-        // Only batch work is drained here; a single interactive test render runs
-        // inline on the admin's request and never reaches the queue.
-        batchId: Not(IsNull()),
-      },
-      order: { createdAt: 'ASC' },
-    });
-
-    if (job === null || job.garmentId === null) {
-      return;
-    }
-
+    // **Reserved before the first `await`, not after the read.**
+    //
+    // `active` used to be incremented once the `findOne` had resolved, so two ticks could
+    // both pass the comparison above, both await the same read, and both come back holding
+    // the same `QUEUED` row. The §8.2 ceiling of one was enforced against a counter that
+    // was not yet counting. Claiming the slot synchronously is what makes the comparison
+    // mean something — there is no suspension point between reading `active` and moving it.
     this.active += 1;
-    const batchId = job.batchId;
 
     try {
-      const request = await this.testRenders.buildRequest(
-        job.garmentId,
-        job.userId,
-        job.referenceModelId ?? undefined,
-        { batchId: batchId ?? undefined, existingJobId: job.id },
-      );
+      const job = await this.jobs.findOne({
+        where: {
+          status: JobStatus.QUEUED,
+          origin: JobOrigin.TEST_RENDER,
+          // Only batch work is drained here; a single interactive test render runs
+          // inline on the admin's request and never reaches the queue.
+          batchId: Not(IsNull()),
+        },
+        order: { createdAt: 'ASC' },
+      });
 
-      await this.runner.run(request);
+      if (job === null || job.garmentId === null) {
+        return;
+      }
+
+      await this.runOne(job);
+    } finally {
+      this.active -= 1;
+    }
+  }
+
+  /**
+   * Runs one claimed batch item and announces it, whatever happened.
+   *
+   * `TestRenderService.runQueued()` rather than `TryOnRunnerService.run()`: the runner
+   * produces and charges for a render, and `testRenderId` / `testRenderState = PENDING`
+   * are written by the service and nowhere else. Calling the runner directly is what left
+   * a fifty-garment batch fully charged and entirely unpublishable.
+   *
+   * The *row* claim is the runner's `adoptJob`, which now re-asserts `status = QUEUED` and
+   * checks `affected`. The counter above bounds concurrency inside this process; the
+   * conditional update is what makes a lost race harmless rather than expensive.
+   */
+  private async runOne(job: TryOnJob): Promise<void> {
+    try {
+      await this.testRenders.runQueued(job);
     } catch (error: unknown) {
       // The runner has already marked the row `FAILED` with its §8.3 code and, where
-      // the taxonomy asks for it, flagged the garment. There is nobody to return an
-      // exception to — the admin reads the outcome from the batch endpoint — so it is
-      // logged and the next tick moves on. Swallowing here is what stops one bad
-      // garment from stalling a fifty-item batch.
+      // the taxonomy asks for it, flagged the garment — or refused to adopt a row
+      // somebody else had already claimed, which is equally not this tick's problem.
+      // There is nobody to return an exception to (the admin reads the outcome from the
+      // batch endpoint), so it is logged and the next tick moves on. Swallowing here is
+      // what stops one bad garment from stalling a fifty-item batch.
       this.logger.warn(
         `A batch test render failed and the batch continues. ` +
           `${error instanceof Error ? error.message : String(error)}`,
       );
     } finally {
-      this.active -= 1;
-      await this.announce(batchId, job.id);
+      await this.announce(job.batchId, job.id);
     }
   }
 

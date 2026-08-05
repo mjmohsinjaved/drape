@@ -72,7 +72,11 @@ export class EnquiryNotificationsListener {
   ) {}
 
   /** A-25 — tell the studio, and confirm to her (C-35). */
-  @OnEvent(ENQUIRY_CREATED_EVENT)
+  // `{ async: true }` — the handler is `async`, and without the flag `emit()` never awaits
+  // the promise it returns. Under `ignoreErrors: false` an unawaited rejection is not
+  // reported *and* is not retried: an A-25 studio notification is silently dropped and the
+  // consumer's C-35 confirmation with it. See `AuditListener`, which has always had it.
+  @OnEvent(ENQUIRY_CREATED_EVENT, { async: true })
   async onCreated(event: EnquiryCreatedEvent): Promise<void> {
     const { input } = event;
 
@@ -85,7 +89,7 @@ export class EnquiryNotificationsListener {
   }
 
   /** A-22 / C-36 — tell her where things stand. */
-  @OnEvent(ENQUIRY_STATUS_CHANGED_EVENT)
+  @OnEvent(ENQUIRY_STATUS_CHANGED_EVENT, { async: true })
   async onStatusChanged(event: EnquiryStatusChangedEvent): Promise<void> {
     const { input } = event;
 

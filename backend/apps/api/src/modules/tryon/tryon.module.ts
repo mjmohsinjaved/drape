@@ -3,11 +3,13 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { ConsentsModule } from '@api/modules/consents';
 import { GarmentsModule } from '@api/modules/garments/garments.module';
+import { ModerationModule } from '@api/modules/moderation';
 import { PersonPhotosModule } from '@api/modules/person-photos';
 import { QuotaModule } from '@api/modules/quota';
 import { ResultsModule } from '@api/modules/results';
 import { SettingsModule } from '@api/modules/settings';
 
+import { ModerationQueueAdapter } from './adapters/moderation.adapter';
 import { PersonPhotoServiceAdapter } from './adapters/person-photo.adapter';
 import { QuotaSpendAdapter } from './adapters/quota-spend.adapter';
 import { TryOnConfig } from './config/tryon.config';
@@ -17,6 +19,7 @@ import { ReferenceModel } from './entities/reference-model.entity';
 import { TryOnCache } from './entities/tryon-cache.entity';
 import { TryOnJob } from './entities/tryon-job.entity';
 import { PersonPhotoRemovedListener } from './listeners/person-photo-removed.listener';
+import { MODERATION_PORT } from './ports/moderation.port';
 import { PERSON_PHOTO_PORT } from './ports/person-photo.port';
 import { QUOTA_PORT } from './ports/quota.port';
 import { tryOnProviderFactory } from './providers/tryon-provider.factory';
@@ -85,6 +88,7 @@ import { TryOnService } from './services/tryon.service';
     SettingsModule,
     PersonPhotosModule,
     QuotaModule,
+    ModerationModule,
   ],
   controllers: [TryOnController, AdminTryOnController],
   providers: [
@@ -92,6 +96,7 @@ import { TryOnService } from './services/tryon.service';
     tryOnProviderFactory,
     { provide: PERSON_PHOTO_PORT, useClass: PersonPhotoServiceAdapter },
     { provide: QUOTA_PORT, useClass: QuotaSpendAdapter },
+    { provide: MODERATION_PORT, useClass: ModerationQueueAdapter },
     // C-16. Registered here because this module owns `tryon_cache` (§4.33); it holds
     // the same `TryOnCacheService` instance the generation path uses, so a retirement
     // cannot run against a second, unrelated cache.

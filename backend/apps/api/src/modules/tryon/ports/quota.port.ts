@@ -51,6 +51,15 @@ export interface ChargeGenerationInput {
   readonly actorId?: string | null;
 }
 
+/** A charge that must not stand, because the generation it paid for did not survive. */
+export interface ReleaseGenerationInput {
+  readonly jobId: string;
+  /** The consumer whose quota was charged. `null` for a test render. */
+  readonly userId: string | null;
+  /** Written into the compensating rows' note, so the A-18 ledger view reads. */
+  readonly reason?: string;
+}
+
 /**
  * The seam between `tryon` and `quota` — guard-chain steps 6 and 8, and the one spend.
  *
@@ -102,4 +111,20 @@ export interface QuotaPort {
    * second call for the same `jobId` cannot double-charge, whatever races to get here.
    */
   chargeSuccess(input: ChargeGenerationInput): Promise<void>;
+
+  /**
+   * Reverses a charge whose generation did not survive to be delivered.
+   *
+   * **A no-op on every ordinary failure**, because §8.4 charges only after the bytes
+   * exist and nothing before that point has written a ledger row. It exists for the one
+   * window that is genuinely reachable: the charge committed and a *later* step — writing
+   * the `tryon_results` row, remembering the cache entry — then failed. Without it the
+   * consumer keeps a decrement for a render that no longer exists, which is the mirror
+   * image of the bug §8.3 is written against.
+   *
+   * Idempotent: calling it twice for the same job reverses once. Never throws — it runs
+   * while something has already gone wrong, and a failing refund must not replace the real
+   * error with its own.
+   */
+  releaseOnFailure(input: ReleaseGenerationInput): Promise<void>;
 }

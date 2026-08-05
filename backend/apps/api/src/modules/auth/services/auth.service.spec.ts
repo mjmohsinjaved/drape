@@ -331,6 +331,26 @@ describe('AuthService', () => {
       });
     });
 
+    /**
+     * **C-38 — a deletion-pending account cannot be signed back into (H7).**
+     *
+     * `login` checked only the *status*, and status is a column an admin can move: suspend
+     * takes a `DEACTIVATED` deletion-pending account to `SUSPENDED`, and unsuspend then
+     * sets it `ACTIVE`. `AdminConsumersService` now refuses both halves of that, and this is
+     * the second lock — `deletionRequestedAt` is the durable fact, and `changePassword` and
+     * `setupTwoFactor` were already checking it while the front door was not.
+     */
+    it('refuses an account whose deletion has been requested, whatever its status', async () => {
+      const user = await seedUser({
+        status: UserStatus.ACTIVE,
+        deletionRequestedAt: new Date('2026-08-01T00:00:00.000Z'),
+      });
+
+      await expect(suite.service.login(user.email, PASSWORD, FACTS)).rejects.toMatchObject({
+        errorCode: ErrorCode.DELETION_IN_PROGRESS,
+      });
+    });
+
     it('holds an account with 2FA in twofaPending and returns nothing about it (S-8)', async () => {
       const user = await seedUser({ twofaEnabledAt: FIXED_NOW, twofaSecret: 'v1.a.b.c' });
 

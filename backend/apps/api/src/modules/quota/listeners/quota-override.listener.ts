@@ -59,7 +59,10 @@ export class QuotaOverrideListener {
     private readonly events: EventEmitter2,
   ) {}
 
-  @OnEvent(USER_EVENTS.QUOTA_OVERRIDE_CHANGED)
+  // `{ async: true }` so `emit()` awaits this. Without it a transient failure while raising
+  // the entitlement is an unawaited rejection: the A-18 screen has already told the admin
+  // the override was applied, and the consumer's quota quietly never moves.
+  @OnEvent(USER_EVENTS.QUOTA_OVERRIDE_CHANGED, { async: true })
   async onQuotaOverrideChanged(event: UserQuotaOverrideChangedEvent): Promise<void> {
     const period = this.quota.periodFor(event.occurredAt);
 

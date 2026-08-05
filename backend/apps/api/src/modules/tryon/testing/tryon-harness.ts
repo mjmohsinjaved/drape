@@ -29,6 +29,11 @@ import { ReferenceModel } from '../entities/reference-model.entity';
 import { TryOnCache } from '../entities/tryon-cache.entity';
 import { TryOnJob } from '../entities/tryon-job.entity';
 import {
+  MODERATION_PORT,
+  type ModerationPort,
+  type QueueModerationInput,
+} from '../ports/moderation.port';
+import {
   PERSON_PHOTO_PORT,
   type PersonPhotoPort,
   type PersonPhotoRef,
@@ -39,6 +44,7 @@ import {
   type ChargeGenerationInput,
   type QuotaPort,
   type QuotaView,
+  type ReleaseGenerationInput,
 } from '../ports/quota.port';
 import { MockTryOnProvider } from '../providers/mock-tryon.provider';
 import { TRYON_PROVIDER } from '../providers/tryon-provider.interface';
@@ -170,6 +176,16 @@ export class FakeStorage {
 export class SpyQuotaPort implements QuotaPort {
   readonly charges: ChargeGenerationInput[] = [];
 
+  /**
+   * Every reversal, in order.
+   *
+   * `releaseOnFailure` was declared on `GenerationSpendService` and called from nowhere in
+   * production code, so "the compensating path exists" was true of the class and false of
+   * the system. It is now called from `TryOnRunnerService.fail()`, and this array is how a
+   * test proves a charge that should not stand was actually taken back.
+   */
+  readonly releases: ReleaseGenerationInput[] = [];
+
   quotaRemaining = 10;
 
   budgetUsed = 0;
@@ -200,10 +216,34 @@ export class SpyQuotaPort implements QuotaPort {
 
   budgetSnapshot = jest.fn((): Promise<BudgetView> => Promise.resolve(this.snapshot()));
 
+  /**
+   * Set to have the charge refuse, exactly as the real ledger does when two generations
+   * race at `remaining = 1` and the loser's `SERIALIZABLE` retry re-derives zero.
+   */
+  chargeFailsWith: Error | null = null;
+
   chargeSuccess = jest.fn((input: ChargeGenerationInput): Promise<void> => {
+    if (this.chargeFailsWith !== null) {
+      return Promise.reject(this.chargeFailsWith);
+    }
     this.charges.push(input);
     this.quotaRemaining -= input.origin === 'CONSUMER' ? 1 : 0;
     this.budgetUsed += 1;
+    return Promise.resolve();
+  });
+
+  releaseOnFailure = jest.fn((input: ReleaseGenerationInput): Promise<void> => {
+    this.releases.push(input);
+
+    // Idempotent, like the ledgers it stands for: a second release of the same job
+    // reverses nothing. Without this the double would hide exactly the defect that made
+    // `refundWithin` unsafe to call twice.
+    const index = this.charges.findIndex((charge) => charge.jobId === input.jobId);
+    if (index !== -1) {
+      const [charge] = this.charges.splice(index, 1);
+      this.quotaRemaining += charge?.origin === 'CONSUMER' ? 1 : 0;
+      this.budgetUsed -= 1;
+    }
     return Promise.resolve();
   });
 
@@ -227,6 +267,23 @@ export class SpyQuotaPort implements QuotaPort {
       resetsAt: new Date('2026-09-01T00:00:00.000Z'),
     };
   }
+}
+
+/**
+ * The moderation port, as a spy.
+ *
+ * §8.3 marks `MODERATION_REJECTED` with `queueModeration: true`, and until the runner
+ * actually read the flag the row was decoration: no A-34 item, no block on the photograph,
+ * and the same image failing upstream at cost on every retry. `queued` is how a test proves
+ * the rejection reached the queue.
+ */
+export class SpyModerationPort implements ModerationPort {
+  readonly queued: QueueModerationInput[] = [];
+
+  queueForReview = jest.fn((input: QueueModerationInput): Promise<void> => {
+    this.queued.push(input);
+    return Promise.resolve();
+  });
 }
 
 /** The person-photo port, over a single in-memory photo. */
@@ -354,6 +411,8 @@ export interface TryOnTestContext {
   readonly provider: MockTryOnProvider;
   readonly quota: SpyQuotaPort;
   readonly photos: FakePersonPhotoPort;
+  /** The A-34 intake spy — §8.3's `queueModeration` behaviour, observed. */
+  readonly moderation: SpyModerationPort;
   readonly storage: FakeStorage;
   /** The sharp double. A cache hit must never reach it — see PRD §9.1. */
   readonly images: { toWebpThumbnail: jest.Mock };
@@ -411,6 +470,7 @@ export async function createTryOnContext(
   const storage = new FakeStorage();
   const quota = new SpyQuotaPort();
   const photos = new FakePersonPhotoPort();
+  const moderation = new SpyModerationPort();
   const config = new TryOnConfig(fakeConfigService({ ...DEFAULT_ENV, ...options.env }));
   const provider = new MockTryOnProvider(config);
 
@@ -453,7 +513,19 @@ export async function createTryOnContext(
       MetricsService,
     ],
     repositories: [
-      { entity: TryOnJob },
+      {
+        entity: TryOnJob,
+        // `UQ_tryon_jobs_idem UNIQUE ("userId","idempotencyKey") WHERE "deletedAt" IS NULL`.
+        //
+        // §8.4 calls this index "the mechanism, not a safety net", and every branch of
+        // `openJob`'s duplicate handling hangs off the `23505` it raises. Without it
+        // modelled here, a spec could assert anything at all about idempotency and pass:
+        // the second insert simply succeeded and there was no duplicate to handle.
+        //
+        // The `WHERE "deletedAt" IS NULL` half matters just as much — soft-deleting a
+        // spent job is how a FAILED or CANCELLED key is released for a retry.
+        uniqueIndexes: [{ name: 'UQ_tryon_jobs_idem', columns: ['userId', 'idempotencyKey'] }],
+      },
       { entity: TryOnCache },
       { entity: TryOnResult },
       { entity: ReferenceModel, rows: [buildReferenceModel()] },
@@ -465,6 +537,7 @@ export async function createTryOnContext(
       { token: TRYON_PROVIDER, value: provider },
       { token: QUOTA_PORT, value: quota },
       { token: PERSON_PHOTO_PORT, value: photos },
+      { token: MODERATION_PORT, value: moderation },
       { token: StorageService, value: storage },
       { token: ImageService, value: images },
       { token: ConsentsService, value: consents },
@@ -494,6 +567,7 @@ export async function createTryOnContext(
     provider,
     quota,
     photos,
+    moderation,
     storage,
     images,
     config,

@@ -60,9 +60,10 @@ export const apiDataSourceOptions: DataSourceOptions = {
 };
 
 /**
- * Default export is what `typeorm -d <file>` picks up. Also exported by name so the
- * `db-check` / `db-reset` scripts can reuse the identical configuration.
+ * The **only** `DataSource` this file may export. `typeorm -d <file>` scans every export and
+ * throws "must contain only one export of DataSource instance" when it finds two — and a
+ * named export plus `export default` of the same object still counts as two. So there is no
+ * default export here; the CLI resolves this one by name, and the `db-check` / `db-reset`
+ * scripts reuse `apiDataSourceOptions` above.
  */
 export const apiDataSource = new DataSource(apiDataSourceOptions);
-
-export default apiDataSource;

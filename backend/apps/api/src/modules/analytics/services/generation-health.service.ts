@@ -27,6 +27,12 @@ import type { AnalyticsWindow } from '../queries/analytics-window';
 
 const MILLISECONDS_PER_MINUTE = 60_000;
 
+/** One aggregate column of the latency histogram: the SQL expression and the alias it reads back as. */
+interface BucketSelect {
+  readonly expression: string;
+  readonly alias: string;
+}
+
 /** Raw counts for one window. Split out so the E-14 sweep and the E-13 screen share it. */
 export interface GenerationTotals {
   readonly total: number;
@@ -229,22 +235,30 @@ export class GenerationHealthService implements OnModuleDestroy {
    * column. A `FILTER` per bucket is one pass over the same window.
    */
   private async latencyBuckets(window: AnalyticsWindow): Promise<LatencyBucketDto[]> {
-    const builder = this.jobs
-      .createQueryBuilder('j')
+    // `createQueryBuilder('j')` seeds the select list with **every column of the entity**,
+    // and `addSelect` appends to it rather than replacing it. Building this query out of
+    // `addSelect` alone therefore emitted
+    // `SELECT "j"."id", …, COUNT(*) FILTER (…) FROM tryon_jobs "j"` with no `GROUP BY`,
+    // which PostgreSQL refuses with `42803: column "j.id" must appear in the GROUP BY
+    // clause`. Since `health()` awaits this inside a `Promise.all`, that was a guaranteed
+    // 500 on the whole E-13 screen on the first admin request.
+    //
+    // The fix is to open with `select()`, which *replaces* the seed — the same shape
+    // `percentiles()` and `CatalogHealthService.counts()` already use. The bucket list is
+    // built first so the head of it can be the replacing select.
+    const [head, ...tail] = this.bucketSelects();
+
+    const builder = this.jobs.createQueryBuilder('j').select(head.expression, head.alias);
+
+    for (const bucket of tail) {
+      builder.addSelect(bucket.expression, bucket.alias);
+    }
+
+    builder
       .where('j.status = :status', { status: JobStatus.SUCCEEDED })
       .andWhere('j."durationMs" IS NOT NULL')
       .andWhere('j.createdAt BETWEEN :from AND :to', { from: window.from, to: window.to })
       .andWhere('j.deletedAt IS NULL');
-
-    let previous = 0;
-    LATENCY_BUCKETS_MS.forEach((upper, index) => {
-      builder.addSelect(
-        `COUNT(*) FILTER (WHERE j."durationMs" >= ${previous} AND j."durationMs" < ${upper})`,
-        `b${index}`,
-      );
-      previous = upper;
-    });
-    builder.addSelect(`COUNT(*) FILTER (WHERE j."durationMs" >= ${previous})`, 'bOver');
 
     const row = await builder.getRawOne<Record<string, string>>();
 
@@ -261,6 +275,36 @@ export class GenerationHealthService implements OnModuleDestroy {
     buckets.push(overflow);
 
     return buckets;
+  }
+
+  /**
+   * The `COUNT(*) FILTER (…)` expression and alias for each {@link LATENCY_BUCKETS_MS}
+   * band, plus the overflow band.
+   *
+   * Typed as a non-empty tuple so the caller's `[head, ...tail]` destructuring is a
+   * compile-time guarantee rather than an assumption about a constant it does not own.
+   */
+  private bucketSelects(): [BucketSelect, ...BucketSelect[]] {
+    const banded: BucketSelect[] = [];
+
+    let previous = 0;
+    LATENCY_BUCKETS_MS.forEach((upper, index) => {
+      banded.push({
+        expression: `COUNT(*) FILTER (WHERE j."durationMs" >= ${previous} AND j."durationMs" < ${upper})`,
+        alias: `b${index}`,
+      });
+      previous = upper;
+    });
+
+    // The overflow band always exists, so putting it at the head is what makes the tuple
+    // non-empty by construction rather than by assumption. Position in the `SELECT` list
+    // is immaterial — every count is read back by its alias.
+    const overflow: BucketSelect = {
+      expression: `COUNT(*) FILTER (WHERE j."durationMs" >= ${previous})`,
+      alias: 'bOver',
+    };
+
+    return [overflow, ...banded];
   }
 
   /** E-13 — "failure rate by error code". Grouped, ordered, limited. */

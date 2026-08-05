@@ -536,6 +536,37 @@ describe('AdminConsumersService — A-16 … A-20', () => {
         ErrorCode.RESOURCE_CONFLICT,
       );
     });
+
+    /**
+     * **suspend → unsuspend was a resurrection (H7).**
+     *
+     * Requesting deletion sets `status = DEACTIVATED` and stamps `deletionRequestedAt`.
+     * `suspend` only refused an account already `SUSPENDED`, so it happily took the
+     * deletion-pending account to `SUSPENDED`; `unsuspend` then only checked that it *was*
+     * `SUSPENDED`, and set it `ACTIVE`. The consumer could sign back into an account she had
+     * asked us to delete — and if the sweep had already written the request off, for good.
+     */
+    it('refuses to suspend an account whose deletion has been requested (C-38)', async () => {
+      users.$rows[0].status = UserStatus.DEACTIVATED;
+      users.$rows[0].deletionRequestedAt = now;
+
+      expect(await errorCodeOf(service.suspend(actor, consumerId, { reason }))).toBe(
+        ErrorCode.DELETION_IN_PROGRESS,
+      );
+      expect(users.$rows[0].status).toBe(UserStatus.DEACTIVATED);
+    });
+
+    it('refuses to lift a hold on an account whose deletion has been requested', async () => {
+      // The account was already on hold when the deletion was requested, so it never
+      // passed through `suspend` — this is the other half of the same door.
+      users.$rows[0].status = UserStatus.SUSPENDED;
+      users.$rows[0].deletionRequestedAt = now;
+
+      expect(await errorCodeOf(service.unsuspend(actor, consumerId))).toBe(
+        ErrorCode.DELETION_IN_PROGRESS,
+      );
+      expect(users.$rows[0].status).toBe(UserStatus.SUSPENDED);
+    });
   });
 
   /* ---------------------------------------------------------------------------------------

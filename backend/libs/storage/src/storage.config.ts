@@ -46,6 +46,38 @@ export const STORAGE_DRIVER_TOKEN = Symbol('STORAGE_DRIVER');
 
 const MEGABYTE = 1024 * 1024;
 
+/**
+ * **The window `exp` is quantised to — the reason a signed URL is cacheable at all.**
+ *
+ * `exp` used to be stamped from the exact millisecond of the call, so asking for the same object
+ * twice produced two different tokens, two different URLs and therefore two different cache keys.
+ * Nothing downstream could reuse anything: not the browser, not a CDN, and not Next's image
+ * optimiser, whose cache key *is* the URL — which is why `next.config.ts`'s `minimumCacheTTL: 300`
+ * was inert and why one component had already fallen back to a plain `<img>`.
+ *
+ * Quantising the **issue instant** — not the expiry — is what makes it safe. `exp` becomes
+ * `floor(now / bucket) * bucket + ttl`, so every call inside the same two-minute window signs a
+ * byte-identical payload and yields a byte-identical URL, while the token still expires, is still
+ * subject-scoped and is still tamper-evident. Nothing about *what* is signed changed; only when the
+ * clock is read.
+ *
+ * Rounding down rather than up is deliberate: it can only ever shorten a token's life (to at worst
+ * `ttl - bucket`), never extend it past the §3.4 TTL for its object class. A photo URL that lived
+ * longer than §3.4 says it may would be a security change dressed up as a cache fix.
+ *
+ * "At worst `ttl - bucket`" is precisely why {@link assertTtlsOutliveTheExpiryBucket} exists: a TTL
+ * at or below this value makes the worst case zero or negative, and the URL is dead on arrival.
+ *
+ * Upload tickets are **not** bucketed: a ticket is used once by one client, nothing caches it, and
+ * shortening its life by up to two minutes would buy nothing and cost a retry. Its TTL is therefore
+ * not constrained by this value.
+ *
+ * It lives here rather than beside the signing code because the assertion below is what gives it
+ * teeth, and a constant that constrains configuration belongs with the configuration.
+ * `signed-url.service.ts` re-exports it, so every existing import still resolves.
+ */
+export const URL_EXPIRY_BUCKET_SECONDS = 120;
+
 /** Long enough that a 64-hex-character secret passes and a placeholder does not. */
 const MIN_SECRET_LENGTH = 32;
 
@@ -200,16 +232,62 @@ export function loadStorageConfig(
 
   const apiBaseUrl = required(env, 'APP_API_URL').replace(/\/+$/, '');
 
+  const ttls = {
+    photoUrlTtlSeconds: optionalInt(env, 'STORAGE_URL_TTL_PHOTO_SECONDS', 300),
+    renderUrlTtlSeconds: optionalInt(env, 'STORAGE_URL_TTL_RENDER_SECONDS', 900),
+    publicUrlTtlSeconds: optionalInt(env, 'STORAGE_URL_TTL_PUBLIC_SECONDS', 3600),
+  };
+
+  assertTtlsOutliveTheExpiryBucket(ttls);
+
   return {
     driver: parseDriver(env.STORAGE_DRIVER),
     root,
     urlSecret,
     apiBaseUrl,
-    photoUrlTtlSeconds: optionalInt(env, 'STORAGE_URL_TTL_PHOTO_SECONDS', 300),
-    renderUrlTtlSeconds: optionalInt(env, 'STORAGE_URL_TTL_RENDER_SECONDS', 900),
-    publicUrlTtlSeconds: optionalInt(env, 'STORAGE_URL_TTL_PUBLIC_SECONDS', 3600),
+    ...ttls,
+    // Not bucketed, so not constrained by the assertion above — see URL_EXPIRY_BUCKET_SECONDS.
     uploadTicketTtlSeconds: optionalInt(env, 'STORAGE_UPLOAD_TICKET_TTL_SECONDS', 900),
     maxUploadBytes: optionalInt(env, 'STORAGE_MAX_UPLOAD_MB', 25) * MEGABYTE,
     minFreeBytes: optionalInt(env, 'STORAGE_MIN_FREE_MB', 2048) * MEGABYTE,
   };
+}
+
+/** The env var each TTL comes from, for an error message that names what to change. */
+const TTL_ENV_NAMES: Readonly<Record<string, string>> = {
+  photoUrlTtlSeconds: 'STORAGE_URL_TTL_PHOTO_SECONDS',
+  renderUrlTtlSeconds: 'STORAGE_URL_TTL_RENDER_SECONDS',
+  publicUrlTtlSeconds: 'STORAGE_URL_TTL_PUBLIC_SECONDS',
+};
+
+/**
+ * **A URL must not be able to be born expired.**
+ *
+ * `SignedUrlService` rounds the issue instant *down* to `URL_EXPIRY_BUCKET_SECONDS` so two
+ * calls for the same key and subject inside one window produce the same URL — which is what
+ * makes a signed URL cacheable and keeps a gallery of thirty renders from minting thirty
+ * distinct tokens. The cost is that a URL issued at the end of a bucket has already spent
+ * up to `URL_EXPIRY_BUCKET_SECONDS` of its life before it is handed over.
+ *
+ * With a TTL at or below the bucket, that is not a shortened lifetime, it is no lifetime:
+ * the token is stamped with an expiry already in the past and the very first click 403s. It
+ * would be intermittent, too — fine for a request that landed early in a bucket, broken for
+ * one that landed late — which is the worst way for a configuration error to present.
+ *
+ * So the relationship is asserted here, at boot, where a bad value stops the process rather
+ * than reaching a consumer. §7's defaults clear it by a wide margin; this exists for the
+ * operator who tightens one of them without knowing about the bucket.
+ */
+export function assertTtlsOutliveTheExpiryBucket(ttls: Readonly<Record<string, number>>): void {
+  for (const [field, seconds] of Object.entries(ttls)) {
+    if (seconds <= URL_EXPIRY_BUCKET_SECONDS) {
+      const name = TTL_ENV_NAMES[field] ?? field;
+      throw new StorageConfigError(
+        `${name} is ${seconds}s, which is not longer than the ${URL_EXPIRY_BUCKET_SECONDS}s ` +
+          'signed-URL expiry bucket. Signed URLs are issued from the start of the current ' +
+          'bucket so they can be cached, so a TTL this short can hand out a URL that has ' +
+          `already expired. Set it above ${URL_EXPIRY_BUCKET_SECONDS}.`,
+      );
+    }
+  }
 }

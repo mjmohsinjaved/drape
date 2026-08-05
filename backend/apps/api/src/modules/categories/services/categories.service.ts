@@ -398,8 +398,23 @@ export class CategoriesService {
    * delete guard starts protecting categories that hold nothing and releasing ones
    * that do.
    *
-   * Read-modify-write rather than `increment()` so the floor at zero is explicit: a
-   * counter that has drifted negative would silently disarm the guard.
+   * ### One statement, not a read then a write
+   *
+   * This used to `findOne`, add the delta in JavaScript, and `update` the result. That is a
+   * lost update waiting to happen: two admins publishing into the same category at the same
+   * moment both read 7, both write 8, and the category holds nine published garments while
+   * claiming eight. The drift is one-directional in practice — concurrent writes cluster
+   * around bulk publishes — and it only ever reads **low**.
+   *
+   * That matters because this counter is not a display number. §4.12 makes it the A-7
+   * delete guard: a category may be deleted when it holds nothing. Drift it low enough and
+   * an admin deletes a category that is holding published garments, which is a catalogue
+   * outage rather than an off-by-one.
+   *
+   * `GREATEST(0, …)` in SQL keeps the floor the read-modify-write was written for — a
+   * counter that drifted negative would silently disarm the guard the other way — while the
+   * whole thing stays a single atomic statement. The row's own value is read by the
+   * database under its row lock, so concurrent deltas serialise instead of racing.
    */
   async applyPublishedGarmentDelta(
     manager: EntityManager,
@@ -410,16 +425,23 @@ export class CategoriesService {
       return;
     }
 
-    const repository = manager.getRepository(Category);
-    const category = await repository.findOne({ where: { id: categoryId } });
-    if (category === null) {
-      return;
-    }
+    // Built as an explicit operator and a magnitude rather than interpolating a signed
+    // number, so the emitted SQL is `… - 5` and never the legal-but-unreadable `… + -5`.
+    // The value is a literal derived from an integer this module computed; nothing
+    // caller-supplied reaches the expression (§2.8).
+    const magnitude = Math.abs(Math.trunc(delta));
+    const operator = delta < 0 ? '-' : '+';
 
-    await repository.update(
-      { id: categoryId },
-      { publishedGarmentCount: Math.max(0, category.publishedGarmentCount + delta) },
-    );
+    await manager
+      .getRepository(Category)
+      .createQueryBuilder()
+      .update(Category)
+      .set({
+        publishedGarmentCount: () =>
+          `GREATEST(0, "publishedGarmentCount" ${operator} ${magnitude})`,
+      })
+      .where('id = :categoryId', { categoryId })
+      .execute();
   }
 
   /* -----------------------------------------------------------------------------------------

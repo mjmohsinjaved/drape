@@ -25,12 +25,23 @@ import { AUDIT_ACTIONS, AUDIT_TARGET_TYPES } from '@api/shared/constants/audit-a
 
 import { MODERATION_PHOTO_COLUMNS } from '../constants/moderation.constants';
 import { ModerationItem } from '../entities/moderation-item.entity';
+import { ModerationSource } from '../enums/moderation-source.enum';
 import { ModerationState } from '../enums/moderation-state.enum';
 import { toModerationItemResponse, type ModerationPhotoFacts } from '../mappers/moderation.mapper';
 
 import type { ModerationItemResponseDto } from '../dto/moderation-item-response.dto';
 import type { ModerationQueryDto } from '../dto/moderation-query.dto';
 import type { ReviewModerationItemDto } from '../dto/review-moderation.dto';
+
+/** An upstream moderation verdict, as the generation path saw it (§8.3). */
+export interface UpstreamRejectionInput {
+  /** `null` for an admin test render — a reference model, not a person (§4.15). */
+  readonly personPhotoId: string | null;
+  readonly userId: string | null;
+  readonly jobId: string | null;
+  /** The upstream code. Truncated to `moderation_items.reasonCode`'s 64 characters. */
+  readonly reasonCode: string;
+}
 
 /** What one review decided, for the audit row and the caller. */
 interface ReviewOutcome {
@@ -260,6 +271,89 @@ export class ModerationQueueService {
       .andWhere('item.createdAt < :threshold', { threshold })
       .andWhere('item.deletedAt IS NULL')
       .getCount();
+  }
+
+  /* -----------------------------------------------------------------------------------------
+   * Intake (§8.3 — the upstream's own moderation verdict)
+   * -------------------------------------------------------------------------------------- */
+
+  /**
+   * Files a photograph the **upstream** rejected, and blocks it pending review.
+   *
+   * ### Why this exists, and why it is not a decision verb
+   *
+   * `tryon-failure.policy.ts` has always declared `queueModeration: true` against
+   * `MODERATION_REJECTED`, and nothing read the flag. So §8.3's moderation branch marked
+   * the job failed, told her the neutral "let's try a different photo", and then did
+   * neither of the two things the row exists for: no `moderation_items` row was written,
+   * so no admin ever saw it (A-34's queue was fed by nothing at all); and the photograph
+   * stayed `APPROVED`, so `checkPhotoOwnership` waved the very same image through on her
+   * next attempt — which failed upstream again, at cost, indefinitely.
+   *
+   * This module's barrel says the *decision* verbs belong to nobody else, and that stands:
+   * `approve` and `reject` are audited admin acts behind `@Roles(Role.ADMIN)` routes.
+   * Filing an item is the opposite — it is the upstream reporting a fact, and the fact has
+   * to reach the queue from wherever the generation happened. The admin's decision is
+   * still the admin's.
+   *
+   * ### Idempotent, because a photograph can fail twice
+   *
+   * `UQ_moderation_items_photo_pending` is `UNIQUE ("personPhotoId") WHERE state = 'PENDING'`,
+   * so a second rejection of a photo already in the queue must not insert. It is checked
+   * rather than caught: the answer to "it is already queued" is "good", not an error.
+   */
+  async queueUpstreamRejection(input: UpstreamRejectionInput): Promise<void> {
+    const personPhotoId = input.personPhotoId;
+
+    if (personPhotoId === null) {
+      // A test render against a reference model (§4.15). There is no consumer photograph
+      // to queue and no consumer to protect from a repeat.
+      return;
+    }
+
+    await runInTransaction(
+      this.dataSource,
+      async (manager: EntityManager): Promise<void> => {
+        const items = manager.getRepository(ModerationItem);
+
+        const pending = await items.findOne({
+          where: { personPhotoId, state: ModerationState.PENDING },
+        });
+
+        if (pending === null) {
+          const photo = await manager.getRepository(PersonPhoto).findOne({
+            where: { id: personPhotoId },
+            // The blurred derivative and nothing else. `storageKey` is not in
+            // MODERATION_PHOTO_COLUMNS and is not selected here either (S-10).
+            select: { id: true, blurredThumbnailKey: true },
+          });
+
+          await items.insert({
+            personPhotoId,
+            userId: input.userId,
+            jobId: input.jobId,
+            source: ModerationSource.UPSTREAM,
+            reasonCode: input.reasonCode.slice(0, 64),
+            state: ModerationState.PENDING,
+            blurredThumbnailKey: photo?.blurredThumbnailKey ?? null,
+            reviewedBy: null,
+            reviewedAt: null,
+            decisionNote: null,
+          });
+        }
+
+        // Blocked either way. If an item was already pending the photograph should already
+        // be blocked, and re-asserting it costs one indexed update and closes the window
+        // where an earlier failure did not get this far.
+        await this.writePhotoState(manager, personPhotoId, PhotoModerationState.BLOCKED);
+      },
+      { label: 'moderation.queueUpstreamRejection' },
+    );
+
+    this.logger.log(
+      `An upstream moderation rejection was filed for review and the photograph is blocked ` +
+        `pending it (A-34, §8.3). jobId=${input.jobId ?? 'none'}`,
+    );
   }
 
   /* -----------------------------------------------------------------------------------------

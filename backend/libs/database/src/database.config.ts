@@ -76,6 +76,15 @@ export function buildSharedDatabaseOptions(env: EnvReader): SharedDatabaseOption
     // A restart storm must not take the API down permanently, but it must not mask a
     // genuinely unreachable database either.
     installExtensions: false,
+
+    // UUID defaults are `gen_random_uuid()`, not `uuid_generate_v4()`. That function is
+    // core PostgreSQL from 13 onwards, so it needs no extension — which matters because
+    // `installExtensions` is false above and CREATE EXTENSION needs rights the API role
+    // does not have. TypeORM's default is 'uuid-ossp'; without this line every generated
+    // migration emits `uuid_generate_v4()` and fails on a database with no contrib
+    // modules installed. 'pgcrypto' here selects the *spelling*, not an extension: nothing
+    // is installed and nothing is required.
+    uuidExtension: 'pgcrypto',
     applicationName: 'drape-api',
   };
 }

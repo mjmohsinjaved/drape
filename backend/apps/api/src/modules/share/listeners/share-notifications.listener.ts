@@ -44,7 +44,9 @@ export class ShareNotificationsListener {
     private readonly config: ConfigService,
   ) {}
 
-  @OnEvent(SHARE_COMMENT_LEFT_EVENT)
+  // `{ async: true }` — see the enquiry listener. An unawaited rejection here loses the
+  // C-33 comment notification with nothing logged.
+  @OnEvent(SHARE_COMMENT_LEFT_EVENT, { async: true })
   async onCommentLeft(event: ShareCommentLeftEvent): Promise<void> {
     const { input } = event;
 

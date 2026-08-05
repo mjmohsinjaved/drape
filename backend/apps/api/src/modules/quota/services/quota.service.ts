@@ -3,7 +3,14 @@ import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 
-import { DataSource, In, Repository, type EntityManager, type FindOptionsWhere } from 'typeorm';
+import {
+  DataSource,
+  In,
+  Like,
+  Repository,
+  type EntityManager,
+  type FindOptionsWhere,
+} from 'typeorm';
 
 import {
   currentPeriod,
@@ -32,7 +39,12 @@ import { QuotaLedgerEntry } from '../entities/quota-ledger-entry.entity';
 import { QuotaReason } from '../enums/quota-reason.enum';
 import { QUOTA_EVENTS, type ConsumerQuotaExhaustedEvent } from '../events/quota.events';
 import { toQuotaLedgerEntry, toQuotaSnapshot } from '../mappers/quota.mapper';
-import { QUOTA_GRANT_REASONS, type LedgerBalance } from '../utils/ledger-math';
+import {
+  QUOTA_GRANT_REASONS,
+  refundNote,
+  refundNotePattern,
+  type LedgerBalance,
+} from '../utils/ledger-math';
 import { isSerializationFailure } from '../utils/postgres-errors';
 
 import type { AdjustLedgerDto } from '../dto/adjust-ledger.dto';
@@ -290,6 +302,16 @@ export class QuotaService {
    * The reversal is booked into the **original** period, not today's: a job that
    * started on 31 August and failed on 1 September was charged against August, and
    * refunding it into September would quietly hand out a free generation.
+   *
+   * ### And why it is idempotent
+   *
+   * Because the compensating row carries no `jobId`, "find the charge" is not a test of
+   * whether a refund already happened — the charge is still there, the table is
+   * append-only, and asking that question twice used to credit her twice. The reversal is
+   * therefore looked for by its own {@link refundMarker}, not inferred from the charge. A
+   * second call finds the first reversal and writes nothing, which is what lets the
+   * failure path call this unconditionally without counting how many times it has. See
+   * `ledger-math`'s `refundMarker()` for the marker's shape and why it leads the note.
    */
   async refundWithin(manager: EntityManager, input: RefundQuotaInput): Promise<QuotaRefundResult> {
     const repository = manager.getRepository(QuotaLedgerEntry);
@@ -307,6 +329,20 @@ export class QuotaService {
       return { refunded: false, snapshot };
     }
 
+    const alreadyReversed = await repository.findOne({
+      where: {
+        userId: input.userId,
+        period: charge.period,
+        reason: QuotaReason.GENERATION_CONSUMED,
+        note: Like(refundNotePattern(input.jobId)),
+      },
+    });
+
+    if (alreadyReversed !== null) {
+      const snapshot = await this.deriveSnapshot(repository, input.userId, charge.period);
+      return { refunded: false, snapshot };
+    }
+
     await repository.insert({
       userId: input.userId,
       delta: -charge.delta,
@@ -314,7 +350,7 @@ export class QuotaService {
       period: charge.period,
       jobId: null,
       actorId: null,
-      note: (input.reason ?? 'Refund').slice(0, 200) + ` — job ${input.jobId}`,
+      note: refundNote(input.jobId, input.reason),
     });
 
     const snapshot = await this.deriveSnapshot(repository, input.userId, charge.period);

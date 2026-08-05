@@ -1,5 +1,8 @@
 import { ErrorCode } from '@library/common';
 
+import { Garment } from '@api/modules/garments/entities/garment.entity';
+import { TestRenderState } from '@api/modules/garments/enums/test-render-state.enum';
+
 import { TryOnConfig } from '../config/tryon.config';
 import { TryOnJob } from '../entities/tryon-job.entity';
 import { JobStatus } from '../enums/job-status.enum';
@@ -12,7 +15,6 @@ import {
 
 import { TestRenderProcessor } from './test-render.processor';
 import { TestRenderService } from './test-render.service';
-import { TryOnRunnerService } from './tryon-runner.service';
 
 /**
  * **PRD §8.2 — "Admin bulk test renders run through a NestJS task processor at
@@ -27,11 +29,10 @@ describe('TestRenderProcessor — §8.2, concurrency one', () => {
   let context: TryOnTestContext;
   let processor: TestRenderProcessor;
 
-  async function buildProcessor(): Promise<void> {
+  function buildProcessor(): void {
     processor = new TestRenderProcessor(
       context.harness.repository<TryOnJob>(TryOnJob),
       context.harness.get<TestRenderService>(TestRenderService),
-      context.harness.get<TryOnRunnerService>(TryOnRunnerService),
       context.harness.get<TryOnConfig>(TryOnConfig),
     );
   }
@@ -42,7 +43,7 @@ describe('TestRenderProcessor — §8.2, concurrency one', () => {
 
   it('claims one queued batch render and runs it to completion', async () => {
     context = await createTryOnContext();
-    await buildProcessor();
+    buildProcessor();
     await context.testRenders.queueBulk({ garmentIds: [GARMENT_ID] }, ADMIN);
 
     await processor.drainOnce();
@@ -54,7 +55,7 @@ describe('TestRenderProcessor — §8.2, concurrency one', () => {
 
   it('adopts the queued row rather than writing a second job', async () => {
     context = await createTryOnContext();
-    await buildProcessor();
+    buildProcessor();
     const { batchId } = await context.testRenders.queueBulk({ garmentIds: [GARMENT_ID] }, ADMIN);
 
     await processor.drainOnce();
@@ -68,7 +69,7 @@ describe('TestRenderProcessor — §8.2, concurrency one', () => {
 
   it('runs one at a time: a tick arriving mid-render does nothing', async () => {
     context = await createTryOnContext({ env: { TRYON_MOCK_LATENCY_MS: 60 } });
-    await buildProcessor();
+    buildProcessor();
     await context.testRenders.queueBulk({ garmentIds: [GARMENT_ID] }, ADMIN);
 
     const first = processor.drainOnce();
@@ -96,7 +97,7 @@ describe('TestRenderProcessor — §8.2, concurrency one', () => {
 
   it('does nothing when the queue is empty', async () => {
     context = await createTryOnContext();
-    await buildProcessor();
+    buildProcessor();
 
     await expect(processor.drainOnce()).resolves.toBeUndefined();
     expect(context.quota.charges).toHaveLength(0);
@@ -104,7 +105,7 @@ describe('TestRenderProcessor — §8.2, concurrency one', () => {
 
   it('ignores a single interactive test render — only batch work is drained', async () => {
     context = await createTryOnContext();
-    await buildProcessor();
+    buildProcessor();
     await context.testRenders.run({ garmentId: GARMENT_ID }, ADMIN);
     const chargesAfterRun = context.quota.charges.length;
 
@@ -115,9 +116,92 @@ describe('TestRenderProcessor — §8.2, concurrency one', () => {
     expect(context.quota.charges).toHaveLength(chargesAfterRun);
   });
 
+  /* -----------------------------------------------------------------------------------------
+   * A-12 — a batch that costs money has to move the garments it paid for
+   * -------------------------------------------------------------------------------------- */
+
+  it('advances the garment to PENDING, so the render it paid for can be approved', async () => {
+    context = await createTryOnContext();
+    buildProcessor();
+    await context.testRenders.queueBulk({ garmentIds: [GARMENT_ID] }, ADMIN);
+
+    await processor.drainOnce();
+
+    // The processor used to call `TryOnRunnerService.run()` directly, which produces and
+    // charges for a render and writes neither of these columns. Fifty queued garments
+    // came back fully charged and every one of them still unpublishable.
+    const garment = context.harness.repository<Garment>(Garment).$rows[0];
+    expect(garment?.testRenderState).toBe(TestRenderState.PENDING);
+    expect(garment?.testRenderId).not.toBeNull();
+
+    // And the A-11 gate now opens, which is the thing the budget was spent for.
+    await expect(context.testRenders.approve(GARMENT_ID, ADMIN)).resolves.toMatchObject({
+      testRenderState: TestRenderState.APPROVED,
+      publishable: true,
+    });
+  });
+
+  it('leaves a failed item at its previous state — nothing to approve', async () => {
+    context = await createTryOnContext();
+    buildProcessor();
+    await context.testRenders.queueBulk({ garmentIds: [GARMENT_ID] }, ADMIN);
+    context.provider.alwaysFail(ErrorCode.UPSTREAM_NO_GARMENT_DETECTED);
+
+    await processor.drainOnce();
+
+    const garment = context.harness.repository<Garment>(Garment).$rows[0];
+    expect(garment?.testRenderId).toBeNull();
+  });
+
+  /* -----------------------------------------------------------------------------------------
+   * §8.2 — the claim, not just the counter
+   * -------------------------------------------------------------------------------------- */
+
+  it('two ticks racing on one queued row adopt it once, and the platform pays once', async () => {
+    context = await createTryOnContext({ env: { TRYON_MOCK_LATENCY_MS: 20 } });
+    await context.testRenders.queueBulk({ garmentIds: [GARMENT_ID] }, ADMIN);
+
+    // Two *independent* processors — the in-process `active` counter cannot see across
+    // them, which is exactly the situation the row claim has to survive. (One process
+    // today, §8.2; the conditional update is what makes that an operational fact rather
+    // than a correctness assumption.)
+    const jobs = context.harness.repository<TryOnJob>(TryOnJob);
+    const service = context.harness.get<TestRenderService>(TestRenderService);
+    const config = context.harness.get<TryOnConfig>(TryOnConfig);
+    const first = new TestRenderProcessor(jobs, service, config);
+    const second = new TestRenderProcessor(jobs, service, config);
+
+    await Promise.all([first.drainOnce(), second.drainOnce()]);
+
+    // `adoptJob` re-asserts `status = QUEUED` and checks `affected`, so the loser adopts
+    // nothing. Without that predicate both ticks ran the same row and the budget was
+    // charged twice for one catalogue render.
+    expect(context.quota.charges).toHaveLength(1);
+    expect(jobs.$rows).toHaveLength(1);
+    expect(jobs.$rows[0]?.status).toBe(JobStatus.SUCCEEDED);
+  });
+
+  it('holds the concurrency slot from the moment it is claimed, not after the read', async () => {
+    context = await createTryOnContext({ env: { TRYON_MOCK_LATENCY_MS: 20 } });
+    buildProcessor();
+    await context.testRenders.queueBulk({ garmentIds: [GARMENT_ID] }, ADMIN);
+
+    // No `await` between the two calls: this is two timer ticks landing in the same turn
+    // of the event loop, which is the only way the ceiling can be beaten from inside one
+    // process. The counter used to be incremented *after* the awaited `findOne`, so both
+    // ticks passed the comparison and both went looking for work.
+    const both = Promise.all([processor.drainOnce(), processor.drainOnce()]);
+    expect(processor.activeCount).toBe(1);
+
+    await both;
+
+    expect(context.quota.charges).toHaveLength(1);
+    expect(processor.activeCount).toBe(0);
+  });
+
   it('carries on after a failed item rather than stalling the batch', async () => {
     context = await createTryOnContext();
-    await buildProcessor();
+    buildProcessor();
     await context.testRenders.queueBulk({ garmentIds: [GARMENT_ID] }, ADMIN);
     context.provider.alwaysFail(ErrorCode.UPSTREAM_NO_GARMENT_DETECTED);
 

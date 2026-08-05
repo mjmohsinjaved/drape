@@ -22,6 +22,7 @@ import {
   createMock,
   createTestingModule,
 } from '../../../../test/fixtures';
+import { installUpdateQueryBuilderDouble } from '../../../../test/fixtures/query-builder-double';
 import { Category } from '../entities/category.entity';
 
 import { CategoriesService } from './categories.service';
@@ -343,6 +344,7 @@ describe('CategoriesService', () => {
     it('moves the A-7 counter and floors it at zero', async () => {
       const category = buildCategory({ publishedGarmentCount: 1 });
       const harness = await arrange([category]);
+      installUpdateQueryBuilderDouble(harness.categories);
       const manager = createFakeEntityManager(new Map([[Category, harness.categories]]));
 
       await harness.service.applyPublishedGarmentDelta(manager, category.id, 1);
@@ -350,6 +352,36 @@ describe('CategoriesService', () => {
 
       await harness.service.applyPublishedGarmentDelta(manager, category.id, -5);
       expect(harness.categories.$rows[0]?.publishedGarmentCount).toBe(0);
+
+      await harness.close();
+    });
+
+    /**
+     * **The counter is the A-7 delete guard, so a lost update is a deletable category.**
+     *
+     * The old implementation read the row, added the delta in JavaScript, and wrote the
+     * sum back — with an `await` between the read and the write. Two publishes landing
+     * together both read 1, both write 2, and the category holds three published garments
+     * while claiming two. Drift low enough and §4.12's guard lets an admin delete a
+     * category that is holding published stock.
+     *
+     * The fixture evaluates the `SET` expression against the live row at `execute()` time,
+     * which is what a single SQL statement does, so this test genuinely distinguishes the
+     * two shapes rather than asserting that a particular method was called.
+     */
+    it('does not lose an update when two publishes land together (M5)', async () => {
+      const category = buildCategory({ publishedGarmentCount: 1 });
+      const harness = await arrange([category]);
+      installUpdateQueryBuilderDouble(harness.categories);
+      const manager = createFakeEntityManager(new Map([[Category, harness.categories]]));
+
+      await Promise.all([
+        harness.service.applyPublishedGarmentDelta(manager, category.id, 1),
+        harness.service.applyPublishedGarmentDelta(manager, category.id, 1),
+        harness.service.applyPublishedGarmentDelta(manager, category.id, 1),
+      ]);
+
+      expect(harness.categories.$rows[0]?.publishedGarmentCount).toBe(4);
 
       await harness.close();
     });

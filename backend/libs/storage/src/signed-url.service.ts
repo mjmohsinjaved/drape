@@ -24,7 +24,12 @@ import {
   uploadTicketInvalid,
 } from './exceptions/storage.exception';
 import { assertValidStorageKey, isValidStorageKey, keyPrefixSegment } from './storage-key.builder';
-import { STORAGE_CONFIG, type StorageConfig } from './storage.config';
+import { STORAGE_CONFIG, URL_EXPIRY_BUCKET_SECONDS, type StorageConfig } from './storage.config';
+
+// Re-exported from where it is asserted. The value belongs beside the TTLs it constrains
+// (`assertTtlsOutliveTheExpiryBucket`); the name stays importable from here because that is
+// where every caller and the barrel already look for it.
+export { URL_EXPIRY_BUCKET_SECONDS };
 
 export interface SignedUrlPayload {
   /** storage key */
@@ -102,30 +107,6 @@ const SUBJECT_REQUIRED_SEGMENTS: ReadonlySet<string> = new Set([
   'renders',
   'exports',
 ]);
-
-/**
- * **The window `exp` is quantised to — the reason a signed URL is cacheable at all.**
- *
- * `exp` used to be stamped from the exact millisecond of the call, so asking for the same object
- * twice produced two different tokens, two different URLs and therefore two different cache keys.
- * Nothing downstream could reuse anything: not the browser, not a CDN, and not Next's image
- * optimiser, whose cache key *is* the URL — which is why `next.config.ts`'s `minimumCacheTTL: 300`
- * was inert and why one component had already fallen back to a plain `<img>`.
- *
- * Quantising the **issue instant** — not the expiry — is what makes it safe. `exp` becomes
- * `floor(now / bucket) * bucket + ttl`, so every call inside the same two-minute window signs a
- * byte-identical payload and yields a byte-identical URL, while the token still expires, is still
- * subject-scoped and is still tamper-evident. Nothing about *what* is signed changed; only when the
- * clock is read.
- *
- * Rounding down rather than up is deliberate: it can only ever shorten a token's life (to at worst
- * `ttl - bucket`), never extend it past the §3.4 TTL for its object class. A photo URL that lived
- * longer than §3.4 says it may would be a security change dressed up as a cache fix.
- *
- * Upload tickets are **not** bucketed: a ticket is used once by one client, nothing caches it, and
- * shortening its life by up to two minutes would buy nothing and cost a retry.
- */
-export const URL_EXPIRY_BUCKET_SECONDS = 120;
 
 @Injectable()
 export class SignedUrlService {

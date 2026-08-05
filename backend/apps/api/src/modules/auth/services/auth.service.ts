@@ -245,6 +245,14 @@ export class AuthService {
     // form into a directory of suspended accounts.
     this.assertAccountUsable(user);
 
+    // C-38: once deletion is under way, nothing more happens on the account — including
+    // signing back into it. `assertAccountUsable` covers this only while the status is
+    // still `DEACTIVATED`, and an admin who suspends and then unsuspends a
+    // deletion-pending consumer sets it back to `ACTIVE`. That path is refused at source
+    // now (`AdminConsumersService`), and this is the second lock: `deletionRequestedAt`
+    // is the durable fact, and it is the one worth checking.
+    this.assertNotBeingDeleted(user);
+
     const twofaRequired = user.twofaEnabledAt !== null;
 
     const issued = await this.sessionService.issue({

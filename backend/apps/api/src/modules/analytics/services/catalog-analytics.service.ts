@@ -188,6 +188,28 @@ export class CatalogAnalyticsService {
    * `publishedGarments` is the one figure that *is* about the catalogue as it stands
    * today, so it comes from `categories.publishedGarmentCount` (§4.12) — a maintained
    * counter, not a scan.
+   *
+   * ### The two subqueries count the same renders, not a superset of them
+   *
+   * They used to join `shortlist_items` → `garments` → `categories` and match on
+   * `c."name" = r."garmentCategorySnapshot"`, which was wrong twice over and in the same
+   * direction — upward:
+   *
+   *  - **no `deletedAt` predicate on `garments` or `categories`.** A verdict against a
+   *    soft-deleted garment still counted, while the `tryon_results` denominator excludes
+   *    soft-deleted rows. Numerator and denominator did not describe the same population.
+   *  - **`categories.name` is not unique.** §4.12 makes the tree unique on
+   *    `(parentId, slug)`, so two "Formal" categories under different parents are two
+   *    rows, and the join multiplied every verdict by however many of them there were.
+   *
+   * Between them a `starRate` could exceed 100% — a number that is not merely imprecise
+   * but self-evidently impossible, on a screen a buyer uses to decide what to stock.
+   *
+   * Both are now correlated on the *snapshot*, which is what the denominator groups by:
+   * `shortlist_items` and `enquiry_items` reach their garment's category snapshot the same
+   * way the renders do, through `tryon_results`. That keeps C-29's "the snapshot is what
+   * survives" argument intact — one recategorisation does not retrospectively move last
+   * month's verdicts — and it makes the ratio a ratio of like to like.
    */
   async categoryPerformance(
     window: AnalyticsWindow,
@@ -198,22 +220,28 @@ export class CatalogAnalyticsService {
       .select('r."garmentCategorySnapshot"', 'name')
       .addSelect('COUNT(*)', 'tryOns')
       .addSelect(
-        `(SELECT COUNT(*) FROM "shortlist_items" s
-            JOIN "garments" g ON g."id" = s."garmentId"
-            JOIN "categories" c ON c."id" = g."categoryId"
-            WHERE c."name" = r."garmentCategorySnapshot"
-              AND s."verdict" IN (:...stars)
+        `(SELECT COUNT(DISTINCT s."id") FROM "shortlist_items" s
+            WHERE s."verdict" IN (:...stars)
               AND s."verdictAt" BETWEEN :from AND :to
-              AND s."deletedAt" IS NULL)`,
+              AND s."deletedAt" IS NULL
+              AND EXISTS (
+                SELECT 1 FROM "tryon_results" sr
+                 WHERE sr."garmentId" = s."garmentId"
+                   AND sr."garmentCategorySnapshot" = r."garmentCategorySnapshot"
+                   AND sr."isTestRender" = false
+                   AND sr."deletedAt" IS NULL))`,
         'stars',
       )
       .addSelect(
-        `(SELECT COUNT(*) FROM "enquiry_items" e
-            JOIN "garments" g ON g."id" = e."garmentId"
-            JOIN "categories" c ON c."id" = g."categoryId"
-            WHERE c."name" = r."garmentCategorySnapshot"
-              AND e."createdAt" BETWEEN :from AND :to
-              AND e."deletedAt" IS NULL)`,
+        `(SELECT COUNT(DISTINCT e."id") FROM "enquiry_items" e
+            WHERE e."createdAt" BETWEEN :from AND :to
+              AND e."deletedAt" IS NULL
+              AND EXISTS (
+                SELECT 1 FROM "tryon_results" er
+                 WHERE er."garmentId" = e."garmentId"
+                   AND er."garmentCategorySnapshot" = r."garmentCategorySnapshot"
+                   AND er."isTestRender" = false
+                   AND er."deletedAt" IS NULL))`,
         'enquiries',
       )
       .where('r."isTestRender" = false')

@@ -235,6 +235,12 @@ export class AdminConsumersService {
       });
     }
 
+    // A-19 preserves data "pending review"; A-20 and C-38 are already destroying it.
+    // Suspending on top of a deletion request is the first half of a resurrection —
+    // suspend moves DEACTIVATED → SUSPENDED, and unsuspend then moves SUSPENDED →
+    // ACTIVE, handing back an account the consumer asked us to delete.
+    this.assertNotBeingDeleted(target);
+
     const suspendedAt = new Date();
     // Captured before the write: the loaded row is identity-mapped, so reading
     // `target.status` after the update can report the value we just set.
@@ -280,6 +286,11 @@ export class AdminConsumersService {
         message: 'This account is not on hold.',
       });
     }
+
+    // The other half of the resurrection. Belt and braces with the check in `suspend`:
+    // an account that was already SUSPENDED when the deletion was requested reaches here
+    // without passing through that one, and lifting the hold would set it ACTIVE.
+    this.assertNotBeingDeleted(target);
 
     await this.users.update(
       { id: userId },
@@ -434,6 +445,21 @@ export class AdminConsumersService {
       throw new NotFoundException(ErrorCode.USER_NOT_FOUND);
     }
     return user;
+  }
+
+  /**
+   * C-38 — once deletion is under way, the account's state is no longer anyone's to move.
+   *
+   * The pair `suspend` → `unsuspend` was a resurrection: the first took a
+   * deletion-pending consumer from `DEACTIVATED` to `SUSPENDED`, the second put her at
+   * `ACTIVE`. She could then sign in to an account she had asked us to delete, right up
+   * until the sweep caught up — and if the sweep had already written off her request,
+   * indefinitely.
+   */
+  private assertNotBeingDeleted(target: User): void {
+    if (target.deletionRequestedAt !== null) {
+      throw new ConflictException(ErrorCode.DELETION_IN_PROGRESS);
+    }
   }
 
   /**

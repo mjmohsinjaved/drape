@@ -178,6 +178,23 @@ export function deriveBudgetBalance(
  * exhausted rather than as unlimited, because the safe reading of a missing cost
  * ceiling is not "spend freely".
  */
+/**
+ * A-29's soft warning, **against whatever ceiling actually applies**.
+ *
+ * `SettingsService.getBudgetPolicy()` computes `warnAt` from
+ * `budget.monthlyGenerations`, which is right for the policy and wrong for a period an
+ * admin has adjusted: an `ADMIN_ADJUSTMENT` row moves the period's granted total and
+ * touches no setting, so a warning pinned to the setting fires at 80% of a budget that
+ * no longer exists. The ratio is the durable part of the policy; the number is not.
+ *
+ * A ceiling of zero warns at zero, and `budgetStateFor` reads a zero `hardStopAt` as
+ * exhausted anyway — so the two agree that a budget of nothing is not a budget to warn
+ * about, it is a budget that is already spent.
+ */
+export function warnAtOf(ceiling: number, warnThresholdPercent: number): number {
+  return Math.floor((Math.max(0, ceiling) * Math.max(0, warnThresholdPercent)) / 100);
+}
+
 export function budgetStateFor(used: number, thresholds: BudgetThresholds): BudgetState {
   if (thresholds.hardStopAt <= 0 || used >= thresholds.hardStopAt) {
     return BUDGET_STATES.EXHAUSTED;
@@ -305,4 +322,44 @@ export function projectBudgetExhaustion(
 
 function round1(value: number): number {
   return Math.round(value * 10) / 10;
+}
+
+/* -------------------------------------------------------------------------------------------------
+ * Refund identity
+ * ---------------------------------------------------------------------------------------------- */
+
+/**
+ * The marker a compensating row carries so a second refund of the same job can find the
+ * first — **and therefore do nothing**.
+ *
+ * ### Why the row cannot simply carry the `jobId`
+ *
+ * `UQ_quota_ledger_job` and `UQ_usage_ledger_job` are
+ * `UNIQUE ("jobId") WHERE "jobId" IS NOT NULL`, and §4.26 says that index "is what makes
+ * a double consumption physically impossible". A reversal that reused the id would have
+ * to weaken it. So the compensating row is written with `jobId = null`, and the job it
+ * reverses is named in `note`.
+ *
+ * That left both refunds **not idempotent**: `refundWithin` looked for the *charge*,
+ * found it — it is still there, ledgers are append-only — and appended another reversal.
+ * Two calls credited the consumer twice for one generation. Now the lookup asks the
+ * question that actually matters, "has this job already been reversed?", and the marker
+ * is what makes that question answerable with an indexed prefix match rather than a
+ * convention about wording.
+ *
+ * The marker leads the note so `note LIKE 'refund:<jobId>%'` is a prefix predicate, and
+ * the human-readable reason follows it.
+ */
+export function refundMarker(jobId: string): string {
+  return `refund:${jobId}`;
+}
+
+/** `refund:<jobId> — <reason>` — the full note a compensating row carries. */
+export function refundNote(jobId: string, reason: string | undefined): string {
+  return `${refundMarker(jobId)} — ${(reason ?? 'Refund').slice(0, 160)}`;
+}
+
+/** The `LIKE` pattern that finds an existing reversal of `jobId`. */
+export function refundNotePattern(jobId: string): string {
+  return `${refundMarker(jobId)}%`;
 }

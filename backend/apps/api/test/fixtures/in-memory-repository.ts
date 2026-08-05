@@ -31,8 +31,17 @@ import type {
  *    explicitly, or cover it with an integration test.
  *  - Relations. `find({ relations: [...] })` returns the stored rows unchanged; wire the
  *    related objects into the fixture yourself.
- *  - Cascades, triggers, unique indexes and the append-only rules. Those are database
- *    behaviour and belong in a migration-backed test.
+ *  - Cascades, triggers and the append-only rules. Those are database behaviour and belong in a
+ *    migration-backed test.
+ *
+ * **What it now does model, on request: partial unique indexes.** Pass `uniqueIndexes` and
+ * `save`/`insert` raise a real `23505` the way PostgreSQL would. This is not decoration. A
+ * whole class of defect lives in the code that *handles* a unique violation —
+ * `TryOnRunnerService.openJob()` catches `23505` and turns it into the §8.4 idempotency
+ * answer — and a double that never raises one leaves every branch of that handler
+ * unreachable from a test. The `WHERE "deletedAt" IS NULL` predicate is honoured, because
+ * releasing a key by soft-deleting the row it belongs to is exactly the manoeuvre the
+ * predicate exists to permit (§4.0 rule 4).
  */
 
 /** Extra handles for arranging and inspecting the fixture. Prefixed so they cannot clash. */
@@ -48,6 +57,31 @@ export interface InMemoryRepositoryControls<T> {
 export type InMemoryRepository<T extends ObjectLiteral> = Repository<T> &
   InMemoryRepositoryControls<T>;
 
+/**
+ * One partial unique index, as the migration declares it.
+ *
+ * ```ts
+ * // CREATE UNIQUE INDEX "UQ_tryon_jobs_idem"
+ * //   ON "tryon_jobs" ("userId", "idempotencyKey") WHERE "deletedAt" IS NULL
+ * { name: 'UQ_tryon_jobs_idem', columns: ['userId', 'idempotencyKey'], whereNotSoftDeleted: true }
+ * ```
+ */
+export interface UniqueIndexSpec<T> {
+  /** The index name, so a violation says which constraint refused. */
+  readonly name: string;
+  readonly columns: readonly (keyof T & string)[];
+  /**
+   * `WHERE "deletedAt" IS NULL`. Defaults to `true` — §4.0 rule 4 requires it of every
+   * unique index on a soft-deletable table, and CLAUDE.md restates it.
+   */
+  readonly whereNotSoftDeleted?: boolean;
+  /**
+   * `WHERE "<column>" IS NOT NULL`, for the append-only ledgers' `UQ_*_job` indexes. A row
+   * whose value is null in any listed column is outside the index and never conflicts.
+   */
+  readonly whereNotNull?: readonly (keyof T & string)[];
+}
+
 export interface InMemoryRepositoryOptions<T> {
   /** Rows present before the test starts. */
   readonly rows?: readonly T[];
@@ -57,6 +91,27 @@ export interface InMemoryRepositoryOptions<T> {
    * clone is returned.
    */
   readonly create?: (input: Partial<T>) => T;
+  /**
+   * Partial unique indexes to enforce on `save()` and `insert()`, raising a
+   * {@link UniqueViolationError} the way PostgreSQL raises `23505`.
+   *
+   * Declare the ones the code under test actually depends on. An index the service never
+   * relies on costs a test nothing to omit, and one it *does* rely on is invisible without
+   * this.
+   */
+  readonly uniqueIndexes?: readonly UniqueIndexSpec<T>[];
+}
+
+/** PostgreSQL `unique_violation`, in the shape TypeORM surfaces it. */
+export class UniqueViolationError extends Error {
+  readonly code = '23505';
+  readonly driverError: { code: string; constraint: string };
+
+  constructor(readonly constraint: string) {
+    super(`duplicate key value violates unique constraint "${constraint}"`);
+    this.name = 'QueryFailedError';
+    this.driverError = { code: '23505', constraint };
+  }
 }
 
 /** Methods that would mislead more than they help. Calling one fails with a reason. */
@@ -250,11 +305,55 @@ export function createInMemoryRepository<T extends ObjectLiteral & { id: string 
     return take === undefined ? matched.slice(skip) : matched.slice(skip, skip + take);
   };
 
+  /**
+   * PostgreSQL's answer to a duplicate, for whichever declared index the row collides with.
+   *
+   * A row is only *in* a partial index when it satisfies the index's predicate, so a
+   * soft-deleted row conflicts with nothing — which is precisely what makes "soft-delete the
+   * old row to release the idempotency key" a legal move rather than a hopeful one.
+   */
+  const assertNoUniqueViolation = (entity: T): void => {
+    const indexes = options.uniqueIndexes ?? [];
+    if (indexes.length === 0) {
+      return;
+    }
+
+    const candidate = asRecord(entity);
+
+    for (const index of indexes) {
+      const applies = (row: T): boolean => {
+        const source = asRecord(row);
+        if (index.whereNotSoftDeleted !== false && isSoftDeleted(row)) {
+          return false;
+        }
+        return (index.whereNotNull ?? []).every(
+          (column) => source[column] !== null && source[column] !== undefined,
+        );
+      };
+
+      if (!applies(entity)) {
+        continue;
+      }
+
+      const collides = rows.some(
+        (row) =>
+          row.id !== entity.id &&
+          applies(row) &&
+          index.columns.every((column) => asRecord(row)[column] === candidate[column]),
+      );
+
+      if (collides) {
+        throw new UniqueViolationError(index.name);
+      }
+    }
+  };
+
   const upsertOne = (entity: T): T => {
     const target = asRecord(entity);
     if (typeof target.id !== 'string' || target.id === '') {
       target.id = randomUUID();
     }
+    assertNoUniqueViolation(entity);
     // `BaseEntity.createdAt` is a `@CreateDateColumn`: PostgreSQL fills it on INSERT.
     // Emulated here because service code legitimately queries on it — the S-6 lockout
     // window reads `auth_attempts.createdAt`, and a row the ORM would have stamped but

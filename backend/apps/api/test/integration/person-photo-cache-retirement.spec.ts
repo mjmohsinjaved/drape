@@ -18,6 +18,7 @@ import {
   type InMemoryDataSource,
   type InMemoryRepository,
 } from '../fixtures';
+import { TEST_SEED_ENV } from '../setup/test-env';
 
 import type { EntityTarget, ObjectLiteral } from 'typeorm';
 
@@ -64,6 +65,11 @@ const BOOT_ENV: Readonly<Record<string, string>> = {
   API_PORT: '4000',
   ARGON2_MEMORY_KIB: '19456',
   SMTP_SECURE: 'false',
+  // And the three seed variables, for the reason `test/boot/api-module.spec.ts` sets out:
+  // this file boots the real `ConfigModule`, which reads a developer's own `.env`, and
+  // `SEED_ADMIN_EMAIL=` there is an empty string rather than absent — which `@IsOptional()`
+  // does not skip. Opting in keeps the suite a function of the repository.
+  ...TEST_SEED_ENV,
 };
 
 const OWNER = 'aaaaaaaa-1111-4222-8333-444455556666';

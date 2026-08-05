@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 
-import { DataSource, In, IsNull, Repository, type EntityManager } from 'typeorm';
+import { DataSource, In, IsNull, Not, Repository, type EntityManager } from 'typeorm';
 
 import {
   ConflictException,
@@ -33,7 +33,11 @@ import { TryOnJob } from '@api/modules/tryon/entities/tryon-job.entity';
 import { User } from '@api/modules/users/entities/user.entity';
 import { AUDIT_ACTIONS, AUDIT_TARGET_TYPES } from '@api/shared/constants/audit-actions.constant';
 
-import { DEFAULT_DELETION_SLA_HOURS, DELETION_BATCH_SIZE } from '../constants/retention.constants';
+import {
+  DEFAULT_DELETION_SLA_HOURS,
+  DELETION_BATCH_SIZE,
+  DELETION_MAX_ATTEMPTS,
+} from '../constants/retention.constants';
 import { DeletionLogEntry } from '../entities/deletion-log-entry.entity';
 import { DeletionInitiator } from '../enums/deletion-initiator.enum';
 import { DeletionSubject } from '../enums/deletion-subject.enum';
@@ -48,6 +52,20 @@ import type { DeletionReceiptResponseDto } from '../dto/deletion-receipt.dto';
  * `AdminConsumersService` uses the same constant for the same reason.
  */
 const EMPTY_MANIFEST_HASH = sha256Hex('');
+
+/**
+ * The storage work a committed purge leaves to be done **after** the transaction.
+ *
+ * Filesystem unlinks are not transactional, so they cannot happen inside one. Collecting
+ * them into a plan is what lets the rows, the completion record and the outbox message
+ * commit or roll back together, and the bytes go afterwards.
+ */
+export interface UnlinkPlan {
+  /** Objects named by rows this purge removed. */
+  readonly keys: readonly string[];
+  /** `person-photos/<id>/`, `renders/<id>/`, `exports/<id>/` — §3.3. */
+  readonly prefixes: readonly string[];
+}
 
 /** What one account purge removed. Every number here ends up on the `deletion_log` row. */
 export interface AccountPurgeResult {
@@ -233,10 +251,21 @@ export class AccountDeletionService {
    * The sweep — A-20 and C-38, executed inside the SLA
    * -------------------------------------------------------------------------------------- */
 
-  /** Requests with no completion row yet, oldest first. `DELETION_BATCH_SIZE` at a time. */
+  /**
+   * Requests with no completion row yet, oldest first. `DELETION_BATCH_SIZE` at a time.
+   *
+   * `failureReason IS NULL` is what separates a *request* from an *attempt*. A failed purge
+   * now appends a retryable row — `completedAt = null`, `failureReason` set — and without
+   * this predicate each failure would look like a second request for the same subject, so
+   * one stuck account would grow to fill the batch by itself.
+   */
   async findPending(limit: number = DELETION_BATCH_SIZE): Promise<DeletionLogEntry[]> {
     const requests = await this.deletions.find({
-      where: { subjectType: DeletionSubject.USER, completedAt: IsNull() },
+      where: {
+        subjectType: DeletionSubject.USER,
+        completedAt: IsNull(),
+        failureReason: IsNull(),
+      },
       order: { requestedAt: 'ASC' },
       take: limit * 4,
     });
@@ -326,10 +355,10 @@ export class AccountDeletionService {
       withDeleted: true,
     });
 
-    const result = await runInTransaction(
+    const { result, plan } = await runInTransaction(
       this.dataSource,
-      async (manager: EntityManager): Promise<AccountPurgeResult> => {
-        const purged = await this.purgeAccount(manager, request.subjectId);
+      async (manager: EntityManager): Promise<{ result: AccountPurgeResult; plan: UnlinkPlan }> => {
+        const { purged, plan } = await this.purgeAccount(manager, request.subjectId);
 
         await manager.getRepository(DeletionLogEntry).insert({
           subjectType: DeletionSubject.USER,
@@ -378,10 +407,28 @@ export class AccountDeletionService {
           });
         }
 
-        return purged;
+        return { result: purged, plan };
       },
       { label: 'retention.executeDeletion' },
     );
+
+    // ---- after `commitTransaction()`, and that is the entire point ----
+    //
+    // The rows are gone, the completion row is durable, and the confirmation email is in
+    // the outbox. Only now are the bytes unlinked.
+    //
+    // Filesystem unlinks are not transactional. Doing them inside the transaction meant a
+    // storage volume that went away on the third of three `deletePrefix` calls left every
+    // byte destroyed and — because the transaction rolled back — every row intact: a
+    // DEACTIVATED account with a gallery of 404s. The throw then routed to `recordFailure`,
+    // which wrote a *completion*, and `findPending` filters on exactly that, so it was
+    // never retried either.
+    //
+    // Ordered this way the worst case is the harmless one. A crash between the commit and
+    // the unlink leaves objects whose rows no longer exist — unreachable, because a signed
+    // URL is minted from a row — and `OrphanSweepService` reclaims them on its next hourly
+    // pass, which is precisely the case §3.5 step 4 exists for.
+    await this.unlink(plan, request.subjectId);
 
     this.events.emit(
       AUDIT_RECORD_EVENT,
@@ -417,19 +464,40 @@ export class AccountDeletionService {
    * -------------------------------------------------------------------------------------- */
 
   /**
-   * Removes everything belonging to one account, inside the caller's transaction.
+   * Removes every **row** belonging to one account, inside the caller's transaction, and
+   * returns the storage keys the caller must unlink **after the commit**.
    *
-   * Order matters in one place only: **the storage objects go before the rows that name
-   * them.** Once a `tryon_results` row is gone there is nothing left that knows which
-   * file it pointed at, and a file with no row is invisible to every later sweep — the
-   * exact shape of leak §9.3 exists to prevent.
+   * ### Why the bytes are no longer destroyed in here
    *
-   * `deletePrefix` on `renders/<userId>/` and `person-photos/<userId>/` (§3.3) is what
-   * catches anything a row did not name: an orphan from a failed write, a thumbnail
-   * whose row was pruned. The per-row deletes give an accurate byte count; the prefix
-   * delete gives completeness. Both are needed and neither replaces the other.
+   * The original ordering — objects first, then the rows that name them — had a real
+   * argument behind it: once a `tryon_results` row is gone, nothing knows which file it
+   * pointed at, and a file with no row is invisible to every later sweep. That argument is
+   * correct for `PurgeService.purgeOne`, which is retried and whose `storage.delete` is
+   * idempotent. It does not transfer here, because here the deletes sit inside a
+   * transaction that can roll back — and an unlink cannot.
+   *
+   * The sweep the argument feared no longer needs the row: `OrphanSweepService` lists
+   * `person-photos/<userId>/`, `renders/<userId>/` and `exports/<userId>/` and deletes what
+   * has no owning row. After this transaction commits, *everything* under those prefixes is
+   * exactly that. So the file with no row is not invisible; it is the sweep's whole
+   * purpose.
+   *
+   * ### The manifest is measured here, not after
+   *
+   * `head()` is a read and is safe inside the transaction, so the byte count and the A-20
+   * verification hash are computed from the set of objects this purge is responsible for
+   * and written onto the completion row before it commits. The hash therefore covers what
+   * was removed even if the unlink of one of them has to be finished by the sweep.
+   *
+   * `deletePrefix` on the three prefixes (§3.3) still catches anything a row did not name:
+   * an orphan from a failed write, a thumbnail whose row was pruned, every export archive
+   * she ever generated (C-39). The per-key list gives an accurate byte count; the prefix
+   * drop gives completeness. Both are needed and neither replaces the other.
    */
-  async purgeAccount(manager: EntityManager, userId: string): Promise<AccountPurgeResult> {
+  async purgeAccount(
+    manager: EntityManager,
+    userId: string,
+  ): Promise<{ purged: AccountPurgeResult; plan: UnlinkPlan }> {
     const photos = await manager.getRepository(PersonPhoto).find({ where: { userId } });
     const renders = await manager.getRepository(TryOnResult).find({
       where: { userId },
@@ -451,16 +519,8 @@ export class AccountDeletionService {
       ...moderationItems.map((item) => item.blurredThumbnailKey),
     ];
 
-    const removed = await this.deleteObjects(namedKeys);
-
-    // Anything the rows did not name — orphans, thumbnails whose rows were pruned, and
-    // every export archive she ever generated (C-39).
-    const prefixCounts = await Promise.all([
-      this.storage.deletePrefix(StoragePrefixes.personPhotosOfUser(userId)),
-      this.storage.deletePrefix(StoragePrefixes.rendersOfUser(userId)),
-      this.storage.deletePrefix(StoragePrefixes.exportsOfUser(userId)),
-    ]);
-    const prefixDeleted = prefixCounts.reduce((sum, value) => sum + value, 0);
+    // Measured, not deleted. See the method comment.
+    const measured = await this.measureObjects(namedKeys);
 
     // A cache row whose canonical copy was one of her renders now points at bytes that
     // no longer exist. Dropping the row costs a future regeneration; leaving it would
@@ -483,11 +543,21 @@ export class AccountDeletionService {
     rowsDeleted.users = await this.deleteWhere(manager, User, { id: userId });
 
     return {
-      userId,
-      rowsDeleted,
-      storageKeysDeleted: removed.keysDeleted + prefixDeleted,
-      bytesReclaimed: removed.bytesReclaimed,
-      verificationHash: removed.verificationHash,
+      purged: {
+        userId,
+        rowsDeleted,
+        storageKeysDeleted: measured.keys.length,
+        bytesReclaimed: measured.bytesReclaimed,
+        verificationHash: measured.verificationHash,
+      },
+      plan: {
+        keys: measured.keys,
+        prefixes: [
+          StoragePrefixes.personPhotosOfUser(userId),
+          StoragePrefixes.rendersOfUser(userId),
+          StoragePrefixes.exportsOfUser(userId),
+        ],
+      },
     };
   }
 
@@ -589,11 +659,17 @@ export class AccountDeletionService {
     return result.affected ?? 0;
   }
 
-  /** Same shape as the photo purge: measure with `head()` first, because after there is nothing. */
-  private async deleteObjects(
+  /**
+   * The manifest: which objects this purge owns, how large they are, and their A-20 hash.
+   *
+   * `head()` only. Nothing is destroyed here, because "here" is inside a transaction that
+   * may still roll back. Keys that no longer exist in storage are excluded, so the hash
+   * describes what was actually there to remove.
+   */
+  private async measureObjects(
     keys: readonly (string | null)[],
-  ): Promise<{ keysDeleted: number; bytesReclaimed: number; verificationHash: string }> {
-    const removed: string[] = [];
+  ): Promise<{ keys: string[]; bytesReclaimed: number; verificationHash: string }> {
+    const present: string[] = [];
     let bytesReclaimed = 0;
 
     for (const key of keys) {
@@ -601,33 +677,102 @@ export class AccountDeletionService {
         continue;
       }
       const stored = await this.storage.head(key);
-      const deleted = await this.storage.delete(key);
-      if (deleted) {
-        removed.push(key);
-        bytesReclaimed += stored?.byteSize ?? 0;
+      if (stored !== null) {
+        present.push(key);
+        bytesReclaimed += stored.byteSize;
       }
     }
 
     return {
-      keysDeleted: removed.length,
+      keys: present,
       bytesReclaimed,
-      verificationHash: sha256Hex([...removed].sort().join('\n')),
+      verificationHash: sha256Hex([...present].sort().join('\n')),
     };
   }
 
   /**
-   * Records a failed purge as a completion row with `failureReason` set.
+   * Unlinks the objects the committed purge named, then drops her three prefixes.
    *
-   * Not a retry loop. A cascade that failed once for a reason nobody has looked at will
-   * fail again every fifteen minutes, and the sweep would spend its whole batch on it
-   * while nine other consumers waited past their SLA. The row is the record; E-14 is the
-   * escalation; a human is the retry.
+   * **Never throws.** The account is already deleted — every row is gone and nothing can
+   * reach these bytes, because a signed URL is minted from a row. A storage failure at this
+   * point is a reclamation problem, not a privacy one, and turning it into an exception
+   * would send `execute()` into `recordFailure` for a purge that succeeded.
+   *
+   * Whatever is left behind is unreferenced, and unreferenced is exactly what
+   * `OrphanSweepService` collects — the failure is logged loudly so an operator knows the
+   * volume misbehaved, and the next hourly sweep finishes the job.
+   */
+  private async unlink(plan: UnlinkPlan, subjectId: string): Promise<void> {
+    let removed = 0;
+    const failures: string[] = [];
+
+    for (const key of plan.keys) {
+      try {
+        if (await this.storage.delete(key)) {
+          removed += 1;
+        }
+      } catch (error: unknown) {
+        failures.push(key);
+        this.logger.error(
+          `Could not unlink ${key} for deleted subject ${subjectId}: ` +
+            `${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
+
+    for (const prefix of plan.prefixes) {
+      try {
+        removed += await this.storage.deletePrefix(prefix);
+      } catch (error: unknown) {
+        failures.push(prefix);
+        this.logger.error(
+          `Could not drop prefix ${prefix} for deleted subject ${subjectId}: ` +
+            `${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
+
+    if (failures.length > 0) {
+      this.logger.error(
+        `${failures.length} storage target(s) survived the purge of subject ${subjectId}. ` +
+          'Every row is gone, so nothing is reachable; the orphan sweep will reclaim the ' +
+          'bytes on its next pass (§3.5 step 4).',
+      );
+      return;
+    }
+
+    this.logger.debug(`Unlinked ${removed} object(s) for deleted subject ${subjectId}.`);
+  }
+
+  /**
+   * Records a failed purge as a **retryable** row — `completedAt = null` — until the
+   * attempts are spent.
+   *
+   * ### Why this is no longer a completion
+   *
+   * It used to write `completedAt = now`, and the argument was about protecting the batch:
+   * a cascade that failed once for a reason nobody has looked at will fail again every
+   * fifteen minutes while nine other consumers wait past their SLA. True, and the price was
+   * far too high. `deletion_log` is what A-20 offers as proof an account is gone, and
+   * `findPending` filters on exactly this column — so a completion row for a purge that did
+   * not happen made the confirmation record false in both directions at once: it said the
+   * deletion finished, and it guaranteed it never would.
+   *
+   * A failure is now visible (`failureReason` is set, and E-14 still counts it as pending
+   * and overdue) and retryable. The batch is protected by {@link DELETION_MAX_ATTEMPTS}
+   * instead of by an untrue row: once those are spent the request is written off with a
+   * real completion carrying the reason, which stops it consuming the batch and leaves the
+   * escalation to a human — which is what the original comment wanted all along.
    */
   private async recordFailure(request: DeletionLogEntry, error: unknown, now: Date): Promise<void> {
     const reason = error instanceof Error ? error.message : String(error);
+    const attempts = await this.failedAttemptsFor(request.subjectId);
+    const writtenOff = attempts + 1 >= DELETION_MAX_ATTEMPTS;
 
     this.logger.error(
-      `Account deletion failed for subject ${request.subjectId} (A-20, C-38): ${reason}`,
+      `Account deletion failed for subject ${request.subjectId} (A-20, C-38), attempt ` +
+        `${attempts + 1} of ${DELETION_MAX_ATTEMPTS}: ${reason}` +
+        (writtenOff ? ' — written off; a human must finish it.' : ''),
     );
 
     try {
@@ -638,7 +783,8 @@ export class AccountDeletionService {
         initiatedBy: request.initiatedBy,
         actorId: request.actorId,
         requestedAt: request.requestedAt,
-        completedAt: now,
+        // `null` keeps the request in `findPending`, so the next sweep tries again.
+        completedAt: writtenOff ? now : null,
         rowsDeleted: {},
         storageKeysDeleted: 0,
         bytesReclaimed: '0',
@@ -660,9 +806,20 @@ export class AccountDeletionService {
         actorId: null,
         actorRole: null,
         targetId: request.id,
-        metadata: { subjectId: request.subjectId, reason },
+        metadata: { subjectId: request.subjectId, reason, attempt: attempts + 1, writtenOff },
       }),
     );
+  }
+
+  /** How many failed attempts this subject has already accumulated. */
+  private async failedAttemptsFor(subjectId: string): Promise<number> {
+    return this.deletions.count({
+      where: {
+        subjectType: DeletionSubject.USER,
+        subjectId,
+        failureReason: Not(IsNull()),
+      },
+    });
   }
 
   private slaHours(): number {

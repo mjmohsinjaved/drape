@@ -6,7 +6,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 
 import { In, Repository } from 'typeorm';
 
-import { ErrorCode, NotFoundException, type ICurrentUser } from '@library/common';
+import { ErrorCode, NotFoundException, type ICurrentUser, type Role } from '@library/common';
 import { StorageService } from '@library/storage';
 
 import { AUDIT_RECORD_EVENT, AuditRecordEvent } from '@api/modules/audit/events/audit.event';
@@ -97,8 +97,55 @@ export class TestRenderService {
 
     const outcome = await this.runner.run(request);
 
+    await this.recordTestRender(request.garment, outcome, admin.id, admin.role);
+
+    return this.describe(request.garment.id);
+  }
+
+  /**
+   * Runs one **already-queued** batch item, end to end — A-12.
+   *
+   * `TestRenderProcessor` used to call `TryOnRunnerService.run()` itself. That produced a
+   * render, charged for it, and stopped: `testRenderId` and `testRenderState` are written
+   * here and nowhere else, so a bulk queue of fifty garments came back with fifty charged
+   * generations, fifty garments still at `testRenderState = NONE`, and `approve()` throwing
+   * `TEST_RENDER_REQUIRED` for every one of them. A batch that cost real money and moved
+   * nothing.
+   *
+   * The processor now calls this, so a queued item and an interactive one reach exactly the
+   * same two writes — which was the stated intent of {@link buildRequest} being exposed in
+   * the first place.
+   */
+  async runQueued(job: TryOnJob): Promise<void> {
+    if (job.garmentId === null) {
+      return;
+    }
+
+    const request = await this.buildRequest(
+      job.garmentId,
+      job.userId,
+      job.referenceModelId ?? undefined,
+      { batchId: job.batchId ?? undefined, existingJobId: job.id },
+    );
+
+    const outcome = await this.runner.run(request);
+
+    // The admin who queued the batch owns the render, and `job.userId` is who that was.
+    await this.recordTestRender(request.garment, outcome, job.userId, null);
+  }
+
+  /**
+   * Stamps the render onto the garment and audits it — **the only writer of
+   * `testRenderId` and `testRenderState = PENDING`.**
+   */
+  private async recordTestRender(
+    garment: Garment,
+    outcome: { job: TryOnJob; result: TryOnResult; cacheHit: boolean },
+    actorId: string,
+    actorRole: Role | null,
+  ): Promise<void> {
     await this.garments.update(
-      { id: request.garment.id },
+      { id: garment.id },
       {
         testRenderId: outcome.result.id,
         // Rendered is not approved. An admin still has to look at it (A-11).
@@ -113,15 +160,13 @@ export class TestRenderService {
       new AuditRecordEvent({
         action: AUDIT_ACTIONS.GARMENT_TEST_RENDER_RUN,
         targetType: AUDIT_TARGET_TYPES.GARMENT,
-        actorId: admin.id,
-        actorRole: admin.role,
-        targetId: request.garment.id,
-        targetLabel: request.garment.title,
+        actorId,
+        ...(actorRole === null ? {} : { actorRole }),
+        targetId: garment.id,
+        targetLabel: garment.title,
         metadata: { jobId: outcome.job.id, cacheHit: outcome.cacheHit },
       }),
     );
-
-    return this.describe(request.garment.id);
   }
 
   /** `POST /admin/garments/:garmentId/test-render/approve` — A-11, unblocks publishing. */

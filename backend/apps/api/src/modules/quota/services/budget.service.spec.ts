@@ -495,6 +495,56 @@ describe('BudgetService — admin adjustment', () => {
     });
     expect(ledger.$rows).toHaveLength(before);
   });
+
+  /* -----------------------------------------------------------------------------------------
+   * The adjustment has to actually *do* something (H3)
+   * -------------------------------------------------------------------------------------- */
+
+  /**
+   * **`POST /admin/usage/adjust` was inert in both directions.**
+   *
+   * `deriveSnapshot` took `hardStopAt` straight from `policy.monthlyGenerations`, and an
+   * `ADMIN_ADJUSTMENT` row moves the ledger, never a setting. So the ceiling every threshold
+   * and every refusal was measured against never moved, whatever an admin did.
+   *
+   * `hardStopAt` is now the period's granted total — the sum of the granting rows, which is
+   * the monthly grant *plus* the adjustment — and `warnAt` is recomputed at the policy's own
+   * ratio, so "warn at 80%" keeps meaning 80% of the budget that exists.
+   */
+  it('raising the budget moves the hard stop, not just the number on the screen', async () => {
+    const { service } = build({ rows: ledgerAt(1000, 1000) });
+
+    // Spent to the last generation: the platform is closed.
+    await expect(service.getSnapshot(NOW)).resolves.toMatchObject({
+      state: BUDGET_STATES.EXHAUSTED,
+      hardStopAt: 1000,
+    });
+
+    await service.adjust(ADMIN, { delta: 500, note: 'Campaign week.' });
+
+    const after = await service.getSnapshot(NOW);
+    expect(after.hardStopAt).toBe(1500);
+    // 80% of 1500, not of the untouched setting.
+    expect(after.warnAt).toBe(1200);
+    expect(after.remaining).toBe(500);
+    // And the fitting room reopens, which is the whole point of the endpoint.
+    expect(after.state).toBe(BUDGET_STATES.OK);
+    await expect(service.assertBudgetAvailable(NOW)).resolves.toBeDefined();
+  });
+
+  it('lowering the budget binds immediately and cannot leave remaining negative', async () => {
+    const { service } = build({ rows: ledgerAt(1000, 700) });
+
+    await service.adjust(ADMIN, { delta: -300, note: 'Running hot.' });
+
+    const after = await service.getSnapshot(NOW);
+    expect(after.hardStopAt).toBe(700);
+    expect(after.remaining).toBe(0);
+    // `used` is at the new ceiling, so the hard stop is in force — a lowered ceiling an
+    // admin sets at 3pm is meant to bind at 3pm.
+    expect(after.state).toBe(BUDGET_STATES.EXHAUSTED);
+    expect(after.remaining).toBeGreaterThanOrEqual(0);
+  });
 });
 
 describe('BudgetService — what the guard chain pays for (PRD §9.1)', () => {

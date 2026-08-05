@@ -3,7 +3,13 @@ import { Injectable } from '@nestjs/common';
 import { BudgetService, GenerationSpendService, QuotaService } from '@api/modules/quota';
 import type { BudgetSnapshot } from '@api/modules/quota';
 
-import type { BudgetView, ChargeGenerationInput, QuotaPort, QuotaView } from '../ports/quota.port';
+import type {
+  BudgetView,
+  ChargeGenerationInput,
+  QuotaPort,
+  QuotaView,
+  ReleaseGenerationInput,
+} from '../ports/quota.port';
 
 /**
  * The `QUOTA_PORT` binding — `quota` answers guard-chain steps 6 and 8, and takes the
@@ -53,6 +59,22 @@ export class QuotaSpendAdapter implements QuotaPort {
       userId: input.userId,
       origin: input.origin,
       actorId: input.actorId ?? null,
+    });
+  }
+
+  /**
+   * The compensating half of {@link chargeSuccess}.
+   *
+   * `GenerationSpendService.releaseOnFailure()` swallows its own errors and reports what it
+   * reversed; the generation path has nothing useful to do with the report — it is already
+   * unwinding a failure — so the return value is dropped here rather than given to a caller
+   * that would be tempted to branch on it.
+   */
+  async releaseOnFailure(input: ReleaseGenerationInput): Promise<void> {
+    await this.spend.releaseOnFailure({
+      jobId: input.jobId,
+      userId: input.userId,
+      reason: input.reason,
     });
   }
 }

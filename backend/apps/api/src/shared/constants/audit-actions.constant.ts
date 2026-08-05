@@ -110,6 +110,16 @@ export const AUDIT_ACTIONS = {
   PURGE_JOB_COMPLETED: 'PURGE_JOB_COMPLETED',
   PURGE_JOB_FAILED: 'PURGE_JOB_FAILED',
 
+  // --- generation (§8.3) ---
+  /**
+   * A generation failed with a code the §8.3 taxonomy marks `alertAdmin`.
+   *
+   * `TRYON_PROVIDER_MISCONFIGURED` is the case with no other route to an operator —
+   * `BUDGET_EXHAUSTED` reaches one through the A-29 threshold event instead. See
+   * `TryOnRunnerService.raiseAdminAlert()`.
+   */
+  TRYON_ALERT_RAISED: 'TRYON_ALERT_RAISED',
+
   // --- audit itself (A-3) ---
   AUDIT_LOG_EXPORTED: 'AUDIT_LOG_EXPORTED',
 } as const;

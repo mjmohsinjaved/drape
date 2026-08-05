@@ -14,6 +14,7 @@ import {
   findRepositoryRoot,
   isPathInside,
   loadStorageConfig,
+  URL_EXPIRY_BUCKET_SECONDS,
 } from './storage.config';
 
 const SECRET = 'a'.repeat(64);
@@ -174,6 +175,66 @@ describe('loadStorageConfig', () => {
       expect(() =>
         loadStorageConfig(envWith({ STORAGE_ROOT: outsideRoot, STORAGE_MAX_UPLOAD_MB: 'lots' })),
       ).toThrow(StorageConfigError);
+    });
+  });
+
+  /* -----------------------------------------------------------------------------------------
+   * A URL must not be able to be born expired (H8)
+   * -------------------------------------------------------------------------------------- */
+
+  /**
+   * `SignedUrlService` rounds the issue instant **down** to {@link URL_EXPIRY_BUCKET_SECONDS} so
+   * two calls for the same key and subject produce the same, cacheable URL. The cost is that a
+   * token issued at the end of a bucket has already spent up to that many seconds of its life.
+   *
+   * At or below the bucket, that is not a shortened life — it is none: `exp` lands in the past
+   * and the very first click 403s. Worse, it would be *intermittent*, fine for a request early
+   * in a bucket and broken for one late in it, which is the hardest way for a misconfiguration
+   * to present. So the relationship is asserted at boot, where a bad value stops the process.
+   */
+  describe('signed-URL TTLs against the expiry bucket (§3.4)', () => {
+    it.each([
+      ['STORAGE_URL_TTL_PHOTO_SECONDS', String(URL_EXPIRY_BUCKET_SECONDS)],
+      ['STORAGE_URL_TTL_RENDER_SECONDS', String(URL_EXPIRY_BUCKET_SECONDS - 1)],
+      ['STORAGE_URL_TTL_PUBLIC_SECONDS', '30'],
+    ])('refuses %s at %ss — the URL would already be expired', (variable, value) => {
+      expect(() =>
+        loadStorageConfig(envWith({ STORAGE_ROOT: outsideRoot, [variable]: value })),
+      ).toThrow(StorageConfigError);
+    });
+
+    it('accepts one second above the bucket', () => {
+      const config = loadStorageConfig(
+        envWith({
+          STORAGE_ROOT: outsideRoot,
+          STORAGE_URL_TTL_PHOTO_SECONDS: String(URL_EXPIRY_BUCKET_SECONDS + 1),
+        }),
+      );
+
+      expect(config.photoUrlTtlSeconds).toBe(URL_EXPIRY_BUCKET_SECONDS + 1);
+    });
+
+    it('leaves the upload ticket alone — a ticket is not bucketed', () => {
+      // Used once by one client, cached by nothing. Shortening it by up to two minutes
+      // would buy nothing and cost a retry, so it is not signed from a bucket boundary and
+      // is not constrained by one.
+      const config = loadStorageConfig(
+        envWith({ STORAGE_ROOT: outsideRoot, STORAGE_UPLOAD_TICKET_TTL_SECONDS: '60' }),
+      );
+
+      expect(config.uploadTicketTtlSeconds).toBe(60);
+    });
+
+    it('the §7 defaults clear the bucket comfortably', () => {
+      const config = loadStorageConfig(envWith({ STORAGE_ROOT: outsideRoot }));
+
+      for (const ttl of [
+        config.photoUrlTtlSeconds,
+        config.renderUrlTtlSeconds,
+        config.publicUrlTtlSeconds,
+      ]) {
+        expect(ttl).toBeGreaterThan(URL_EXPIRY_BUCKET_SECONDS);
+      }
     });
   });
 });

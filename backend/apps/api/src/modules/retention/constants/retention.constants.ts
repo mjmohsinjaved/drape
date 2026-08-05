@@ -47,6 +47,27 @@ export const PURGE_CRON = '0 3 * * *';
 export const DELETION_SWEEP_MS = 15 * 60_000;
 
 /**
+ * How many times one deletion request is retried before it is written off.
+ *
+ * The original design recorded any failed purge as a **completion**, and the reasoning was
+ * sound as far as it went: a cascade that failed once for a reason nobody has looked at
+ * will fail again every fifteen minutes, and the sweep would spend its whole batch on it
+ * while nine other consumers waited past their SLA.
+ *
+ * What it missed is that most failures are transient — the storage volume was unreachable
+ * for ninety seconds — and that a completion row is *the* record A-20 offers as proof the
+ * account is gone. Writing one for a purge that did not happen makes the confirmation false
+ * in both directions: `findPending` filters on `completedAt`, so the request is never
+ * retried, and the row says the deletion completed when it did not.
+ *
+ * So a failure is now a **retryable** row — `completedAt = null`, `failureReason` set — and
+ * the batch is protected by a bound rather than by lying. After this many attempts the
+ * request is written off with a real completion carrying the reason, which stops it eating
+ * the batch and leaves E-14 escalating to a human, who is the retry that was always meant.
+ */
+export const DELETION_MAX_ATTEMPTS = 5;
+
+/**
  * A deletion request older than this fraction of the SLA is overdue, and the E-14 purge
  * alert fires before the promise is broken rather than after.
  *

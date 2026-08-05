@@ -34,6 +34,7 @@ import { InvitedAccountDirectoryService } from '@api/modules/users/services/invi
 import { UserDirectoryService } from '@api/modules/users/services/user-directory.service';
 
 import { createInMemoryDataSource } from '../fixtures';
+import { TEST_SEED_ENV } from '../setup/test-env';
 
 /**
  * **The boot test.** Builds the real `ApiModule` DI graph and compiles it.
@@ -85,11 +86,27 @@ import { createInMemoryDataSource } from '../fixtures';
  * They are set to the §7 defaults for this file only and restored afterwards, because
  * the point of booting `ApiModule` is that the environment gate runs for real. Nothing
  * here weakens `validateEnv`; the test meets it.
+ *
+ * ### And the three seed variables, for a reason worth stating
+ *
+ * This is the only spec that boots the real `ConfigModule.forRoot`, and that reads
+ * `.env.local` and `.env` — **a developer's own files**. `SEED_ADMIN_EMAIL` and its two
+ * companions are `@IsOptional()`, so *unset* is fine; but `.env.example` declares them with
+ * empty values, and `@IsOptional()` skips `null` and `undefined`, not `''`. A checkout whose
+ * `.env` carries `SEED_ADMIN_EMAIL=` therefore fails `@IsEmail` and this whole file goes red
+ * — for a reason that has nothing to do with the DI graph it exists to check, on one
+ * machine and not another.
+ *
+ * `TEST_SEED_ENV` was written for exactly this ("a test that wants a working seed opts in
+ * explicitly") and had no callers. Opting in here is what makes the suite a function of the
+ * repository rather than of whatever is in someone's `.env`, and it leaves the seeder's own
+ * "must throw when unset" test — which does its own unsetting — untouched.
  */
 const BOOT_ENV: Readonly<Record<string, string>> = {
   API_PORT: '4000',
   ARGON2_MEMORY_KIB: '19456',
   SMTP_SECURE: 'false',
+  ...TEST_SEED_ENV,
 };
 
 describe('ApiModule — the DI graph boots', () => {

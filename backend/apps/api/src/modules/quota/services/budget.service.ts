@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 
-import { DataSource, In, Repository, type EntityManager } from 'typeorm';
+import { DataSource, In, Like, Repository, type EntityManager } from 'typeorm';
 
 import {
   currentPeriod,
@@ -40,8 +40,11 @@ import {
   burnPercent,
   crossedThreshold,
   projectBudgetExhaustion,
+  refundNote,
+  refundNotePattern,
   sumDeltas as sumLedgerDeltas,
   trailingDailyRate as trailingDailyRateOf,
+  warnAtOf,
   type BudgetState,
   type BudgetThresholds,
   type LedgerRow,
@@ -87,6 +90,16 @@ interface RawPeriodTotalsRow {
 
 function toNumber(value: string | number | null): number {
   return value === null ? 0 : Number(value);
+}
+
+/**
+ * The A-29 policy as this service needs it: the two thresholds *and* the ratio between
+ * them, because only the ratio survives an admin adjustment (see {@link BudgetService.deriveSnapshot}).
+ * `SettingsService.getBudgetPolicy()` satisfies it structurally.
+ */
+interface BudgetPolicy extends BudgetThresholds {
+  /** `budget.warnThresholdPercent` — 80 in A-29. */
+  readonly warnThresholdPercent: number;
 }
 
 /** The derived platform position for a period (A-29, §4.27). */
@@ -352,9 +365,10 @@ export class BudgetService {
 
   /**
    * Reverses a budget charge, **inside the caller's transaction**. No-op when there is
-   * nothing to reverse — see {@link QuotaService.refundWithin} for why that is the
-   * common case and why the compensating row carries no `jobId`
-   * (`UQ_usage_ledger_job`, §4.27).
+   * nothing to reverse — see `QuotaService.refundWithin` for why that is the common case,
+   * why the compensating row carries no `jobId` (`UQ_usage_ledger_job`, §4.27), and why
+   * that in turn means the reversal has to be found by its own marker rather than by the
+   * charge. Calling this twice for one job reverses once.
    */
   async refundWithin(
     manager: EntityManager,
@@ -371,6 +385,19 @@ export class BudgetService {
       return { refunded: false, snapshot };
     }
 
+    const alreadyReversed = await repository.findOne({
+      where: {
+        period: charge.period,
+        reason: charge.reason,
+        note: Like(refundNotePattern(input.jobId)),
+      },
+    });
+
+    if (alreadyReversed !== null) {
+      const snapshot = await this.readSnapshot(repository, charge.period);
+      return { refunded: false, snapshot };
+    }
+
     const totals = await this.readTotals(repository, charge.period, new Date());
     const remaining = sumLedgerDeltas(totals.byReason, charge.period) - charge.delta;
 
@@ -382,7 +409,7 @@ export class BudgetService {
       userId: charge.userId,
       balanceAfter: remaining,
       actorId: null,
-      note: (input.reason ?? 'Refund').slice(0, 200) + ` — job ${input.jobId}`,
+      note: refundNote(input.jobId, input.reason),
     });
 
     const snapshot = await this.readSnapshot(repository, charge.period);
@@ -454,13 +481,11 @@ export class BudgetService {
           note: dto.note ?? null,
         });
 
-        const limit = before.limit + dto.delta;
-        return {
-          ...before,
-          limit,
-          remaining,
-          percentUsed: burnPercent(before.used, before.hardStopAt),
-        };
+        // Re-derived rather than patched. The adjustment moves the period's granted total,
+        // and since the hard stop and the warning are now derived *from* that total
+        // ({@link deriveSnapshot}), patching `limit` and `remaining` by hand and leaving the
+        // rest of the snapshot alone would report the very inconsistency this fix removes.
+        return this.readSnapshot(repository, period);
       },
     );
 
@@ -651,27 +676,46 @@ export class BudgetService {
    * authoritative number §4.27 names — and `used` is computed back from the granted
    * total rather than summed independently, so the two can never disagree.
    *
+   * ### The hard stop is the period's granted total, not the setting
+   *
+   * It used to be `policy.hardStopAt`, which comes from `budget.monthlyGenerations`. That
+   * made `POST /admin/usage/adjust` **inert in both directions**: an `ADMIN_ADJUSTMENT` row
+   * moves `limit` and `remaining` — both are sums over the ledger — but it does not touch a
+   * setting, so the ceiling every threshold and every refusal was measured against never
+   * moved. Raising the budget by 500 changed the number on the screen and let nothing
+   * through; lowering it by 500 took `remaining` down and left the hard stop where it was,
+   * so `remaining` could go negative while `budgetStateFor` still said `HEALTHY`.
+   *
+   * `limit` is the honest ceiling: it is the sum of every granting row of the period, which
+   * is exactly `budget.monthlyGenerations` reconciled by {@link reconcileMonthlyGrant} *plus*
+   * whatever an admin adjusted. `warnAt` is recomputed from it at the policy's own ratio, so
+   * "warn at 80%" keeps meaning 80% of the budget that actually exists rather than 80% of a
+   * number an admin has since moved.
+   *
    * Pure, and over the grouped rows rather than the repository: the sums are `ledger-math`'s,
    * which is what keeps the E-5 arithmetic tests testing the arithmetic this method uses.
    */
   private deriveSnapshot(
     totals: PeriodTotals,
     period: string,
-    policy: BudgetThresholds,
+    policy: BudgetPolicy,
   ): BudgetSnapshot {
     const remaining = sumLedgerDeltas(totals.byReason, period);
     const limit = sumLedgerDeltas(totals.byReason, period, BUDGET_GRANT_REASONS);
     const used = limit - remaining;
+
+    const hardStopAt = limit;
+    const warnAt = warnAtOf(hardStopAt, policy.warnThresholdPercent);
 
     return {
       period,
       limit,
       used,
       remaining,
-      percentUsed: burnPercent(used, policy.hardStopAt),
-      warnAt: policy.warnAt,
-      hardStopAt: policy.hardStopAt,
-      state: budgetStateFor(used, { warnAt: policy.warnAt, hardStopAt: policy.hardStopAt }),
+      percentUsed: burnPercent(used, hardStopAt),
+      warnAt,
+      hardStopAt,
+      state: budgetStateFor(used, { warnAt, hardStopAt }),
       resetsAt: periodResetsAt(period, this.timeZone()),
     };
   }

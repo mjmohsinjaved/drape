@@ -38,6 +38,7 @@ import { TryOnJob } from '@api/modules/tryon/entities/tryon-job.entity';
 import { User } from '@api/modules/users/entities/user.entity';
 
 import { createInMemoryRepository, createMock } from '../../../../test/fixtures';
+import { DELETION_MAX_ATTEMPTS } from '../constants/retention.constants';
 import { DeletionLogEntry } from '../entities/deletion-log-entry.entity';
 import { DeletionInitiator } from '../enums/deletion-initiator.enum';
 import { DeletionSubject } from '../enums/deletion-subject.enum';
@@ -358,16 +359,50 @@ function build(): Harness {
     },
   } as unknown as EntityManager;
 
+  /**
+   * **A query runner that actually rolls back.**
+   *
+   * The usual fixture's `rollbackTransaction` is a no-op, and for most services that is the
+   * right fidelity. Not for this one. The whole finding here is about what survives a
+   * rollback — the transaction destroyed every byte, then rolled back, and every row came
+   * back with its storage key pointing at nothing. Against a double where rollback does
+   * nothing, that failure mode is not merely untested, it is *unrepresentable*.
+   *
+   * So this one snapshots each repository on `startTransaction` and restores it on
+   * `rollbackTransaction`. Rows are shallow-cloned, because `update()` mutates in place and
+   * a snapshot of references would restore the mutated objects.
+   */
+  const snapshots = new Map<unknown, { id: string }[]>();
+  const queryRunner = {
+    manager,
+    isTransactionActive: false,
+    connect: async (): Promise<void> => undefined,
+    startTransaction: async (): Promise<void> => {
+      snapshots.clear();
+      for (const [entity, repository] of repositories) {
+        snapshots.set(
+          entity,
+          repository.$rows.map((row) => ({ ...row })),
+        );
+      }
+      queryRunner.isTransactionActive = true;
+    },
+    commitTransaction: async (): Promise<void> => {
+      snapshots.clear();
+      queryRunner.isTransactionActive = false;
+    },
+    rollbackTransaction: async (): Promise<void> => {
+      for (const [entity, rows] of snapshots) {
+        repositories.get(entity)?.$seed(rows);
+      }
+      snapshots.clear();
+      queryRunner.isTransactionActive = false;
+    },
+    release: async (): Promise<void> => undefined,
+  };
+
   const dataSource = {
-    createQueryRunner: () => ({
-      manager,
-      isTransactionActive: false,
-      connect: async (): Promise<void> => undefined,
-      startTransaction: async (): Promise<void> => undefined,
-      commitTransaction: async (): Promise<void> => undefined,
-      rollbackTransaction: async (): Promise<void> => undefined,
-      release: async (): Promise<void> => undefined,
-    }),
+    createQueryRunner: () => queryRunner,
   } as unknown as DataSource;
 
   const config = createMock<ConfigService>(['get']);
@@ -614,16 +649,107 @@ describe('AccountDeletionService', () => {
     });
   });
 
-  describe('a failure is recorded, not retried forever', () => {
-    it('appends a completion row carrying failureReason and moves on', async () => {
+  /* -----------------------------------------------------------------------------------------
+   * The bytes go after the commit, and a failure is retryable
+   * -------------------------------------------------------------------------------------- */
+
+  describe('unreachable storage cannot destroy the account and record it as done', () => {
+    it('never unlinks a byte before the transaction commits', async () => {
       const harness = build();
-      harness.storage.deletePrefix.mockRejectedValue(new Error('storage volume is unreachable'));
+      const orderOfEvents: string[] = [];
+
+      harness.storage.delete.mockImplementation(async (key: string) => {
+        orderOfEvents.push(`delete:${key}`);
+        return true;
+      });
+      harness.storage.deletePrefix.mockImplementation(async (prefix: string) => {
+        orderOfEvents.push(`deletePrefix:${prefix}`);
+        return 0;
+      });
+      const insert = harness.deletionLog.insert.bind(harness.deletionLog);
+      harness.deletionLog.insert = jest.fn(async (row: Parameters<typeof insert>[0]) => {
+        orderOfEvents.push('completionRow');
+        return insert(row);
+      });
+
+      await harness.service.sweep(NOW);
+
+      // The completion row — which commits with the cascade — lands before the first
+      // unlink. Reversed, a storage failure destroys every byte and then rolls every row
+      // back, leaving a DEACTIVATED account with a gallery of 404s.
+      expect(orderOfEvents[0]).toBe('completionRow');
+      expect(orderOfEvents.slice(1).every((event) => event.startsWith('delete'))).toBe(true);
+    });
+
+    it('a storage volume that dies mid-purge leaves the rows intact and nothing unlinked', async () => {
+      const harness = build();
+      // The cascade itself fails — the case that must roll back cleanly.
+      harness.inbox.purgeForUser.mockRejectedValue(new Error('the database went away'));
+
+      const { completed, failed } = await harness.service.sweep(NOW);
+
+      expect({ completed, failed }).toEqual({ completed: 0, failed: 1 });
+      // Rolled back — and this fixture's query runner really does roll back, so the
+      // assertion means something.
+      expect(harness.users.$rows).toHaveLength(1);
+      expect(rowsOf(harness, PersonPhoto)).toHaveLength(1);
+      // …and, crucially, her photographs are still *there*. The unlinks never ran, because
+      // they no longer run inside the transaction.
+      expect(harness.deletedKeys).toEqual([]);
+      expect(harness.deletedPrefixes).toEqual([]);
+    });
+
+    it('records a failure as retryable, so the next sweep tries again', async () => {
+      const harness = build();
+      harness.inbox.purgeForUser.mockRejectedValue(new Error('storage volume is unreachable'));
 
       const { completed, failed } = await harness.service.sweep(NOW);
 
       expect({ completed, failed }).toEqual({ completed: 0, failed: 1 });
       expect(harness.deletionLog.$rows).toHaveLength(2);
-      expect(harness.deletionLog.$rows[1].failureReason).toContain('storage volume is unreachable');
+
+      const failure = harness.deletionLog.$rows[1];
+      expect(failure.failureReason).toContain('storage volume is unreachable');
+      // The finding in one assertion. A completion row here would be false in both
+      // directions: it claims the account is gone, and `findPending` filters on exactly
+      // this column, so the request would never be retried.
+      expect(failure.completedAt).toBeNull();
+      await expect(harness.service.findPending()).resolves.toHaveLength(1);
+    });
+
+    it('retries until the attempts are spent, then writes the request off', async () => {
+      const harness = build();
+      harness.inbox.purgeForUser.mockRejectedValue(new Error('still unreachable'));
+
+      for (let attempt = 0; attempt < DELETION_MAX_ATTEMPTS; attempt += 1) {
+        await harness.service.sweep(NOW);
+      }
+
+      // Written off with a real completion, so it stops eating the batch while nine other
+      // consumers wait past their SLA — the concern the original comment had, addressed
+      // with a bound instead of with an untrue row.
+      const last = harness.deletionLog.$rows[harness.deletionLog.$rows.length - 1];
+      expect(last.completedAt).toEqual(NOW);
+      expect(last.failureReason).toContain('still unreachable');
+      await expect(harness.service.findPending()).resolves.toHaveLength(0);
+    });
+
+    it('completes the purge even when the unlink afterwards fails', async () => {
+      const harness = build();
+      harness.storage.deletePrefix.mockRejectedValue(new Error('storage volume is unreachable'));
+
+      const { completed, failed } = await harness.service.sweep(NOW);
+
+      // The account really is deleted: every row is gone, so nothing can reach the
+      // residue — a signed URL is minted from a row. What survives is unreferenced, which
+      // is precisely what `OrphanSweepService` collects (§3.5 step 4).
+      expect({ completed, failed }).toEqual({ completed: 1, failed: 0 });
+      expect(harness.users.$rows).toHaveLength(0);
+      expect(rowsOf(harness, PersonPhoto)).toHaveLength(0);
+
+      const completion = harness.deletionLog.$rows[1];
+      expect(completion.completedAt).toEqual(NOW);
+      expect(completion.failureReason).toBeNull();
     });
   });
 });
