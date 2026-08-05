@@ -1,13 +1,25 @@
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
-import { PagePlaceholder } from '@/components/states';
+import { CategoriesScreen } from '@/features/categories/components/CategoriesScreen';
 import { buildMetadata } from '@/lib/metadata';
 import { routes } from '@/lib/routes';
+import { serverGet } from '@/lib/server-api';
 
+import type { AdminCategory } from '@/features/categories/types/admin-categories';
 import type { LocaleParams } from '@/lib/route-params';
 import type { Metadata } from 'next';
 
 type Props = LocaleParams;
+
+/**
+ * The console is per-request, never prerendered.
+ *
+ * `lib/server-api.ts` catches every throw from its axios call, including the dynamic-usage
+ * signal Next raises when `cookies()` is read during a static render — so a page that reads
+ * through it would prerender to a data-less shell instead of bailing to dynamic. Saying so
+ * explicitly keeps every admin screen request-scoped and its session-scoped reads honest.
+ */
+export const dynamic = 'force-dynamic';
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { locale } = await params;
@@ -22,22 +34,21 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 /**
- * TODO(W3): replace `PagePlaceholder` with the feature component. The route, the
- * metadata, the loading skeleton and the error boundary are already in place — this segment
- * needs a body, not a decision about where it lives (ARCHITECTURE §6.6).
+ * A-4 … A-7 — the category manager.
+ *
+ * A Server Component that reads the tree with the incoming session cookie (B-9) and hands it to
+ * the client island as `initialData`, so the first paint is the real tree rather than a skeleton
+ * that resolves to the same thing a moment later. A failed read is not thrown: the island
+ * re-requests and renders the D-5 error or permission-denied state itself, which keeps one code
+ * path for "the tree did not load" whether that happened on the server or in the browser.
  */
 export default async function AdminCategoriesPage({ params }: Props) {
   const { locale } = await params;
   setRequestLocale(locale);
 
-  const t = await getTranslations({ locale, namespace: 'admin.categories' });
+  const result = await serverGet<AdminCategory[]>('/admin/categories', {
+    params: { includeArchived: true },
+  });
 
-  return (
-    <PagePlaceholder
-      title={t('title')}
-      description={t('description')}
-      workstream="W3"
-      notes={[t('next1'), t('next2')]}
-    />
-  );
+  return <CategoriesScreen initialTree={result.ok ? result.data : undefined} />;
 }

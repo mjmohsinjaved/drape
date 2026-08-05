@@ -20,12 +20,19 @@ import { AuthModule } from '@api/modules/auth/auth.module';
 import { CatalogModule } from '@api/modules/catalog/catalog.module';
 import { CategoriesModule } from '@api/modules/categories/categories.module';
 import { ConsentsModule } from '@api/modules/consents/consents.module';
+import { EnquiriesModule } from '@api/modules/enquiries/enquiries.module';
 import { FilesModule } from '@api/modules/files/files.module';
 import { GarmentImagesModule } from '@api/modules/garments/garment-images.module';
 import { GarmentsModule } from '@api/modules/garments/garments.module';
 import { HealthModule } from '@api/modules/health/health.module';
 import { InvitesModule } from '@api/modules/invites/invites.module';
+import { PersonPhotosModule } from '@api/modules/person-photos/person-photos.module';
+import { QuotaModule } from '@api/modules/quota/quota.module';
+import { ResultsModule } from '@api/modules/results/results.module';
 import { SettingsModule } from '@api/modules/settings/settings.module';
+import { ShareModule } from '@api/modules/share/share.module';
+import { ShortlistModule } from '@api/modules/shortlist/shortlist.module';
+import { TryOnModule } from '@api/modules/tryon/tryon.module';
 import { UsersModule } from '@api/modules/users/users.module';
 
 /**
@@ -102,9 +109,14 @@ import { UsersModule } from '@api/modules/users/users.module';
     GarmentImagesModule,
     CatalogModule,
     FilesModule,
-    // Still to land: PersonPhotosModule, TryOnModule, ResultsModule,
-    // ShortlistModule, ShareModule, EnquiriesModule, QuotaModule,
-    // ModerationModule, AnalyticsModule, RetentionModule.
+    PersonPhotosModule,
+    QuotaModule,
+    TryOnModule,
+    ResultsModule,
+    ShortlistModule,
+    ShareModule,
+    EnquiriesModule,
+    // Still to land: ModerationModule, AnalyticsModule, RetentionModule.
     // --- end feature modules ---
   ],
 })

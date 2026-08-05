@@ -2,9 +2,8 @@ import Link from 'next/link';
 
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
-import { Callout } from '@repo/ui';
-
 import { AuthShell } from '@/components/layout/AuthShell';
+import { ConfirmEmailToken } from '@/features/auth/components/EmailVerification';
 import { buildMetadata } from '@/lib/metadata';
 import { routes } from '@/lib/routes';
 
@@ -26,8 +25,20 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   });
 }
 
+/**
+ * `/verify-email/[token]` — C-3.
+ *
+ * ARCHITECTURE §6.6 sketches this segment as consuming the token during the server render.
+ * It does not, deliberately: the token is **single use**, and mail clients, corporate link
+ * scanners and messaging previews fetch every URL in a message. A token spent by a render is
+ * already gone by the time the reader presses the link. One deliberate press costs a tap and
+ * makes the link work.
+ *
+ * The confirmation is also a mutation, and a mutation in a render is not something to reach for
+ * regardless.
+ */
 export default async function AuthVerifyEmailTokenPage({ params }: Props) {
-  const { locale } = await params;
+  const { locale, token } = await params;
   setRequestLocale(locale);
 
   const t = await getTranslations({ locale, namespace: 'auth.verifyEmailToken' });
@@ -39,18 +50,7 @@ export default async function AuthVerifyEmailTokenPage({ params }: Props) {
       description={t('description')}
       footer={<Link href={routes.login(locale)}>{t('footerLogin')}</Link>}
     >
-      {/*
-        ══ TODO(W1) — form insertion point ══
-        Replace this notice with the client form island. The shell, the layout, the metadata
-        and the states around it are finished; only the form itself is outstanding.
-        The form must: validate with zod, surface field errors through `errors[]` from the
-        API envelope (§2.3), display the server's message verbatim (it is already user-safe),
-        keep every control at least 44 x 44 px, and never distinguish an unknown email from a
-        wrong password (S-6).
-      */}
-      <Callout tone="info" title={t('todoTitle')}>
-        {t('todoBody')}
-      </Callout>
+      <ConfirmEmailToken locale={locale} token={token} />
     </AuthShell>
   );
 }

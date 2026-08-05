@@ -2,9 +2,8 @@ import Link from 'next/link';
 
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
-import { Callout } from '@repo/ui';
-
 import { AuthShell } from '@/components/layout/AuthShell';
+import { ResetPasswordForm } from '@/features/auth/components/ResetPasswordForm';
 import { buildMetadata } from '@/lib/metadata';
 import { routes } from '@/lib/routes';
 
@@ -26,8 +25,16 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   });
 }
 
+/**
+ * `/reset-password/[token]` — S-6.
+ *
+ * The token is **not** validated on render. `POST /auth/password/reset` consumes it in the same
+ * call that sets the password, and it is single use: a validating probe would either burn it
+ * before the reader had typed anything, or become a free oracle for guessing tokens. So the
+ * screen renders the form, and the one call that matters decides.
+ */
 export default async function AuthResetPasswordTokenPage({ params }: Props) {
-  const { locale } = await params;
+  const { locale, token } = await params;
   setRequestLocale(locale);
 
   const t = await getTranslations({ locale, namespace: 'auth.resetPasswordToken' });
@@ -39,18 +46,7 @@ export default async function AuthResetPasswordTokenPage({ params }: Props) {
       description={t('description')}
       footer={<Link href={routes.login(locale)}>{t('footerLogin')}</Link>}
     >
-      {/*
-        ══ TODO(W1) — form insertion point ══
-        Replace this notice with the client form island. The shell, the layout, the metadata
-        and the states around it are finished; only the form itself is outstanding.
-        The form must: validate with zod, surface field errors through `errors[]` from the
-        API envelope (§2.3), display the server's message verbatim (it is already user-safe),
-        keep every control at least 44 x 44 px, and never distinguish an unknown email from a
-        wrong password (S-6).
-      */}
-      <Callout tone="info" title={t('todoTitle')}>
-        {t('todoBody')}
-      </Callout>
+      <ResetPasswordForm locale={locale} token={token} />
     </AuthShell>
   );
 }

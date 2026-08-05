@@ -2,38 +2,681 @@
   "categories": {
     "title": "Categories",
     "description": "The tree customers browse. Reorder or archive it without breaking a link.",
-    "next1": "The tree with drag reorder, and archive rather than delete.",
-    "next2": "A category in use cannot be removed silently — it says what depends on it."
+    "addCategory": "Add a category",
+    "showArchived": "Show archived categories",
+    "loading": "Loading the category tree",
+    "tableCaption": "Categories, in the order customers see them",
+    "reorderHelpTitle": "Reordering",
+    "reorderHelpBody": "Drag a row by its handle, or use the up and down buttons on any row. Both save the whole order for that group.",
+    "coverUnavailable": "Cover image unavailable",
+    "noCover": "No cover",
+    "columns": {
+      "order": "Reorder handle",
+      "cover": "Cover image",
+      "name": "Name",
+      "slug": "Slug",
+      "published": "Published pieces",
+      "state": "State",
+      "actions": "Actions"
+    },
+    "state": {
+      "live": "Live",
+      "archived": "Archived"
+    },
+    "actions": {
+      "moveUp": "Move {name} up",
+      "moveDown": "Move {name} down",
+      "addChild": "Add a sub-category under {name}",
+      "edit": "Edit {name}",
+      "archive": "Archive {name}",
+      "restore": "Restore {name}",
+      "delete": "Delete {name}"
+    },
+    "error": {
+      "title": "The category tree didn't load",
+      "retry": "Try again"
+    },
+    "empty": {
+      "title": "Add your first category",
+      "body": "Categories are how customers find their way around the collection — bridal, formal, festive. Every piece belongs to one.",
+      "action": "Add a category"
+    },
+    "toast": {
+      "created": "Added {name}",
+      "saved": "Saved {name}",
+      "archived": "Archived {name}",
+      "restored": "Restored {name}",
+      "deleted": "Deleted {name}"
+    },
+    "form": {
+      "createTitle": "Add a category",
+      "createBody": "Give it a name customers will recognise. You can add a cover image once it exists.",
+      "editTitle": "Edit {name}",
+      "editBody": "Renaming keeps the existing link working. Changing the slug does not.",
+      "name": "Name",
+      "namePlaceholder": "Bridal lehenga",
+      "nameHint": "Shown to customers on the browse screen.",
+      "nameRequired": "Give the category a name customers will recognise.",
+      "nameTooLong": "Keep the name to 80 characters or fewer.",
+      "nameUr": "Name in Urdu",
+      "nameUrHint": "Shown to customers reading in Urdu. Leave it blank to use the English name.",
+      "slug": "Slug",
+      "slugHint": "The part of the address customers see. Changing it breaks any link already shared.",
+      "slugShape": "Use lowercase words separated by single hyphens, like bridal-lehenga.",
+      "parent": "Sits under",
+      "parentRoot": "Top level",
+      "parentHint": "Categories go one level deep, so a sub-category can't have children of its own.",
+      "parentLocked": "This category has sub-categories, so it stays at the top level.",
+      "cover": "Cover image",
+      "coverChoose": "Choose a cover image",
+      "coverReplaceReady": "New cover ready — save to apply",
+      "coverRemove": "Remove the cover",
+      "coverHint": "JPEG, PNG, WebP or HEIC, up to 10 MB.",
+      "coverUploading": "Uploading the cover image",
+      "coverAfterCreate": "Add a cover image once the category exists — the upload is filed under it.",
+      "coverUnavailable": "Cover image unavailable",
+      "coverNone": "No cover",
+      "cancel": "Cancel",
+      "save": "Save",
+      "create": "Add category"
+    },
+    "delete": {
+      "title": "Delete {name}",
+      "body": "This removes {name} from the tree for good. Pieces filed under it keep their history but will need a new category.",
+      "confirm": "Delete category",
+      "cancel": "Cancel",
+      "typePrompt": "To confirm, type {name}",
+      "mismatch": "The name doesn't match yet. Type it exactly as shown above.",
+      "blockedTitle": "{name} can't be deleted",
+      "blockedBody": "{count, plural, one {It holds # published piece.} other {It holds # published pieces.}} A category that customers can still browse into can't be removed.",
+      "archiveInsteadTitle": "Archive it instead",
+      "archiveInsteadBody": "Archiving takes it off the storefront and leaves every piece where it is. You can restore it at any time.",
+      "alreadyArchived": "It is already archived, so customers can't browse into it. Move its pieces to another category to delete it.",
+      "close": "Close",
+      "archive": "Archive category"
+    }
   },
   "catalog": {
     "title": "Catalog",
-    "description": "Every garment, its publish state and its image health.",
-    "next1": "The dense table with sorting, selection and bulk actions.",
-    "next2": "Keyboard: j and k move, Enter opens, p publishes, / searches."
-  },
-  "catalogNew": {
-    "title": "Add a garment",
-    "description": "Details, images and the test render, in one pass.",
-    "next1": "The editor with drag-and-drop images and per-file progress.",
-    "next2": "Saving as a draft is always available; publishing needs the checks to pass."
-  },
-  "catalogHealth": {
-    "title": "Catalog health",
-    "description": "Garments missing an image, a price or an approved test render.",
-    "next1": "One row per problem, with the fix a click away.",
-    "next2": "Counts that match the dashboard, so the two never disagree."
-  },
-  "garment": {
-    "title": "Garment",
-    "description": "Details, images, the quality report and the test render.",
-    "next1": "The editor, the image manager and the quality report side by side.",
-    "next2": "Publish state changes are audited and confirmed in the same words."
-  },
-  "garmentTestRender": {
-    "title": "Test render",
-    "description": "The source photo beside the render. Approve it, or send it back with a reason.",
-    "next1": "Side-by-side compare at full width, with zoom on both.",
-    "next2": "Approve and reject, both audited, with the reason required on reject."
+    "description": "Every piece, its publish state and its photo health.",
+    "healthLink": "Catalog health",
+    "addGarment": "Add a piece",
+    "loading": "Loading the catalog",
+    "tableCaption": "Every piece in the catalog",
+    "rowsLabel": "Catalog rows. Press j and k to move, Enter to open.",
+    "selectAll": "Select every piece on this page",
+    "selectRow": "Select {title}",
+    "resultCount": "{total, plural, one {# piece} other {# pieces}} · page {page} of {pages}",
+    "flagged": "Flagged for review",
+    "uncategorised": "No category",
+    "noStarRate": "No verdicts yet",
+    "paginationLabel": "Catalog pages",
+    "paginationSummary": "Showing {from}–{to} of {total}",
+    "columns": {
+      "piece": "Piece",
+      "category": "Category",
+      "price": "Price",
+      "state": "State",
+      "testRender": "Test render",
+      "quality": "Photo quality",
+      "tryOns": "Try-ons",
+      "starRate": "Star rate",
+      "updated": "Updated"
+    },
+    "filters": {
+      "searchLabel": "Search",
+      "searchPlaceholder": "Title, SKU or style tag",
+      "category": "Category",
+      "anyCategory": "Every category",
+      "state": "State",
+      "anyState": "Every state",
+      "sort": "Sort by"
+    },
+    "sort": {
+      "newest": "Newest first",
+      "mostTried": "Most tried on",
+      "highestStarRate": "Highest star rate"
+    },
+    "publishState": {
+      "label": "Publish state",
+      "DRAFT": "Draft",
+      "PUBLISHED": "Live",
+      "ARCHIVED": "Archived"
+    },
+    "testRenderState": {
+      "label": "Test render",
+      "NONE": "Not run",
+      "PENDING": "Waiting for approval",
+      "APPROVED": "Approved",
+      "REJECTED": "Sent back"
+    },
+    "shortcuts": {
+      "intro": "Keyboard:",
+      "move": "move",
+      "open": "open",
+      "select": "select",
+      "publish": "publish or take down",
+      "approve": "test render",
+      "search": "search"
+    },
+    "error": {
+      "title": "The catalog didn't load",
+      "retry": "Try again"
+    },
+    "empty": {
+      "title": "Add your first piece",
+      "body": "A piece needs a title, a category, a price and one photograph before it can go live. It takes about two minutes.",
+      "action": "Add a piece"
+    },
+    "noMatches": {
+      "title": "Nothing matches these filters",
+      "body": "Widen the search, or clear the filters to see the whole catalog.",
+      "action": "Clear the filters"
+    },
+    "toast": {
+      "published": "{title} is live",
+      "unpublished": "{title} is back to draft",
+      "publishBlockedHint": "Open the piece to see what it still needs."
+    },
+    "firstRun": {
+      "title": "From an empty catalog to your first live piece",
+      "body": "Five steps. Each one takes you straight to the screen that does it.",
+      "stepperLabel": "Getting the first piece live",
+      "steps": {
+        "category": {
+          "label": "Make a category",
+          "description": "Every piece belongs to one.",
+          "action": "Add a category"
+        },
+        "garment": {
+          "label": "Add a piece",
+          "description": "Title, SKU, category, price.",
+          "action": "Add a piece"
+        },
+        "photo": {
+          "label": "Add photographs",
+          "description": "One of them is the try-on source.",
+          "action": "Add photographs"
+        },
+        "testRender": {
+          "label": "Run a test render",
+          "description": "See it on a reference model, then approve it.",
+          "action": "Run a test render"
+        },
+        "publish": {
+          "label": "Publish",
+          "description": "The piece goes on the storefront.",
+          "action": "Open the piece to publish"
+        }
+      }
+    },
+    "quality": {
+      "label": "Photo quality",
+      "notChecked": "Not checked yet",
+      "notCheckedBody": "The photo check runs on the try-on source.",
+      "notCheckedHint": "Mark one of the photographs as the try-on source and the check runs straight away.",
+      "scoreShort": "{score} of 100",
+      "needsBetterPhotoShort": "Needs a better photo · {score}",
+      "overriddenShort": "Override recorded · {score}",
+      "sectionTitle": "Photo quality",
+      "sectionDescription": "The try-on source is checked against five things the model needs. The pass mark is {minScore}.",
+      "revalidate": "Check the photo again",
+      "scoreLabel": "Photo quality score",
+      "scoreOf": "{score} of 100, pass mark {minScore}",
+      "needsBetterPhoto": "Needs a better photo",
+      "needsBetterPhotoBody": "Change what the checks below name and this clears on its own. Until then the piece can't go live.",
+      "overriddenBody": "An override was recorded on {when}, so this piece can go live with this photograph. The score has not changed.",
+      "readyTitle": "This photograph is ready for try-on",
+      "readyBody": "It passes every check, so nothing here blocks publishing.",
+      "checkPassed": ", passed",
+      "checkFailed": ", needs changing",
+      "checks": {
+        "LONG_EDGE": "Resolution",
+        "DOMINANT_GARMENT": "One garment, filling the frame",
+        "BACKGROUND_UNIFORMITY": "Plain background",
+        "ASPECT_RATIO": "Upright framing",
+        "FORMAT": "File format"
+      },
+      "overrideExplainer": "{count, plural, one {The check above is what the model needs.} other {The # checks above are what the model needs.}} Re-shooting or re-exporting is the fix. If the photograph genuinely cannot be replaced, an override lets this piece go live and is written to the audit log.",
+      "overrideAction": "Record an override instead"
+    },
+    "override": {
+      "title": "Publish {title} with this photograph?",
+      "body": "It scores {score} against a pass mark of {minScore}.",
+      "consequenceTitle": "What this does",
+      "consequenceFailedChecks": "{count, plural, one {The piece goes live with # failing photo check.} other {The piece goes live with # failing photo checks.}}",
+      "consequenceConsumers": "Customers trying it on will see more failed try-ons than usual.",
+      "consequenceAudit": "The override is written to the audit log under your name, with the reason you give below.",
+      "reasonLabel": "Why this piece may go live below the bar",
+      "reasonPlaceholder": "Archive piece — the only surviving photograph, a reshoot isn't possible.",
+      "reasonHint": "At least {min} characters. This is what the audit log records.",
+      "reasonTooShort": "Say why in a sentence — this is the only record of the decision.",
+      "cancel": "Keep the block",
+      "confirm": "Record the override"
+    },
+    "form": {
+      "identity": {
+        "title": "The piece",
+        "description": "What it is called, how it is coded, and where it sits."
+      },
+      "detail": {
+        "title": "Detail",
+        "description": "What customers filter and read by."
+      },
+      "pricing": {
+        "title": "Price",
+        "description": "Whether it sells or rents, and what that costs."
+      },
+      "fields": {
+        "title": "Title",
+        "titleUr": "Title in Urdu",
+        "sku": "SKU",
+        "slug": "Slug",
+        "category": "Category",
+        "colors": "Colours",
+        "fabric": "Fabric",
+        "sizes": "Sizes available",
+        "styleTags": "Style tags",
+        "embellishment": "Embellishment weight",
+        "description": "Description",
+        "descriptionUr": "Description in Urdu",
+        "mode": "Sale or rental",
+        "price": "Price",
+        "deposit": "Deposit"
+      },
+      "placeholders": {
+        "title": "Zarrin bridal lehenga",
+        "sku": "ZBL-00042",
+        "colors": "maroon, gold",
+        "fabric": "Raw silk",
+        "sizes": "S, M, L",
+        "styleTags": "bridal, traditional",
+        "description": "What the piece is, in a sentence or two.",
+        "category": "Choose a category"
+      },
+      "hints": {
+        "title": "Shown to customers on the storefront.",
+        "titleUr": "Leave it blank to use the English title.",
+        "sku": "Your own stock code. It has to be unique across live pieces.",
+        "slug": "The part of the address customers see. It fills itself in from the title.",
+        "category": "Archived categories aren't offered — pieces can't be filed under one.",
+        "colors": "Press Enter after each colour. Customers filter by these.",
+        "sizes": "Press Enter after each size.",
+        "styleTags": "Press Enter after each tag. These feed search.",
+        "embellishment": "How heavy the work is. Customers filter by this.",
+        "description": "Fabric, work, occasion. Two or three sentences is plenty.",
+        "price": "In major units, with up to two decimal places.",
+        "deposit": "Held against the rental and returned afterwards.",
+        "depositSaleOnly": "A deposit only applies to a rental."
+      },
+      "errors": {
+        "skuRequired": "Give the piece a stock code.",
+        "titleRequired": "Give the piece a title customers will recognise.",
+        "categoryRequired": "Choose the category this piece belongs to.",
+        "priceRequired": "Enter the price.",
+        "priceInvalid": "Enter the price as a number, with up to two decimal places.",
+        "depositRequired": "A rental needs a deposit. Enter the amount held against it.",
+        "depositInvalid": "Enter the deposit as a number, with up to two decimal places."
+      },
+      "embellishment": {
+        "LIGHT": {
+          "label": "Light",
+          "description": "Little or no surface work."
+        },
+        "MEDIUM": {
+          "label": "Medium",
+          "description": "Worked panels, borders, selective zari."
+        },
+        "HEAVY": {
+          "label": "Heavy",
+          "description": "Dense work across the piece."
+        }
+      },
+      "mode": {
+        "SALE": {
+          "label": "Sale",
+          "description": "The customer buys it. No deposit applies."
+        },
+        "RENTAL": {
+          "label": "Rental",
+          "description": "The customer borrows it. A deposit is required."
+        }
+      },
+      "removeTag": "Remove {tag}",
+      "depositNoticeTitle": "No deposit on a sale",
+      "depositNoticeBody": "Deposits only apply to rentals, so this piece won't carry one. Switch it to a rental and the deposit field comes back."
+    },
+    "images": {
+      "sectionTitle": "Photographs",
+      "sectionDescription": "One photograph is the try-on source. The rest are the gallery customers scroll.",
+      "dropzoneLabel": "Add photographs of this piece",
+      "dropzoneBrowse": "Drop them here, or choose files",
+      "dropzoneHint": "JPEG, PNG, WebP or HEIC, up to {size} each, {max} in total.",
+      "uploadsLabel": "Photographs being uploaded",
+      "removeUpload": "Remove from the queue",
+      "retryUpload": "Try this upload again",
+      "finalising": "Filing it against the piece…",
+      "uploadedQuality": "Photo quality {score} of 100",
+      "clearFinished": "Clear the finished uploads",
+      "atCapacityTitle": "This gallery is full",
+      "atCapacityBody": "A piece holds up to {max} photographs. Remove one to add another.",
+      "loadFailedTitle": "The photographs didn't load",
+      "empty": "No photographs yet. Drop the first one above — the piece can't go live without one.",
+      "noSourceTitle": "No try-on source yet",
+      "noSourceBody": "Mark one photograph as the try-on source. It is the image the model works from, and the piece can't go live without it.",
+      "imageUnavailable": "This image is not available",
+      "noImage": "No image",
+      "roleLabel": "Role",
+      "tryOnSource": "Try-on source",
+      "galleryImage": "Gallery",
+      "dimensions": "{width}×{height}",
+      "altLabel": "Alt text",
+      "altPlaceholder": "Deep red lehenga with gold zari on the hem",
+      "position": "Position {position}",
+      "cannotDeleteLiveSource": "The try-on source of a live piece can't be deleted. Take the piece down first, or mark another photograph as the source.",
+      "actions": {
+        "moveEarlier": "Move photograph {position} earlier",
+        "moveLater": "Move photograph {position} later",
+        "setSource": "Use as try-on source",
+        "delete": "Delete photograph {position}"
+      },
+      "toast": {
+        "sourceSet": "Try-on source changed",
+        "sourceSetHint": "The test render has been reset, so this piece needs a fresh one approved before it can go live.",
+        "deleted": "Photograph deleted"
+      },
+      "deleteDialog": {
+        "title": "Delete this photograph",
+        "body": "It is removed from the gallery for good.",
+        "sourceBody": "This is the try-on source. Deleting it leaves {title} without one, and it can't go live until another is chosen.",
+        "confirm": "Delete photograph",
+        "cancel": "Cancel",
+        "typePrompt": "To confirm, type {name}",
+        "mismatch": "The title doesn't match yet. Type it exactly as shown above."
+      },
+      "loading": "Loading the photographs"
+    },
+    "publish": {
+      "sectionTitle": "Publishing",
+      "sectionDescription": "What this piece still needs, and what happens next.",
+      "fields": {
+        "state": "State",
+        "testRender": "Test render",
+        "publishedAt": "Went live",
+        "updatedAt": "Last edited"
+      },
+      "never": "Not yet",
+      "blockedTitle": "{count, plural, one {One thing before this can go live} other {# things before this can go live}}",
+      "blockers": {
+        "source": {
+          "title": "No try-on source photograph",
+          "body": "Add a photograph and mark it as the try-on source. It is the image the model works from.",
+          "link": "Go to the photographs"
+        },
+        "testRender": {
+          "title": "No approved test render",
+          "none": "Run a test render and approve it. This is how we know the piece works on a body before a customer sees it.",
+          "pending": "A test render is waiting for your decision. Approve it, or send it back with a reason.",
+          "rejected": "The last test render was sent back. Change the photograph or run another, then approve it.",
+          "link": "Go to the test render"
+        },
+        "quality": {
+          "title": "The photograph is below the quality bar",
+          "body": "It scores {score}. Change what the photo report names, or record an override with a reason.",
+          "link": "Go to the photo report"
+        }
+      },
+      "readyTitle": "Ready to go live",
+      "readyBody": "Every check has passed. Publishing puts this piece on the storefront and makes it available to try on.",
+      "overriddenTitle": "Published below the quality bar",
+      "overriddenBody": "An override was recorded on {when}. The photograph still fails its checks, and customers may see more failed try-ons from this piece.",
+      "actions": {
+        "publish": "Publish",
+        "unpublish": "Take it down",
+        "archive": "Archive",
+        "delete": "Delete"
+      },
+      "archiveVsDelete": "Archiving keeps the piece and its history and takes it off the storefront. Deleting keeps the history but removes the piece from the catalog.",
+      "deleteDialog": {
+        "title": "Delete {title}",
+        "body": "The piece leaves the catalog. Its try-on history stays in analytics, and its SKU and slug become free to reuse.",
+        "confirm": "Delete piece",
+        "cancel": "Cancel",
+        "typePrompt": "To confirm, type {name}",
+        "mismatch": "The title doesn't match yet. Type it exactly as shown above."
+      },
+      "toast": {
+        "publish": "{title} is live",
+        "unpublish": "{title} is back to draft",
+        "archive": "{title} is archived",
+        "deleted": "{title} has been deleted"
+      }
+    },
+    "editor": {
+      "metaTitle": "Piece",
+      "metaDescription": "Details, photographs, the photo report and the test render.",
+      "description": "SKU {sku}",
+      "testRenderLink": "Test render",
+      "backToList": "Back to the catalog",
+      "save": "Save changes",
+      "loading": "Loading this piece",
+      "error": {
+        "title": "This piece didn't load",
+        "retry": "Try again",
+        "back": "Back to the catalog"
+      },
+      "toast": {
+        "saved": "Saved {title}",
+        "rolledBack": "Your changes have been put back the way they were.",
+        "overrideRecorded": "Override recorded",
+        "revalidated": "Checked again — {score} of 100"
+      }
+    },
+    "new": {
+      "title": "Add a piece",
+      "description": "Details first, photographs next.",
+      "cancel": "Cancel",
+      "save": "Save and add photographs",
+      "photosNextTitle": "Photographs come next",
+      "photosNextBody": "Save the details and the piece opens ready for its photographs. Uploads are filed against a piece, so it has to exist first.",
+      "noCategories": {
+        "title": "Make a category first",
+        "body": "Every piece belongs to a category, and there are none yet. It takes a moment.",
+        "action": "Add a category"
+      },
+      "toast": {
+        "created": "Added {title}",
+        "createdHint": "Add its photographs next."
+      }
+    },
+    "testRender": {
+      "metaTitle": "Test render",
+      "metaDescription": "The render beside the source photograph. Approve it, or send it back with a reason.",
+      "title": "Test render — {title}",
+      "description": "The render sits beside the photograph it came from. Approving it is what lets this piece go live.",
+      "backToGarment": "Back to the piece",
+      "loading": "Loading the test render",
+      "error": {
+        "title": "The test render didn't load",
+        "retry": "Try again",
+        "back": "Back to the catalog"
+      },
+      "failedTitle": "The last render didn't finish",
+      "sourceTitle": "Source photograph",
+      "sourceDescription": "The try-on source, as the model receives it.",
+      "renderTitle": "Test render",
+      "renderDescription": "The piece on a reference model.",
+      "notRunYet": "No render yet. Run one below to see this piece on a reference model.",
+      "zoomSource": "Zoom the source photograph",
+      "zoomRender": "Zoom the test render",
+      "sourceAlt": "The try-on source photograph of {title}",
+      "renderAlt": "{title} rendered on a reference model",
+      "imageUnavailable": "This image is not available",
+      "noImage": "No image",
+      "noSource": {
+        "title": "Add a try-on source first",
+        "body": "A test render needs one photograph marked as the try-on source. Add a photograph to this piece and mark it.",
+        "action": "Go to the photographs"
+      },
+      "run": {
+        "title": "Run a render",
+        "description": "One render against one reference model.",
+        "model": "Reference model",
+        "modelDefault": "Use the default model",
+        "modelHint": "Reference models are the only person photographs we send upstream. A customer's photo is never used here.",
+        "costTitle": "What this spends",
+        "costBody": "One generation from the studio's monthly budget. It never touches a customer's allowance.",
+        "action": "Run a test render",
+        "again": "Run it again"
+      },
+      "decision": {
+        "title": "Your decision",
+        "description": "Approving unblocks publishing. Sending it back keeps the piece off the storefront.",
+        "approvedTitle": "Approved",
+        "approvedBody": "This piece can now be published.",
+        "rejectedTitle": "Sent back",
+        "rejectedBody": "This piece stays off the storefront until a new render is approved.",
+        "reasonLabel": "Why it is going back",
+        "reasonPlaceholder": "The drape falls wrong at the shoulder.",
+        "reasonHint": "Whoever picks this up next needs to know whether the photograph was wrong or the render was.",
+        "reasonRequired": "Say what was wrong with it — this is the only record of the decision.",
+        "approve": "Approve this render",
+        "reject": "Send it back",
+        "rejectConfirm": "Send it back",
+        "cancelReject": "Cancel"
+      },
+      "toast": {
+        "ran": "Test render finished",
+        "approved": "Test render approved",
+        "approvedHint": "This piece can now be published.",
+        "rejected": "Test render sent back"
+      }
+    },
+    "bulk": {
+      "barLabel": "Actions for the selected pieces",
+      "selected": "{count, plural, one {# piece selected} other {# pieces selected}}",
+      "publish": "Publish",
+      "unpublish": "Take down",
+      "recategorise": "Move to a category",
+      "archive": "Archive",
+      "testRender": "Run test renders",
+      "overRecordCap": "Select {max} pieces or fewer to act on them together.",
+      "overRenderCap": "Test renders run in batches of {max} or fewer.",
+      "clear": "Clear the selection",
+      "cancel": "Cancel",
+      "done": "Done",
+      "working": "Working through the selection…",
+      "progressLabel": "Batch progress",
+      "progressCounts": "{done} of {total} finished · {failed} didn't go through",
+      "runFailedTitle": "The batch didn't start",
+      "confirm": {
+        "named": "This affects {names}.",
+        "namedWithRest": "This affects {names} and {count, plural, one {# other piece} other {# other pieces}}.",
+        "destination": "Move them to",
+        "destinationPlaceholder": "Choose a category",
+        "destinationHint": "Published pieces keep their state; the category counts move with them.",
+        "PUBLISH": {
+          "title": "{count, plural, one {Publish # piece} other {Publish # pieces}}",
+          "body": "Each piece goes through the same checks as publishing it on its own. Anything without an approved test render is left as it is and named in the report.",
+          "action": "Publish them"
+        },
+        "UNPUBLISH": {
+          "title": "{count, plural, one {Take down # piece} other {Take down # pieces}}",
+          "body": "They come off the storefront and go back to draft. Nothing is deleted and their history stays.",
+          "action": "Take them down"
+        },
+        "ARCHIVE": {
+          "title": "{count, plural, one {Archive # piece} other {Archive # pieces}}",
+          "body": "They come off the storefront and out of the working catalog. Their try-on history stays in analytics.",
+          "action": "Archive them"
+        },
+        "RECATEGORISE": {
+          "title": "{count, plural, one {Move # piece} other {Move # pieces}}",
+          "body": "They move to the category you choose. Nothing else about them changes.",
+          "action": "Move them"
+        },
+        "TEST_RENDER": {
+          "title": "{count, plural, one {Run a test render for # piece} other {Run test renders for # pieces}}",
+          "body": "Each one is a real generation against the studio's budget. Pieces that already have an approved render are skipped. The cost is below — check it before you start.",
+          "action": "Run them"
+        }
+      },
+      "estimate": {
+        "loading": "Working out what this would cost…",
+        "failedTitle": "The estimate didn't load",
+        "title": "{generations, plural, one {This run spends # generation} other {This run spends # generations}}",
+        "selected": "{count, plural, one {# piece selected} other {# pieces selected}}",
+        "alreadyApproved": "{count, plural, one {# already has an approved render and will be skipped} other {# already have an approved render and will be skipped}}",
+        "budgetRemaining": "{amount} left in this month's budget",
+        "overBudget": "This run would go past what's left. Reduce the selection, or wait for the budget to reset."
+      },
+      "report": {
+        "summary": "{succeeded} of {total} went through · {failed} didn't",
+        "partialTitle": "Some pieces didn't go through",
+        "partialBody": "Each one is named below with the reason. Nothing else in the selection was affected.",
+        "outcome": "Outcome",
+        "succeeded": "Done",
+        "failed": "Not done"
+      }
+    },
+    "health": {
+      "title": "Catalog health",
+      "description": "Pieces missing an approved test render, scoring low on photo quality, failing often, or going untried.",
+      "loading": "Checking the catalog",
+      "backToCatalog": "Back to the catalog",
+      "inspected": "{count, plural, one {# piece checked} other {# pieces checked}}",
+      "truncatedTitle": "Showing the most recent pieces",
+      "truncatedBody": "The catalog is larger than this screen sweeps, so these counts cover the {count} most recently edited pieces rather than everything.",
+      "uncategorised": "No category",
+      "never": "Never",
+      "error": {
+        "title": "Catalog health didn't load",
+        "retry": "Try again"
+      },
+      "allClear": {
+        "title": "Nothing needs attention",
+        "body": "Every piece has an approved test render, passes its photo checks, and is being tried on.",
+        "action": "Back to the catalog"
+      },
+      "groups": {
+        "empty": "Nothing in this group.",
+        "missingTestRender": {
+          "title": "Missing a test render",
+          "hint": "Can't go live until one is approved",
+          "description": "These pieces have no approved test render, so they can't be published."
+        },
+        "lowQualityScore": {
+          "title": "Low photo quality",
+          "hint": "Below the {minScore} pass mark",
+          "description": "The try-on source scores below the pass mark of {minScore}. The photo report on each piece says what to change."
+        },
+        "elevatedFailureRate": {
+          "title": "Failing often",
+          "hint": "{count} or more failed try-ons",
+          "description": "Customers are getting failed try-ons from these. Usually the photograph has more than one garment in frame."
+        },
+        "zeroTryOnsIn30Days": {
+          "title": "Not being tried on",
+          "hint": "Nothing in {days} days",
+          "description": "Live, but nobody has tried these on in {days} days. Worth checking where they sit in the collection."
+        }
+      },
+      "columns": {
+        "piece": "Piece",
+        "category": "Category",
+        "state": "State",
+        "testRender": "Test render",
+        "quality": "Photo quality",
+        "failures": "Failures",
+        "lastTried": "Last tried",
+        "fix": "Fix"
+      },
+      "fix": {
+        "testRender": "Run a render",
+        "photo": "Open the photos",
+        "review": "Open the piece"
+      }
+    }
   },
   "consumers": {
     "title": "Customers",
@@ -156,5 +799,38 @@
     "settings": "Settings",
     "policy": "Policy",
     "preview": "Preview"
+  },
+  "errors": {
+    "GENERIC": "That didn't go through. Try again — nothing you typed has been lost.",
+    "VALIDATION_ERROR": "Some of these details need another look. The fields with a message below them are the ones to change.",
+    "NETWORK_ERROR": "You appear to be offline. Your changes are still here — try again when you're back.",
+    "REQUEST_TIMEOUT": "That took too long to answer. Try again.",
+    "RATE_LIMIT_EXCEEDED": "That's a lot of requests in a short time. Wait a moment and try again.",
+    "CATEGORY_NOT_FOUND": "That category is no longer in the tree. Refresh the page to see the current list.",
+    "CATEGORY_HAS_PUBLISHED_GARMENTS": "This category still holds published pieces, so it can't be deleted. Archive it instead — it disappears from the storefront and the pieces stay where they are.",
+    "CATEGORY_DEPTH_EXCEEDED": "Categories go one level deep. Pick a top-level category as the parent, or move this one back to the top level first.",
+    "CATEGORY_ARCHIVED": "That category is archived, so new pieces can't be filed under it. Restore it, or choose another.",
+    "GARMENT_NOT_FOUND": "That piece is no longer in the catalog. Go back to the list to see what's there now.",
+    "GARMENT_SKU_EXISTS": "Another piece already uses this SKU. Give this one a different code.",
+    "INVALID_PUBLISH_TRANSITION": "That change isn't available from the piece's current state. Refresh the page to see where it stands.",
+    "TRYON_SOURCE_REQUIRED": "This piece has no try-on source photo yet. Add a photo and mark one as the try-on source.",
+    "TRYON_SOURCE_ALREADY_SET": "That photo is already the try-on source. Pick a different one to change it.",
+    "TEST_RENDER_REQUIRED": "This piece needs an approved test render before it can go live. Run one and approve it on the test render screen.",
+    "GARMENT_QUALITY_BELOW_THRESHOLD": "This photo is below the quality bar for try-on. The report lists what to change.",
+    "QUALITY_OVERRIDE_REQUIRED": "The photo is below the quality bar, so publishing needs a recorded override with a reason.",
+    "IMAGE_TOO_SMALL": "This image is too small for try-on. Re-export it at 2,000px or more on its longest side.",
+    "IMAGE_FORMAT_UNSUPPORTED": "That file type isn't accepted. Use JPEG, PNG, WebP or HEIC.",
+    "IMAGE_TOO_LARGE": "That file is larger than the upload limit. Export it again at a smaller size.",
+    "IMAGE_CORRUPT": "That file couldn't be read as an image. Export it again from the original.",
+    "UPLOAD_TICKET_INVALID": "That upload couldn't be matched to this piece. Choose the file again.",
+    "UPLOAD_TICKET_EXPIRED": "The upload took longer than the window allows. Choose the file again.",
+    "BULK_OPERATION_PARTIAL_FAILURE": "Some pieces went through and some didn't. The list below names each one.",
+    "BUDGET_EXHAUSTED": "This month's generation budget is spent, so test renders are paused until it resets.",
+    "UPSTREAM_NO_GARMENT_DETECTED": "The model couldn't find a single garment in this photo. One piece per frame, filling most of it, works best.",
+    "UPSTREAM_UNSUPPORTED_FORMAT": "The model couldn't read this file. Re-export it as a JPEG or PNG.",
+    "UPSTREAM_TIMEOUT": "The render took too long to come back. Try it again.",
+    "UPSTREAM_UNAVAILABLE": "The render service isn't answering right now. Try again in a few minutes.",
+    "UPSTREAM_RATE_LIMITED": "The render service is busy. Wait a moment and try again.",
+    "MODERATION_REJECTED": "That image didn't pass the automatic content check. Use a different photograph."
   }
 }

@@ -1,14 +1,11 @@
 'use client';
 
-import { useState } from 'react';
-
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
 import { LogOut } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
-import { apiClient } from '@repo/api-client';
 import { useAuthStore } from '@repo/store';
 import {
   Avatar,
@@ -25,6 +22,7 @@ import {
 
 
 import { accountMenuNav } from '@/components/layout/nav-items';
+import { useLogout } from '@/features/auth/hooks/use-auth-mutations';
 import { routes } from '@/lib/routes';
 
 import type { Locale } from '@/i18n/config';
@@ -49,21 +47,25 @@ export function UserMenu({ locale, name, email, initials, extraItems }: UserMenu
   const t = useTranslations('common');
   const router = useRouter();
   const clearAuth = useAuthStore((state) => state.clear);
-  const [isSigningOut, setIsSigningOut] = useState(false);
+  const logout = useLogout();
 
-  async function handleSignOut() {
-    setIsSigningOut(true);
-    try {
-      // TODO(W1): swap for the generated `logout()` endpoint + `useLogout` mutation from
-      // `@repo/api-client`, which also invalidates `queryKeys.auth.me()`.
-      await apiClient.post('/auth/logout');
-    } finally {
-      // The store is presentation state only; the session itself died server-side (S-3).
-      clearAuth();
-      setIsSigningOut(false);
-      router.replace(routes.home(locale));
-      router.refresh();
-    }
+  /**
+   * `POST /auth/logout` through the feature hook, which invalidates the `auth` and `me` query
+   * roots for us. The local clean-up runs whether or not the call succeeded: the cookie may
+   * already be dead, and leaving a stale identity on screen after someone pressed Sign out is
+   * worse than signing them out of a session that had already ended.
+   */
+  function handleSignOut() {
+    if (logout.isPending) return;
+
+    logout.mutate(undefined, {
+      onSettled: () => {
+        // The store is presentation state only; the session itself dies server-side (S-3).
+        clearAuth();
+        router.replace(routes.home(locale));
+        router.refresh();
+      },
+    });
   }
 
   return (
@@ -115,7 +117,7 @@ export function UserMenu({ locale, name, email, initials, extraItems }: UserMenu
         })}
 
         <DropdownMenuSeparator />
-        <DropdownMenuItem disabled={isSigningOut} onSelect={() => void handleSignOut()}>
+        <DropdownMenuItem disabled={logout.isPending} onSelect={handleSignOut}>
           <LogOut aria-hidden="true" className="size-4" />
           {t('actions.signOut')}
         </DropdownMenuItem>

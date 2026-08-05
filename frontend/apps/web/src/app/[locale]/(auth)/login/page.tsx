@@ -1,10 +1,12 @@
+import { Suspense } from 'react';
+
 import Link from 'next/link';
 
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
-import { Callout } from '@repo/ui';
-
 import { AuthShell } from '@/components/layout/AuthShell';
+import { PageSkeleton } from '@/components/states';
+import { LoginForm } from '@/features/auth/components/LoginForm';
 import { buildMetadata } from '@/lib/metadata';
 import { routes } from '@/lib/routes';
 
@@ -26,6 +28,16 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   });
 }
 
+/**
+ * `/login` — the one sign-in URL for both roles (S-1).
+ *
+ * A Server Component shell around a client form island: the card, the heading, the metadata and
+ * the language switch are server-rendered, and `'use client'` reaches no further than the
+ * fields themselves.
+ *
+ * The caller is never asked which kind of account they hold, and nothing on this page differs
+ * for an admin and a consumer.
+ */
 export default async function AuthLoginPage({ params }: Props) {
   const { locale } = await params;
   setRequestLocale(locale);
@@ -40,17 +52,13 @@ export default async function AuthLoginPage({ params }: Props) {
       footer={<Link href={routes.signup(locale)}>{t('footerSignup')}</Link>}
     >
       {/*
-        ══ TODO(W1) — form insertion point ══
-        Replace this notice with the client form island. The shell, the layout, the metadata
-        and the states around it are finished; only the form itself is outstanding.
-        The form must: validate with zod, surface field errors through `errors[]` from the
-        API envelope (§2.3), display the server's message verbatim (it is already user-safe),
-        keep every control at least 44 x 44 px, and never distinguish an unknown email from a
-        wrong password (S-6).
+        The form reads `?from=` to send the user back where they were heading, so it needs a
+        Suspense boundary: this segment is statically prerendered (the locale layout declares
+        `generateStaticParams`), and the search params only exist once the request does.
       */}
-      <Callout tone="info" title={t('todoTitle')}>
-        {t('todoBody')}
-      </Callout>
+      <Suspense fallback={<PageSkeleton variant="form" count={2} />}>
+        <LoginForm locale={locale} />
+      </Suspense>
     </AuthShell>
   );
 }

@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { cookies, headers } from 'next/headers';
+
 import { createServerApiClient } from '@repo/api-client/server';
 
 import { ErrorCodes, type ErrorCode } from '@/lib/constants';
@@ -15,16 +17,6 @@ import { ErrorCodes, type ErrorCode } from '@/lib/constants';
  * `createServerApiClient()` lives behind the `@repo/api-client/server` subpath because it
  * carries `import 'server-only'` (ARCHITECTURE §6.4) and must never enter a client bundle.
  */
-
-/** The success envelope produced by the API's `ResponseTransformInterceptor` (§2.3). */
-interface SuccessEnvelope<T> {
-  success: true;
-  statusCode: number;
-  message: string;
-  data: T;
-  meta?: PaginationMeta;
-  requestId?: string;
-}
 
 export interface PaginationMeta {
   page: number;
@@ -45,8 +37,7 @@ export interface ServerApiFailure {
 }
 
 export type ServerResult<T> =
-  | { ok: true; data: T; meta?: PaginationMeta }
-  | { ok: false; error: ServerApiFailure };
+  { ok: true; data: T; meta?: PaginationMeta } | { ok: false; error: ServerApiFailure };
 
 export interface ServerRequestOptions {
   /** Forwarded to the API as query parameters. */
@@ -94,25 +85,50 @@ function toFailure(error: unknown): ServerApiFailure {
 }
 
 /**
+ * Builds the per-request client, forwarding the incoming `drape.sid` cookie so the API can
+ * resolve the caller's session (B-9). Without the cookie header every read here would be
+ * anonymous, and `/auth/me` would answer `AUTH_REQUIRED` for a signed-in visitor.
+ *
+ * A fresh instance per request, never a module singleton — a shared one would carry one
+ * visitor's cookie into another visitor's render.
+ */
+async function requestScopedClient() {
+  const cookieHeader = (await cookies()).toString();
+  const requestId = (await headers()).get('x-request-id') ?? undefined;
+  return createServerApiClient(cookieHeader, { requestId });
+}
+
+/**
  * A GET that never throws. The caller renders the error state instead of blowing up the
  * segment, which is what D-5 asks for: states are rendered, not thrown.
+ *
+ * `createServerApiClient` attaches the package's response interceptor, which has already
+ * unwrapped the §2.3 envelope — `response.data` is the payload, and a paginated route arrives
+ * as `{ items, meta }`. Nothing here unwraps a second time.
  */
 export async function serverGet<T>(
   path: string,
   options: ServerRequestOptions = {},
 ): Promise<ServerResult<T>> {
   try {
-    const client = await createServerApiClient();
-    const response = await client.get<SuccessEnvelope<T>>(path, {
+    const client = await requestScopedClient();
+    const response = await client.get<T | { items: T; meta: PaginationMeta }>(path, {
       params: options.params,
     });
-    const envelope = response.data;
-    return envelope.meta
-      ? { ok: true, data: envelope.data, meta: envelope.meta }
-      : { ok: true, data: envelope.data };
+    const payload = response.data;
+
+    if (isPaginatedPayload<T>(payload)) {
+      return { ok: true, data: payload.items, meta: payload.meta };
+    }
+    return { ok: true, data: payload };
   } catch (error: unknown) {
     return { ok: false, error: toFailure(error) };
   }
+}
+
+/** True for the `{ items, meta }` shape the interceptor lifts a §2.8 list response into. */
+function isPaginatedPayload<T>(value: unknown): value is { items: T; meta: PaginationMeta } {
+  return isRecord(value) && Array.isArray(value.items) && isRecord(value.meta);
 }
 
 /**

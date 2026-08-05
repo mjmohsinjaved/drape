@@ -2,9 +2,8 @@ import Link from 'next/link';
 
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
-import { Callout } from '@repo/ui';
-
 import { AuthShell } from '@/components/layout/AuthShell';
+import { SignupForm } from '@/features/auth/components/SignupForm';
 import { buildMetadata } from '@/lib/metadata';
 import { routes } from '@/lib/routes';
 
@@ -26,6 +25,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   });
 }
 
+/**
+ * `/signup` — C-2, S-4. Creates a Consumer account and only a Consumer account.
+ *
+ * The form asks for name, email, password and phone. Event date, event type and budget band
+ * are prompted later, in context, on the account screen — not here.
+ */
 export default async function AuthSignupPage({ params }: Props) {
   const { locale } = await params;
   setRequestLocale(locale);
@@ -39,18 +44,7 @@ export default async function AuthSignupPage({ params }: Props) {
       description={t('description')}
       footer={<Link href={routes.login(locale)}>{t('footerLogin')}</Link>}
     >
-      {/*
-        ══ TODO(W1) — form insertion point ══
-        Replace this notice with the client form island. The shell, the layout, the metadata
-        and the states around it are finished; only the form itself is outstanding.
-        The form must: validate with zod, surface field errors through `errors[]` from the
-        API envelope (§2.3), display the server's message verbatim (it is already user-safe),
-        keep every control at least 44 x 44 px, and never distinguish an unknown email from a
-        wrong password (S-6).
-      */}
-      <Callout tone="info" title={t('todoTitle')}>
-        {t('todoBody')}
-      </Callout>
+      <SignupForm locale={locale} />
     </AuthShell>
   );
 }
