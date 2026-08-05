@@ -15,8 +15,13 @@ export {
   type StoredRender,
 } from './services/result-writer.service';
 export { ResultsService } from './services/results.service';
-export { ResultDownloadService, type WatermarkedRender } from './services/result-download.service';
+export {
+  ResultDownloadService,
+  type WatermarkedArchive,
+  type WatermarkedRender,
+} from './services/result-download.service';
 export { MarketingOptInDto } from './dto/marketing-opt-in.dto';
+export { MAX_DOWNLOAD_RESULTS, ResultDownloadDto } from './dto/result-download.dto';
 export { ResultIdParamDto } from './dto/result-id-param.dto';
 export {
   NO_VERDICT,

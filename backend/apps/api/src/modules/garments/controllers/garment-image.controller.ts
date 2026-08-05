@@ -10,6 +10,11 @@ import {
   type ICurrentUser,
 } from '@library/common';
 
+import {
+  GarmentImageBatchDto,
+  GarmentImageBatchResponseDto,
+  MAX_BATCH_GARMENT_IMAGES,
+} from '../dto/garment-image-batch.dto';
 import { UpdateGarmentImageDto } from '../dto/garment-image-create.dto';
 import { GarmentImageIdParamDto } from '../dto/garment-image-params.dto';
 import {
@@ -31,6 +36,31 @@ import { GarmentImagesService } from '../services/garment-images.service';
 @Controller('admin/garment-images')
 export class GarmentImageController {
   constructor(private readonly images: GarmentImagesService) {}
+
+  /**
+   * Declared before `:imageId` so `batch` is matched as a literal segment rather than
+   * read as an id — the same rule `GarmentsController` applies to `bulk`.
+   */
+  @Post('batch')
+  @Roles(Role.ADMIN)
+  @ResponseMessage('Images retrieved successfully')
+  @ApiOperation({
+    summary: 'The primary image of many garments in one request (§5.7, §6.2)',
+    description:
+      'What the admin catalog table needs to draw §6.2’s 40 px row thumbnail without a ' +
+      'request per row. The try-on source where there is one (A-9), the first image in ' +
+      'gallery order otherwise. A garment with no image comes back with `image: null` ' +
+      'rather than being dropped, so the caller can align its rows. The list is bounded ' +
+      `at ${MAX_BATCH_GARMENT_IMAGES}; a longer one is refused, not truncated.`,
+  })
+  @ApiOkResponse({ type: GarmentImageBatchResponseDto })
+  @ApiStandardResponses()
+  async findPrimaryImages(
+    @Body() dto: GarmentImageBatchDto,
+    @CurrentUser() actor: ICurrentUser,
+  ): Promise<GarmentImageBatchResponseDto> {
+    return this.images.findPrimaryForGarments(dto.garmentIds, actor);
+  }
 
   @Patch(':imageId')
   @Roles(Role.ADMIN)

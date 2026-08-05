@@ -696,6 +696,22 @@ export class GarmentsService {
   }
 
   /**
+   * A set of already-selected rows → DTOs.
+   *
+   * Public so `CatalogHealthService` (A-15) presents its cohort samples through this
+   * mapper rather than a second one. A health row and a catalog-list row are the same
+   * piece; if the two were built separately they would eventually disagree about
+   * `publishable`, which is exactly the field the console uses to decide whether the
+   * remedy it is linking to has already been applied.
+   *
+   * It takes rows rather than a query on purpose: the selection is the caller's
+   * business, and this class has no way to bound one it did not write.
+   */
+  async presentRows(rows: readonly Garment[]): Promise<GarmentResponseDto[]> {
+    return this.presentMany(rows);
+  }
+
+  /**
    * A page of rows → a page of DTOs, in three queries rather than three per row.
    *
    * The list screen is the one most likely to be opened at `limit=100`, so the

@@ -4,9 +4,11 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { CategoriesModule } from '@api/modules/categories';
 import { SettingsModule } from '@api/modules/settings';
 
+import { CatalogHealthController } from './controllers/catalog-health.controller';
 import { GarmentsController } from './controllers/garments.controller';
 import { GarmentImage } from './entities/garment-image.entity';
 import { Garment } from './entities/garment.entity';
+import { CatalogHealthService } from './services/catalog-health.service';
 import { GarmentsService } from './services/garments.service';
 
 /**
@@ -21,6 +23,11 @@ import { GarmentsService } from './services/garments.service';
  *  - **`SettingsModule`** — `quality.minScore` for the A-10 publish gate, read
  *    through the cached getter rather than from the `settings` table (§4.28).
  *
+ * `CatalogHealthController` and `CatalogHealthService` (A-15, §5.6) live here rather
+ * than in a module of their own: the panel is four aggregate queries over `garments`
+ * and presents its samples through `GarmentsService`, so it owns no table, no entity
+ * and no rule that is not already this module's.
+ *
  * What it exports:
  *  - **`GarmentsService`** — the record surface other admin modules build on.
  *  - **`TypeOrmModule`** — so `catalog`, which owns no entities of its own (§4.33)
@@ -32,8 +39,8 @@ import { GarmentsService } from './services/garments.service';
  */
 @Module({
   imports: [TypeOrmModule.forFeature([Garment, GarmentImage]), CategoriesModule, SettingsModule],
-  controllers: [GarmentsController],
-  providers: [GarmentsService],
+  controllers: [GarmentsController, CatalogHealthController],
+  providers: [GarmentsService, CatalogHealthService],
   exports: [GarmentsService, TypeOrmModule],
 })
 export class GarmentsModule {}

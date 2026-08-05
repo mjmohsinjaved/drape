@@ -13,7 +13,7 @@ import {
   toast,
 } from '@repo/ui';
 
-import { AdminDensityScope, AdminPageHeader } from '@/features/catalog/components/AdminPage';
+import { AdminPage, AdminPageHeader } from '@/features/catalog/components/AdminPage';
 import { PublishStatePill, QualityPill } from '@/features/catalog/components/CatalogPills';
 import { GarmentForm } from '@/features/catalog/components/GarmentForm';
 import { GarmentImagesPanel } from '@/features/catalog/components/GarmentImagesPanel';
@@ -142,20 +142,20 @@ export function GarmentEditorScreen({
 
   if (query.isPending || values === null) {
     return (
-      <AdminDensityScope>
+      <AdminPage>
         <div role="status" aria-live="polite" aria-busy="true" className="flex flex-col gap-4">
           <VisuallyHidden>{t('loading')}</VisuallyHidden>
           <Skeleton className="h-8 w-64 rounded-sm" />
           <Skeleton className="h-64 w-full rounded-md" />
           <Skeleton className="h-48 w-full rounded-md" />
         </div>
-      </AdminDensityScope>
+      </AdminPage>
     );
   }
 
   if (query.isError || !garment) {
     return (
-      <AdminDensityScope>
+      <AdminPage>
         {isPermissionDenied(query.error) ? (
           <PermissionDeniedState />
         ) : (
@@ -172,7 +172,7 @@ export function GarmentEditorScreen({
             }
           />
         )}
-      </AdminDensityScope>
+      </AdminPage>
     );
   }
 
@@ -181,7 +181,7 @@ export function GarmentEditorScreen({
   const checks = liveQuality?.checks ?? garment.qualityChecks;
 
   return (
-    <AdminDensityScope>
+    <AdminPage>
       <AdminPageHeader
         title={garment.title}
         description={t('description', { sku: garment.sku })}
@@ -253,6 +253,6 @@ export function GarmentEditorScreen({
           saving={overrideQuality.isPending}
         />
       ) : null}
-    </AdminDensityScope>
+    </AdminPage>
   );
 }

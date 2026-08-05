@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 
-import { DataSource, Repository, type EntityManager } from 'typeorm';
+import { DataSource, In, Repository, type EntityManager } from 'typeorm';
 
 import {
   ConflictException,
@@ -29,6 +29,7 @@ import {
 
 import { ImageQualityService } from './image-quality.service';
 
+import type { GarmentImageBatchResponseDto } from '../dto/garment-image-batch.dto';
 import type {
   CreateGarmentImageDto,
   ReorderGarmentImagesDto,
@@ -104,6 +105,75 @@ export class GarmentImagesService {
       order: { position: 'ASC', createdAt: 'ASC' },
     });
     return rows.map((row) => this.present(row));
+  }
+
+  /**
+   * `POST /admin/garment-images/batch` — the primary image of many garments at once
+   * (§5.7, §6.2).
+   *
+   * ### Why it exists
+   *
+   * §6.2 asks the admin catalog table for a 40 px thumbnail on every row. `GET
+   * /admin/garments` does not carry one — `GarmentResponseDto` has no image field, and
+   * adding one would put a join and a signing call on the hot list query whether the
+   * caller wants pictures or not. The alternative the console was left with is one
+   * `GET /admin/garments/:id/images` per row: a hundred requests to draw one screen.
+   *
+   * ### What "primary" means
+   *
+   * The **try-on source** where there is one, because that is the image the piece is
+   * actually judged and generated from (A-9), and the first image in gallery order
+   * otherwise. One query for every garment asked about, not one per garment.
+   *
+   * ### The URLs are scoped to the caller
+   *
+   * `signedUrl(key, admin.id)` — the token carries `sub`, so `GET /files/:token`
+   * additionally requires a session belonging to that admin (§3.4 step 4). §3.4's table
+   * leaves `sub` off `garments/**` because those objects are also served to the public
+   * catalogue; this route is not that route. It is an admin console read, and a token
+   * minted here that another account could replay would be a token worth stealing. The
+   * public projection in `modules/catalog` is unaffected and still issues the unscoped,
+   * cacheable form.
+   *
+   * A garment id that names nothing comes back with `image: null`, exactly like a
+   * garment with no images. This is a table-rendering aid, not a lookup: it reveals no
+   * more than `GET /admin/garments` already does to the same admin, and refusing the
+   * whole batch because one row was deleted a second ago would break the screen for
+   * everything else on it.
+   */
+  async findPrimaryForGarments(
+    garmentIds: readonly string[],
+    actor: ICurrentUser,
+  ): Promise<GarmentImageBatchResponseDto> {
+    // An empty `IN ()` is not valid SQL and an empty request is not an error.
+    if (garmentIds.length === 0) {
+      return { items: [] };
+    }
+
+    const rows = await this.images.find({
+      where: { garmentId: In([...garmentIds]) },
+      order: { position: 'ASC', createdAt: 'ASC' },
+    });
+
+    const primary = new Map<string, GarmentImage>();
+    for (const row of rows) {
+      const current = primary.get(row.garmentId);
+      // The try-on source always wins; otherwise the first row of an already-ordered
+      // result set is the first image in gallery order.
+      if (current === undefined || (row.isTryOnSource && !current.isTryOnSource)) {
+        primary.set(row.garmentId, row);
+      }
+    }
+
+    return {
+      items: garmentIds.map((garmentId) => {
+        const image = primary.get(garmentId);
+        return {
+          garmentId,
+          image: image === undefined ? null : this.presentFor(image, actor.id),
+        };
+      }),
+    };
   }
 
   /* -----------------------------------------------------------------------------------------
@@ -494,6 +564,11 @@ export class GarmentImagesService {
 
   private present(image: GarmentImage): GarmentImageResponseDto {
     return toGarmentImageResponse(image, (key) => this.storage.signedUrl(key));
+  }
+
+  /** The same DTO, with every URL scoped to one account (§3.4). See {@link findPrimaryForGarments}. */
+  private presentFor(image: GarmentImage, subject: string): GarmentImageResponseDto {
+    return toGarmentImageResponse(image, (key) => this.storage.signedUrl(key, subject));
   }
 
   /* A-3 — emitted, never written here. The `audit` module's listener owns the row (§2.9 rule 4). */

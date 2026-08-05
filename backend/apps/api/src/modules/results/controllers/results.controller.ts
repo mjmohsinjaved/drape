@@ -26,6 +26,7 @@ import {
 import { ShortlistItemResponseDto } from '@api/modules/shortlist/dto/shortlist-response.dto';
 
 import { MarketingOptInDto } from '../dto/marketing-opt-in.dto';
+import { MAX_DOWNLOAD_RESULTS, ResultDownloadDto } from '../dto/result-download.dto';
 import { ResultIdParamDto } from '../dto/result-id-param.dto';
 import { ResultQueryDto } from '../dto/result-query.dto';
 import { ResultGroupDto, ResultResponseDto } from '../dto/result-response.dto';
@@ -71,6 +72,50 @@ export class ResultsController {
     @CurrentUser() user: ICurrentUser,
   ): Promise<IPaginated<ResultResponseDto>> {
     return this.results.list(user, query);
+  }
+
+  /**
+   * C-23 / §5.12 — a zip of a selected set, each render watermarked at download time.
+   *
+   * Declared before the `:resultId` routes so `download` is matched as a literal
+   * segment. Returns a `StreamableFile` wrapping the archive stream, which
+   * `ResponseTransformInterceptor` passes through untouched — and the archive is
+   * produced as it is read, so nothing is held in memory but the render currently
+   * being marked.
+   *
+   * Every id in the body is ownership-checked individually. A foreign id is refused
+   * with `RESULT_NOT_FOUND` — the same answer a nonexistent one gets, so the refusal
+   * discloses nothing about whether it exists (§9.2).
+   */
+  @Post('download')
+  @Roles(Role.CONSUMER)
+  @ApiOperation({
+    summary: 'Download a selected set of renders as a watermarked zip (C-23, §5.12)',
+    description:
+      `At most ${MAX_DOWNLOAD_RESULTS} renders, all of them hers. Each carries the ` +
+      'same brand mark the single-render download applies (C-23); the stored files ' +
+      'stay clean (§3.6).',
+  })
+  @ApiOkResponse({
+    description: 'The zip archive.',
+    schema: { type: 'string', format: 'binary' },
+  })
+  @ApiStandardResponses({ notFound: true })
+  async downloadMany(
+    @Body() dto: ResultDownloadDto,
+    @CurrentUser() user: ICurrentUser,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<StreamableFile> {
+    const archive = await this.downloads.downloadMany(user, dto.resultIds);
+
+    // No Content-Length: the archive's size is not known until it has been written,
+    // and a wrong one is worse than none — the response is chunked instead.
+    response.setHeader('Content-Type', archive.contentType);
+    response.setHeader('Content-Disposition', `attachment; filename="${archive.filename}"`);
+    response.setHeader('Cache-Control', 'private, no-store');
+    response.setHeader('X-Content-Type-Options', 'nosniff');
+
+    return new StreamableFile(archive.stream);
   }
 
   /** Declared before `:resultId` so `groups` is matched as a literal segment. */

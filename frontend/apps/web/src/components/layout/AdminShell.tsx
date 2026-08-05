@@ -1,3 +1,4 @@
+import { AdminDensityRoot } from '@/components/layout/AdminDensityRoot';
 import { AdminShortcuts } from '@/components/layout/AdminShortcuts';
 import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
 import { Sidebar } from '@/components/layout/Sidebar';
@@ -23,9 +24,14 @@ export interface AdminShellProps {
  * the shell. The vertical rhythm comes from the density scale, so `compact` tightens the whole
  * console at once rather than screen by screen (§6.1).
  *
- * It is a Server Component. The only client islands are the rail (it holds collapse and
- * density), the breadcrumb (it reads the pathname), the four top-bar controls, and the
- * shortcut listener.
+ * **The shell owns `data-density`** — `AdminDensityRoot` is the outermost element, so the whole
+ * console (rail, top bar and page) retimes together when the rail's compact toggle is pressed.
+ * No screen sets the attribute for itself; every `--density-*` value in `@repo/config-tailwind`
+ * reads it from here.
+ *
+ * It is a Server Component. The only client islands are the density root, the rail (it holds
+ * collapse and density), the breadcrumb (it reads the pathname), the four top-bar controls, and
+ * the shortcut listener.
  *
  * **D-9**: it stays usable on a phone for enquiry handling and approvals — the rail moves into
  * a drawer rather than disappearing, and no control drops below 44 x 44 px.
@@ -36,7 +42,7 @@ export interface AdminShellProps {
  */
 export function AdminShell({ locale, user, children, breadcrumbOverrides }: AdminShellProps) {
   return (
-    <div className="flex min-h-dvh flex-col bg-canvas">
+    <AdminDensityRoot className="flex min-h-dvh flex-col bg-canvas">
       <SkipLink />
       <AdminShortcuts />
       <Topbar locale={locale} user={user} />
@@ -54,6 +60,6 @@ export function AdminShell({ locale, user, children, breadcrumbOverrides }: Admi
           </div>
         </main>
       </div>
-    </div>
+    </AdminDensityRoot>
   );
 }

@@ -16,8 +16,8 @@ import { useErrorCopy } from '@/features/auth/lib/error-copy';
 import { isE164 } from '@/features/auth/lib/password-policy';
 import { localeLabels } from '@/i18n/config';
 
-import type { MyAccount } from '@/features/account/api/types';
-import type { Locale as ApiLocaleValue } from '@repo/api-client';
+import type { MyAccount ,Locale as ApiLocaleValue } from '@repo/api-client';
+
 
 /**
  * `PATCH /me` — name, phone and the interface language (C-7).

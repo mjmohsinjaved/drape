@@ -27,6 +27,12 @@ export {
 } from './services/tryon-cache.service';
 export { TestRenderService } from './services/test-render.service';
 export {
+  TestRenderBatchEventsService,
+  type BatchCompletedEventData,
+  type BatchEventName,
+  type BatchProgressEventData,
+} from './services/test-render-batch-events.service';
+export {
   TRYON_FAILURE_CODES,
   TRYON_FAILURE_POLICY,
   consumerMessageFor,

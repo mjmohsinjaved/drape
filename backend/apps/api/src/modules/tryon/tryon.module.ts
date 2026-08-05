@@ -21,6 +21,7 @@ import { PERSON_PHOTO_PORT } from './ports/person-photo.port';
 import { QUOTA_PORT } from './ports/quota.port';
 import { tryOnProviderFactory } from './providers/tryon-provider.factory';
 import { ReferenceModelsService } from './services/reference-models.service';
+import { TestRenderBatchEventsService } from './services/test-render-batch-events.service';
 import { TestRenderProcessor } from './services/test-render.processor';
 import { TestRenderService } from './services/test-render.service';
 import { TryOnCacheService } from './services/tryon-cache.service';
@@ -103,6 +104,10 @@ import { TryOnService } from './services/tryon.service';
     TryOnService,
     TryOnJobsService,
     ReferenceModelsService,
+    // The A-12 batch bus (§5.11). A singleton for the same reason `TryOnEventsService`
+    // is: the processor publishes into the instance the controller streams from, and a
+    // second one would be a stream that silently never emits.
+    TestRenderBatchEventsService,
     TestRenderService,
     TestRenderProcessor,
   ],

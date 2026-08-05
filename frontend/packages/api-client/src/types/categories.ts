@@ -3,70 +3,110 @@
  *
  * A category tree is at most two levels deep (A-5): a category whose `parentId` is set may not
  * itself be a parent, enforced server-side as `CATEGORY_DEPTH_EXCEEDED`.
+ *
+ * Written against `modules/categories/dto/**`.
  */
 
 import type { IsoDateTime, Uuid } from './common';
 
-/** A node of the PUBLIC tree from `GET /categories` — published, non-archived, in `position` order (A-6). */
-export interface CategoryNode {
+/**
+ * `PublicCategoryResponseDto` — `GET /categories` (PUBLIC), the browse nav (C-14).
+ *
+ * Counts, archive state and the delete guard are all admin concerns and are absent here.
+ */
+export interface PublicCategory {
+  id: Uuid;
+  name: string;
+  /** Urdu display name (C-41). */
+  nameUr: string | null;
+  slug: string;
+  /** Signed, expiring cover-image URL (A-6, §3.4). The storage key never leaves the API. */
+  coverImageUrl: string | null;
+  /** Browse order (A-6), ascending. */
+  position: number;
+  /** One level only (A-5). Always empty on a sub-category. */
+  children: PublicCategory[];
+}
+
+/**
+ * `AdminCategoryResponseDto` — the whole `/admin/categories` surface (§5.5).
+ *
+ * There is no `updatedAt` and no `totalGarmentCount`. The count that matters is
+ * `publishedGarmentCountIncludingChildren`, and `deletable` is the API's own A-7 decision: the
+ * console reads the decision rather than re-deriving it from a count.
+ */
+export interface AdminCategory {
   id: Uuid;
   name: string;
   nameUr: string | null;
   slug: string;
+  /** One level only (A-5). A node with a `parentId` never has children. */
   parentId: Uuid | null;
-  /** Signed URL for the cover image (§3.4), or null. The storage key never leaves the API. */
   coverImageUrl: string | null;
   position: number;
-  /** Populated for a root node; always `[]` on a child, because the tree is one level deep. */
-  children: CategoryNode[];
-}
-
-/** A node of the ADMIN tree from `GET /admin/categories` — includes archived, with garment counts. */
-export interface AdminCategoryNode extends Omit<CategoryNode, 'children'> {
+  /** A-7: an archived category is hidden, not deleted. */
   archived: boolean;
   archivedAt: IsoDateTime | null;
-  /** §4.12 denormalised counter; the A-7 delete guard reads it. */
+  /** Held directly by this category. */
   publishedGarmentCount: number;
-  /** Every garment in the category, whatever its publish state. */
-  totalGarmentCount: number;
+  /** This node plus, for a top-level node, its sub-categories — what the delete guard compares. */
+  publishedGarmentCountIncludingChildren: number;
+  /** Whether A-7 currently permits `DELETE`. The API decides; the console explains. */
+  deletable: boolean;
   createdAt: IsoDateTime;
-  updatedAt: IsoDateTime;
-  children: AdminCategoryNode[];
+  children: AdminCategory[];
 }
 
-export interface AdminCategoryTreeQuery {
+/** `GET /admin/categories`. The admin tree is complete by default, archived rows included. */
+export interface AdminCategoryQuery {
   includeArchived?: boolean;
 }
 
-/** `POST /admin/categories` (ADMIN) — A-4, A-5. */
+/** `MAX_CATEGORY_NAME_LENGTH` from `CreateCategoryDto`. */
+export const MAX_CATEGORY_NAME_LENGTH = 80;
+
+/** The slug shape the API accepts, mirrored so a form can say so before the round trip. */
+export const CATEGORY_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+/**
+ * `POST /admin/categories` (ADMIN) — A-5, A-6.
+ *
+ * The cover is named by its **storage key** — the value `PUT /files/upload/:ticket` handed back —
+ * not by a ticket. The key is never returned; a signed URL is.
+ */
 export interface CreateCategoryRequest {
   name: string;
-  nameUr?: string | null;
-  /** Omit or `null` for a root category. Setting it to a child's id is `CATEGORY_DEPTH_EXCEEDED`. */
-  parentId?: Uuid | null;
+  nameUr?: string;
+  /** Derived from `name` when omitted, and de-duplicated with a numeric suffix if taken. */
   slug?: string;
+  /** Omit for a root category. A parent that already has a parent is `CATEGORY_DEPTH_EXCEEDED`. */
+  parentId?: Uuid;
+  coverImageKey?: string;
+  /** Appended to the end of its sibling set when omitted. */
   position?: number;
 }
 
-/** `PATCH /admin/categories/:categoryId` (ADMIN) — rename, re-parent, set cover image. */
+/** `PATCH /admin/categories/:categoryId`. `null` is a real edit — it promotes a node, or clears a cover. */
 export interface UpdateCategoryRequest {
   name?: string;
   nameUr?: string | null;
-  parentId?: Uuid | null;
   slug?: string;
-  /** The upload ticket for a freshly uploaded cover, or `null` to clear the cover. */
-  coverImageTicket?: string | null;
+  parentId?: Uuid | null;
+  coverImageKey?: string | null;
+  position?: number;
 }
 
-/** `POST /admin/categories/reorder` (ADMIN) — persists a new sort order for one sibling set (A-4). */
+/** One reorder covers at most this many siblings. */
+export const MAX_REORDER_BATCH = 200;
+
+/**
+ * `POST /admin/categories/reorder` (ADMIN) — A-6.
+ *
+ * The **complete** sibling set in display order; the API refuses a partial list. The field is
+ * `categoryIds`, and the route answers the renumbered tree rather than an echo of the request.
+ */
 export interface ReorderCategoriesRequest {
-  /** `null` reorders the root set. */
-  parentId: Uuid | null;
-  /** Every sibling id, in the order the admin dragged them into. */
-  orderedIds: Uuid[];
-}
-
-export interface ReorderCategoriesResponse {
-  parentId: Uuid | null;
-  orderedIds: Uuid[];
+  /** The parent whose children are being ordered. Omit or send `null` for the top-level set. */
+  parentId?: Uuid | null;
+  categoryIds: Uuid[];
 }

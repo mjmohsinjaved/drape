@@ -17,8 +17,8 @@ import { useErrorCopy } from '@/features/auth/lib/error-copy';
 import { isOtpComplete } from '@/features/auth/lib/password-policy';
 import { routes } from '@/lib/routes';
 
-import type { MyAccount } from '@/features/account/api/types';
 import type { Locale } from '@/i18n/config';
+import type { MyAccount } from '@repo/api-client';
 
 /**
  * Phone confirmation by OTP — C-3.

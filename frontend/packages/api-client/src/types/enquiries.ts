@@ -9,11 +9,10 @@
  */
 
 import type {
-  DateRangeQuery,
   IsoDate,
   IsoDateTime,
+  PaginationQuery,
   SearchablePaginationQuery,
-  SignedFileUrl,
   Uuid,
 } from './common';
 import type { BudgetBand, EnquiryStatus, EventType } from './enums';
@@ -22,65 +21,71 @@ import type { BudgetBand, EnquiryStatus, EventType } from './enums';
 
 /**
  * `POST /enquiries` (CONSUMER) — C-35. Requires a verified phone (C-3), otherwise
- * `PHONE_NOT_VERIFIED`. Blocked with `ENQUIRIES_DISABLED` when `enquiries.enabled` is false (A-30),
- * and `ENQUIRY_ALREADY_OPEN` when she already has one in flight.
+ * `PHONE_NOT_VERIFIED`. Blocked with `ENQUIRIES_DISABLED` when `enquiries.enabled` is false (A-30).
+ *
+ * **There is no item list here.** The enquiry snapshots her shortlist as it stands at submission
+ * (A-21), in her rank order — there is no field to pick items with.
  */
 export interface CreateEnquiryRequest {
   message: string;
-  eventDate?: IsoDate | null;
-  eventType?: EventType | null;
-  budgetBand?: BudgetBand | null;
-  /**
-   * The shortlist items to include, in her order. Omit to snapshot the whole shortlist as it
-   * currently stands. `NOT_FOR_ME` items are excluded server-side either way (§4.20).
-   */
-  shortlistItemIds?: Uuid[];
+  /** Defaults to the date on her profile when omitted. */
+  eventDate?: IsoDate;
+  eventType?: EventType;
+  budgetBand?: BudgetBand;
 }
 
-/** One row of `GET /enquiries` (CONSUMER) — her history with current status (C-36). */
-export interface MyEnquiryListItem {
+/** One frozen item of an enquiry, as the **consumer** sees it (§4.24). */
+export interface EnquiryItem {
+  /** Null once the garment has been hard-deleted; the snapshot still reads (§4.24). */
+  garmentId: Uuid | null;
+  /** Title at the time she sent it. */
+  title: string;
+  sku: string;
+  /** Price at the time she sent it. */
+  price: number | null;
+  /** Her rank order at submission (A-21). */
+  rank: number;
+  /** Her per-item note at submission (A-21). */
+  note: string | null;
+  /** Signed, expiring URL for the render thumbnail (§3.4). */
+  renderThumbnailUrl: string | null;
+}
+
+/**
+ * Her own enquiry — `GET /enquiries` (list rows) and `GET /enquiries/:enquiryId` (one), both
+ * returning this same shape with `items` populated either way (C-36). **Internal notes are never
+ * included** (A-24) — there is no field for one to arrive in.
+ */
+export interface MyEnquiry {
   id: Uuid;
   /** `ENQ-2026-000137`, shown to both sides (§4.23). */
   reference: string;
   status: EnquiryStatus;
-  itemCount: number;
-  totalValueSnapshot: number | null;
-  currency: string;
+  message: string;
   eventDate: IsoDate | null;
   eventType: EventType | null;
+  budgetBand: BudgetBand | null;
+  /** Total at the time she sent it. */
+  totalValue: number | null;
+  itemCount: number;
+  items: EnquiryItem[];
   createdAt: IsoDateTime;
-  firstRespondedAt: IsoDateTime | null;
   closedAt: IsoDateTime | null;
 }
 
-/** `GET /enquiries/:enquiryId` (CONSUMER). **Internal notes are never included** (A-24). */
-export interface MyEnquiryDetail extends MyEnquiryListItem {
-  message: string;
-  budgetBand: BudgetBand | null;
-  items: EnquiryItem[];
-}
-
-/** One frozen item of an enquiry (§4.24). */
-export interface EnquiryItem {
-  id: Uuid;
-  /** Null once the garment has been hard-deleted; the snapshots still read (§4.24). */
-  garmentId: Uuid | null;
-  garmentTitleSnapshot: string;
-  garmentSkuSnapshot: string;
-  garmentPriceSnapshot: number | null;
-  rank: number;
-  note: string | null;
-  resultId: Uuid | null;
-  /** The render the admin is allowed to see (S-10). */
-  renderThumbnail: SignedFileUrl | null;
-  renderImage: SignedFileUrl | null;
-}
-
-export interface MyEnquiryListQuery extends SearchablePaginationQuery {
+/** `GET /enquiries` (CONSUMER) — no free-text search; filter by status only (C-36). */
+export interface MyEnquiryListQuery extends PaginationQuery {
   status?: EnquiryStatus;
+  sortBy?: 'createdAt' | 'status';
 }
 
 /* ---------------------------------------------------------------------- admin */
+
+/** One frozen item as an **admin** sees it (A-21) — adds the full render, reachable only here (S-10). */
+export interface AdminEnquiryItem extends EnquiryItem {
+  /** Signed, expiring URL for the full render (§3.4), scoped to the requesting admin. */
+  renderUrl: string | null;
+}
 
 /** One row of `GET /admin/enquiries` (ADMIN) — the inbox of A-25. */
 export interface AdminEnquiryListItem {
@@ -88,37 +93,43 @@ export interface AdminEnquiryListItem {
   reference: string;
   status: EnquiryStatus;
   contactName: string;
-  contactEmail: string;
-  contactPhone: string;
-  itemCount: number;
-  totalValueSnapshot: number | null;
-  currency: string;
-  eventDate: IsoDate | null;
   eventType: EventType | null;
+  eventDate: IsoDate | null;
   budgetBand: BudgetBand | null;
-  assignedToId: Uuid | null;
-  assignedToName: string | null;
-  /** A-25: true when `firstRespondedAt` is still null more than 24 h after submission. */
+  itemCount: number;
+  totalValue: number | null;
+  assignedTo: Uuid | null;
+  /** A-25: true when untouched for more than 24 hours. Derived, never stored. */
   isStale: boolean;
   firstRespondedAt: IsoDateTime | null;
   createdAt: IsoDateTime;
 }
 
-/** `GET /admin/enquiries/:enquiryId` (ADMIN) — A-21. Contact details, event, budget, ranked items. */
+/**
+ * `GET /admin/enquiries/:enquiryId` (ADMIN) — A-21. Contact details (snapshotted at submission,
+ * never a live join onto `users`), event, budget, ranked items with renders. Internal notes have
+ * their own route (A-24).
+ */
 export interface AdminEnquiryDetail extends AdminEnquiryListItem {
+  /** The consumer who sent it. */
   userId: Uuid;
+  /** Verified at submission (A-21). */
+  contactEmail: string;
+  /** Verified by OTP before sending (C-3). */
+  contactPhone: string;
   message: string;
+  /** A-22. Set only on a lost enquiry. */
   lostReason: string | null;
   closedAt: IsoDateTime | null;
-  items: EnquiryItem[];
+  items: AdminEnquiryItem[];
 }
 
-export interface AdminEnquiryListQuery extends SearchablePaginationQuery, DateRangeQuery {
+export interface AdminEnquiryListQuery extends SearchablePaginationQuery {
   status?: EnquiryStatus;
-  assignedToId?: Uuid;
   /** A-25 stale-after-24-h filter. */
-  staleOnly?: boolean;
-  sortBy?: 'createdAt' | 'firstRespondedAt' | 'totalValueSnapshot' | 'status';
+  stale?: boolean;
+  assignedTo?: Uuid;
+  sortBy?: 'createdAt' | 'status';
 }
 
 /**
@@ -134,7 +145,7 @@ export interface UpdateEnquiryStatusRequest {
 
 /** `PATCH /admin/enquiries/:enquiryId/assign` (ADMIN). `null` unassigns. */
 export interface AssignEnquiryRequest {
-  assignedToId: Uuid | null;
+  assignedTo: Uuid | null;
 }
 
 /** One row of `GET /admin/enquiries/:enquiryId/notes` (ADMIN) — A-24, admin-only, append-only. */
@@ -151,22 +162,13 @@ export interface CreateEnquiryNoteRequest {
   body: string;
 }
 
-/** `GET /admin/enquiries/:enquiryId/whatsapp-link` (ADMIN) — A-23. */
+/**
+ * `GET /admin/enquiries/:enquiryId/whatsapp-link` (ADMIN) — A-23. Built from the **brand**
+ * WhatsApp number in Settings (A-27); an admin's own number is never used.
+ */
 export interface WhatsAppLinkResponse {
   /** A `wa.me` deep link pre-filled with her name and top pieces. */
   url: string;
   /** The pre-filled message body, so the admin can review or edit before sending. */
   message: string;
-  phone: string;
-}
-
-/**
- * `GET /admin/enquiries/export` (ADMIN) — CSV export of the filtered set (A-26). The response is a
- * signed download rather than a raw stream, so it goes through the same §3.4 token path as
- * everything else.
- */
-export interface EnquiryExportResponse {
-  download: SignedFileUrl;
-  filename: string;
-  rowCount: number;
 }

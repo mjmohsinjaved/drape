@@ -3,12 +3,25 @@
  *
  * Admin accounts exist only by invitation (S-5). There is no code path where `/auth/signup` can
  * produce `role = ADMIN` (S-4), so this module is the only way a second admin comes into being.
+ *
+ * Written against `modules/invites/dto/**` and `modules/auth/dto/accept-invite.dto.ts` — the
+ * acceptance route is served by an `auth` controller mounted on the `/invites` path.
  */
 
+import type { SessionUser } from './auth';
 import type { IsoDateTime, SearchablePaginationQuery, Uuid } from './common';
-import type { Role } from './enums';
+import type { Locale, Role } from './enums';
 
-/** One row of `GET /invites` (ADMIN) — pending and consumed invites. */
+/**
+ * One row of `GET /invites` (ADMIN).
+ *
+ * **No token and no token hash.** The raw token lives only as long as it takes to render the
+ * email, and the hash is credential-equivalent, so neither is ever sent to a browser. An admin
+ * who loses the email uses `POST /invites/:inviteId/resend`, which issues a new one.
+ *
+ * `invitedBy` is the **id** of the admin who sent it, not a display name — resolving the name is
+ * the console's job, not this row's.
+ */
 export interface InviteListItem {
   id: Uuid;
   email: string;
@@ -16,55 +29,64 @@ export interface InviteListItem {
   status: InviteStatus;
   expiresAt: IsoDateTime;
   consumedAt: IsoDateTime | null;
-  invitedByName: string;
+  invitedBy: Uuid;
+  /** The account created by accepting it. */
   consumedByUserId: Uuid | null;
   createdAt: IsoDateTime;
 }
 
-/** Derived server-side from `consumedAt` / `expiresAt`; there is no status column (§4.9). */
+/** Derived server-side from `consumedAt` / `expiresAt` / `deletedAt`; there is no status column (§4.9). */
 export const INVITE_STATUSES = ['PENDING', 'CONSUMED', 'EXPIRED', 'REVOKED'] as const;
 export type InviteStatus = (typeof INVITE_STATUSES)[number];
 
+/** Sortable columns for `GET /invites` (§2.8). All are real `invites` columns — `status` is not. */
+export const INVITE_SORTABLE_COLUMNS = ['createdAt', 'expiresAt', 'email', 'consumedAt'] as const;
+export type InviteSortColumn = (typeof INVITE_SORTABLE_COLUMNS)[number];
+
 export interface InviteListQuery extends SearchablePaginationQuery {
   status?: InviteStatus;
-  sortBy?: 'createdAt' | 'expiresAt' | 'email';
+  sortBy?: InviteSortColumn;
 }
 
-/** `POST /invites` (ADMIN). `role` is always `ADMIN` in V1 (S-5). */
+/**
+ * `POST /invites` (ADMIN).
+ *
+ * **There is no `role` field, and there will not be one.** Every invite is `ADMIN`; a role in the
+ * payload would be the one place in the system where a request body chooses a privilege level
+ * (S-4, S-5).
+ */
 export interface CreateInviteRequest {
   email: string;
-  role?: Role;
 }
 
-/**
- * `POST /invites` / `POST /invites/:inviteId/resend` (ADMIN). The token itself is emailed and is
- * never returned to the browser — only its hash is stored (§4.9).
- */
-export type CreateInviteResponse = InviteListItem;
+/** `POST /invites`, `POST /invites/:inviteId/resend` and `DELETE /invites/:inviteId` (ADMIN). */
+export type InviteResponse = InviteListItem;
 
 /**
- * `GET /invites/token/:token` (PUBLIC) — validates the token and returns just enough to render
- * the acceptance form. An invalid, expired or consumed token is `INVITE_NOT_FOUND`,
- * `INVITE_EXPIRED` or `INVITE_ALREADY_CONSUMED`.
+ * `GET /invites/token/:token` (PUBLIC) — three facts and nothing more: which address, what role,
+ * when it lapses. It reveals nothing about who sent it, so there is no `invitedByName`.
+ *
+ * An invalid, expired or consumed token is `INVITE_NOT_FOUND`, `INVITE_EXPIRED` or
+ * `INVITE_ALREADY_CONSUMED`.
  */
 export interface InviteTokenPreview {
   email: string;
   role: Role;
   expiresAt: IsoDateTime;
-  invitedByName: string;
 }
 
-/** `POST /invites/token/:token/accept` (PUBLIC). 2FA setup is forced immediately after (S-8). */
+/**
+ * `POST /invites/token/:token/accept` (PUBLIC). 2FA setup is forced immediately after (S-8).
+ *
+ * The email and the role come from the invite row — there is no field here that could carry
+ * either, which is what makes the escalation impossible rather than merely unlikely (S-4, S-5).
+ * The DTO takes `locale` and has no `phone`; the global pipe rejects anything undeclared.
+ */
 export interface AcceptInviteRequest {
   name: string;
   password: string;
-  phone?: string;
+  locale?: Locale;
 }
 
-export interface AcceptInviteResponse {
-  userId: Uuid;
-  email: string;
-  role: Role;
-  /** Always true for an admin: S-8 makes 2FA mandatory before the account is usable. */
-  twofaSetupRequired: boolean;
-}
+/** Acceptance answers the created admin directly, and signs them in on the same response. */
+export type AcceptInviteResponse = SessionUser;

@@ -78,6 +78,7 @@
     "action": "Browse the collection",
     "secondaryAction": "Revisit your try-ons"
   },
+  "caption": "This is an approximate guide to help you shortlist. Fabric fall, embroidery detail and length will differ in person.",
   "loading": "Loading your shortlist",
   "errors": {
     "title": "Your shortlist didn't load",

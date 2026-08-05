@@ -10,13 +10,17 @@ import type { LocaleParamsWith } from '@/lib/route-params';
 import type { Metadata } from 'next';
 
 /**
- * Rendered per request, never prerendered at build time.
+ * Rendered per request, never prerendered — deliberate, not a workaround.
  *
- * Every read on this route goes through the cookie-forwarding server client (B-9), and the
- * catalog, her photos, her renders and her shortlist all change without a deploy. Without this
- * the segment is a build-time snapshot taken against an API that may not even be reachable — and
- * `serverGet` deliberately never throws (D-5 renders states rather than crashing), so that
- * snapshot would bake in silently rather than failing the build.
+ * The public catalog is the one part of this app that could plausibly be prerendered: it is
+ * reachable signed out (C-1) and it is the surface a search engine sees. It still must not be.
+ * Garments, facets and categories change without a deploy and V1 has no revalidation contract,
+ * so a build-time snapshot would serve yesterday's collection until the next release — and it
+ * would be taken against an API that need not even be reachable during the build.
+ *
+ * Stating it here also keeps a later `generateStaticParams` over the slug from quietly turning
+ * these into static pages. It is not standing in for a dynamic bailout: `lib/server-api.ts`
+ * rethrows Next's dynamic-usage signal, so every cookie-forwarding read bails on its own.
  */
 export const dynamic = 'force-dynamic';
 

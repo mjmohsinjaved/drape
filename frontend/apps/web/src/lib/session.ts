@@ -4,8 +4,10 @@ import { cache } from 'react';
 
 import { redirect } from 'next/navigation';
 
+import { authPaths, type SessionUser } from '@repo/api-client';
+
 import { Role, RETURN_TO_PARAM } from '@/lib/constants';
-import { apiPaths, routes } from '@/lib/routes';
+import { routes } from '@/lib/routes';
 import { serverGetOrNull } from '@/lib/server-api';
 
 import type { Locale } from '@/i18n/config';
@@ -19,27 +21,19 @@ import type { Locale } from '@/i18n/config';
  * re-verifies here rather than trusting the middleware that ran before it.
  */
 
-/** Mirrors the `GET /auth/me` payload (§4.3, §5.1). */
-export interface SessionUser {
-  id: string;
-  name: string;
-  email: string;
-  role: Role;
-  locale: 'EN' | 'UR';
-  status: 'ACTIVE' | 'SUSPENDED' | 'DEACTIVATED';
-  emailVerifiedAt: string | null;
-  phoneVerifiedAt: string | null;
-  twofaEnabled: boolean;
-  /** Consumers only: whether the current policy version has been accepted (C-11, C-12). */
-  consentCurrent?: boolean;
-}
+/**
+ * The `GET /auth/me` payload is {@link SessionUser} from `@repo/api-client` — the B-4 contract,
+ * not a local restatement of it. This module re-exports it so the many callers that only need
+ * "the signed-in person" keep importing from one place.
+ */
+export type { SessionUser };
 
 /**
  * Cached per request, so a layout, its page and a nested layout resolving the same session
  * cost exactly one call to the API.
  */
 export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
-  return serverGetOrNull<SessionUser>(apiPaths.authMe);
+  return serverGetOrNull<SessionUser>(authPaths.me);
 });
 
 export async function isAuthenticated(): Promise<boolean> {

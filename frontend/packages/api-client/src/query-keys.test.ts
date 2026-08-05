@@ -54,10 +54,10 @@ describe('queryKeys — §6.4 factory shape', () => {
   });
 
   it('threads filters into the list key so two filter sets never share a cache entry', () => {
-    const a = queryKeys.catalog.list({ categoryId: 'cat-1', sort: 'newest' });
-    const b = queryKeys.catalog.list({ categoryId: 'cat-2', sort: 'newest' });
+    const a = queryKeys.catalog.list({ categoryId: 'cat-1', sortBy: 'newest' });
+    const b = queryKeys.catalog.list({ categoryId: 'cat-2', sortBy: 'newest' });
 
-    expect(a).toEqual(['catalog', 'list', { categoryId: 'cat-1', sort: 'newest' }]);
+    expect(a).toEqual(['catalog', 'list', { categoryId: 'cat-1', sortBy: 'newest' }]);
     expect(a).not.toEqual(b);
   });
 

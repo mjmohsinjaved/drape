@@ -180,6 +180,43 @@ export class ResultsService {
   }
 
   /**
+   * Several rows, **ownership-checked one by one**, in the order they were asked for.
+   *
+   * `POST /results/download` (§5.12) takes a selection, and a selection is exactly
+   * where a batch ownership check goes wrong: filtering the query by `userId` and
+   * zipping whatever comes back would quietly return four renders when five were
+   * asked for, which is a silent partial success dressed as a complete one. So the
+   * rows are read by id and the predicate is applied per item — a foreign id is
+   * refused, and the whole request fails with it.
+   *
+   * One query for the set rather than one per id; the loop below is over rows already
+   * in hand. `RESULT_NOT_OWNED` is masked to `RESULT_NOT_FOUND` by
+   * `GlobalExceptionFilter` (§2.4, S-9), so a caller cannot tell a render that is not
+   * hers from one that does not exist.
+   */
+  async loadOwnedMany(userId: string, resultIds: readonly string[]): Promise<TryOnResult[]> {
+    if (resultIds.length === 0) {
+      return [];
+    }
+
+    const rows = await this.results.find({ where: { id: In([...resultIds]) } });
+    const byId = new Map(rows.map((row) => [row.id, row]));
+
+    return resultIds.map((resultId) => {
+      const row = byId.get(resultId);
+
+      if (row === undefined) {
+        throw new NotFoundException(ErrorCode.RESULT_NOT_FOUND);
+      }
+      if (row.userId !== userId) {
+        // True code thrown, masked code returned (§2.4). Per item, never once for the set.
+        throw new OwnershipException(ErrorCode.RESULT_NOT_OWNED);
+      }
+      return row;
+    });
+  }
+
+  /**
    * `DELETE /results/:resultId` — C-31.
    *
    * Files first would risk a row pointing at nothing if the delete failed halfway;

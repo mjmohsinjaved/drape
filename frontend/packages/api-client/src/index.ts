@@ -29,6 +29,9 @@ export { getCsrfToken, readCookie, setCsrfFetcher } from './csrf';
 
 export * from './interceptors';
 
+/** §6.4 — one typed function per §5 route, grouped by module. Features call these, not axios. */
+export * from './endpoints';
+
 export {
   DEFAULT_GC_TIME_MS,
   DEFAULT_STALE_TIME_MS,

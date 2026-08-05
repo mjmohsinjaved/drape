@@ -4,20 +4,22 @@ import { Info } from 'lucide-react';
 
 import { cn } from '../../lib/cn';
 
-export interface ShortlistingCaptionProps extends React.HTMLAttributes<HTMLDivElement> {
+export interface ShortlistingCaptionProps
+  extends Omit<React.HTMLAttributes<HTMLDivElement>, 'children'> {
   /**
-   * The translated caption. Pass the `ur` and `en` strings from `i18n/messages`.
+   * The translated caption — **required, and there is no English fallback**.
    *
-   * If you omit it, the English default below is used. It is written to pass the §8.3 copy
-   * check: it does not promise accuracy, it frames the render as indicative, it never says "see
-   * yourself in", and it makes the shortlisting purpose explicit.
+   * `@repo/ui` has no access to `next-intl`, so a default string here could only ever be one
+   * language. A caption that silently renders English to an `ur` reader is worse than a build
+   * error, and C-20 makes this the one line that must always be readable: it is where the
+   * promise that Drape shortlists rather than previews is actually kept.
+   *
+   * Pass `t('…')` from the calling screen's namespace. The copy must pass the §8.3 / §9.4 check
+   * in **both** locales: indicative, never a promise of accuracy, never "see yourself in".
    */
-  children?: React.ReactNode;
+  children: React.ReactNode;
   variant?: 'inline' | 'overlay';
 }
-
-const DEFAULT_CAPTION =
-  'This is an approximate guide to help you shortlist. Fabric fall, embroidery detail and length will differ in person.';
 
 /**
  * The persistent, non-dismissible caption that sits with every rendered try-on (C-20, §8.3).
@@ -42,11 +44,8 @@ export const ShortlistingCaption = React.forwardRef<HTMLDivElement, Shortlisting
         {...props}
       >
         <Info aria-hidden="true" className="mt-px size-4 shrink-0" />
-        <p className="text-pretty">{children ?? DEFAULT_CAPTION}</p>
+        <p className="text-pretty">{children}</p>
       </div>
     );
   },
 );
-
-/** Exported so a test can assert the shipped English copy has not drifted. */
-export { DEFAULT_CAPTION as SHORTLISTING_CAPTION_EN };

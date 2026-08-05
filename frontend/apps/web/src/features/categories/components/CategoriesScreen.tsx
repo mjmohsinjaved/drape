@@ -35,7 +35,7 @@ import {
   toast,
 } from '@repo/ui';
 
-import { AdminDensityScope, AdminPageHeader } from '@/features/catalog/components/AdminPage';
+import { AdminPage, AdminPageHeader } from '@/features/catalog/components/AdminPage';
 import { SignedImage } from '@/features/catalog/components/SignedImage';
 import {
   isPermissionDenied,
@@ -222,7 +222,7 @@ export function CategoriesScreen({ initialTree }: CategoriesScreenProps) {
 
   if (query.isPending) {
     return (
-      <AdminDensityScope>
+      <AdminPage>
         {header}
         <div role="status" aria-live="polite" aria-busy="true" className="flex flex-col gap-2">
           <VisuallyHidden>{t('loading')}</VisuallyHidden>
@@ -230,13 +230,13 @@ export function CategoriesScreen({ initialTree }: CategoriesScreenProps) {
             <Skeleton key={index} className="h-row w-full rounded-sm" animate={false} />
           ))}
         </div>
-      </AdminDensityScope>
+      </AdminPage>
     );
   }
 
   if (query.isError) {
     return (
-      <AdminDensityScope>
+      <AdminPage>
         {header}
         {isPermissionDenied(query.error) ? (
           <PermissionDeniedState />
@@ -249,13 +249,13 @@ export function CategoriesScreen({ initialTree }: CategoriesScreenProps) {
             retrying={query.isFetching}
           />
         )}
-      </AdminDensityScope>
+      </AdminPage>
     );
   }
 
   if (rows.length === 0) {
     return (
-      <AdminDensityScope>
+      <AdminPage>
         {header}
         <EmptyState
           title={t('empty.title')}
@@ -278,12 +278,12 @@ export function CategoriesScreen({ initialTree }: CategoriesScreenProps) {
           onUpdate={handleUpdate}
           saving={createCategory.isPending || updateCategory.isPending}
         />
-      </AdminDensityScope>
+      </AdminPage>
     );
   }
 
   return (
-    <AdminDensityScope>
+    <AdminPage>
       {header}
 
       <Callout tone="info" title={t('reorderHelpTitle')}>
@@ -471,6 +471,6 @@ export function CategoriesScreen({ initialTree }: CategoriesScreenProps) {
           onArchive={() => handleArchive(deleting)}
         />
       ) : null}
-    </AdminDensityScope>
+    </AdminPage>
   );
 }

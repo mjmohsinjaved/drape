@@ -16,7 +16,7 @@ import { useTwoFactorDisable } from '@/features/auth/hooks/use-auth-mutations';
 import { useErrorCopy } from '@/features/auth/lib/error-copy';
 import { isOtpComplete } from '@/features/auth/lib/password-policy';
 
-import type { MyAccount } from '@/features/account/api/types';
+import type { MyAccount } from '@repo/api-client';
 
 /**
  * The two-factor panel on the security screen — S-8.

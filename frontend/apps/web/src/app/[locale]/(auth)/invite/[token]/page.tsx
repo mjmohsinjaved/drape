@@ -2,16 +2,15 @@ import Link from 'next/link';
 
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
+import { authPaths ,type  InviteTokenPreview } from '@repo/api-client';
 import { Button, EmptyState, ErrorState } from '@repo/ui';
 
 import { AuthShell } from '@/components/layout/AuthShell';
-import { authApi } from '@/features/auth/api/paths';
 import { InviteAcceptanceForm } from '@/features/auth/components/InviteAcceptanceForm';
 import { buildMetadata } from '@/lib/metadata';
 import { routes } from '@/lib/routes';
 import { serverGet } from '@/lib/server-api';
 
-import type { InvitePreview } from '@/features/auth/api/types';
 import type { LocaleParamsWith } from '@/lib/route-params';
 import type { Metadata } from 'next';
 
@@ -57,7 +56,7 @@ export default async function AuthInviteTokenPage({ params }: Props) {
   setRequestLocale(locale);
 
   const t = await getTranslations({ locale, namespace: 'auth.invite' });
-  const result = await serverGet<InvitePreview>(authApi.invitePreview(token));
+  const result = await serverGet<InviteTokenPreview>(authPaths.invitePreview(token));
 
   return (
     <AuthShell

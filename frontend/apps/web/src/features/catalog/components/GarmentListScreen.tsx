@@ -34,7 +34,7 @@ import {
 } from '@repo/ui';
 import { formatCurrency, formatRelative } from '@repo/utils';
 
-import { AdminDensityScope, AdminPageHeader } from '@/features/catalog/components/AdminPage';
+import { AdminPage, AdminPageHeader } from '@/features/catalog/components/AdminPage';
 import { BulkActionBar, type BulkOperation } from '@/features/catalog/components/BulkActionBar';
 import { BulkRunDialog } from '@/features/catalog/components/BulkRunDialog';
 import {
@@ -379,7 +379,7 @@ export function GarmentListScreen({ locale, initialPage, categories }: GarmentLi
 
   if (query.isPending) {
     return (
-      <AdminDensityScope>
+      <AdminPage>
         {header}
         {filters}
         <div role="status" aria-live="polite" aria-busy="true" className="flex flex-col gap-2">
@@ -388,13 +388,13 @@ export function GarmentListScreen({ locale, initialPage, categories }: GarmentLi
             <Skeleton key={index} className="h-row w-full rounded-sm" animate={false} />
           ))}
         </div>
-      </AdminDensityScope>
+      </AdminPage>
     );
   }
 
   if (query.isError) {
     return (
-      <AdminDensityScope>
+      <AdminPage>
         {header}
         {isPermissionDenied(query.error) ? (
           <PermissionDeniedState />
@@ -407,13 +407,13 @@ export function GarmentListScreen({ locale, initialPage, categories }: GarmentLi
             retrying={query.isFetching}
           />
         )}
-      </AdminDensityScope>
+      </AdminPage>
     );
   }
 
   if (rows.length === 0) {
     return (
-      <AdminDensityScope>
+      <AdminPage>
         {header}
         {filters}
         {isUnfiltered(state) ? (
@@ -457,12 +457,12 @@ export function GarmentListScreen({ locale, initialPage, categories }: GarmentLi
             }
           />
         )}
-      </AdminDensityScope>
+      </AdminPage>
     );
   }
 
   return (
-    <AdminDensityScope>
+    <AdminPage>
       {header}
       {filters}
 
@@ -643,6 +643,6 @@ export function GarmentListScreen({ locale, initialPage, categories }: GarmentLi
           }}
         />
       ) : null}
-    </AdminDensityScope>
+    </AdminPage>
   );
 }

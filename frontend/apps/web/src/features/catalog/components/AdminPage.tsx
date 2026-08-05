@@ -1,36 +1,22 @@
-'use client';
-
-import { useAdminDensity } from '@repo/store';
 import { cn } from '@repo/ui';
 
 import type { ReactNode } from 'react';
 
 /**
- * The admin layout language, applied where the console's dense screens actually live (D-4, §6.2).
+ * The admin layout language for a single console screen (D-4, §6.2).
  *
- * `@repo/config-tailwind/density.css` scopes the whole density scale to `[data-density]`, and
- * `useUiStore.adminDensity` already holds the admin's choice — but nothing in the shell writes
- * the attribute, so `h-row`, `p-cell`, `text-density`, `gap-stack` and `gap-section` all resolve
- * to the `:root` comfortable values and the compact toggle in the rail changes nothing on screen.
- *
- * Setting it here is deliberately narrow: it is the smallest change that makes the scale real on
- * the catalog and category screens without reaching into `components/layout/`, which belongs to
- * another workstream. **`AdminShell` should set `data-density` on its `<main>`; when it does,
- * this wrapper collapses to a plain `<section>`.**
+ * It is a plain wrapper: one `--density-section-gap` rhythm between the header and the blocks
+ * below it. **It does not set `data-density`.** `AdminShell` owns that attribute for the whole
+ * admin surface, so the rail's compact toggle retimes the rail, the top bar and the page in one
+ * step — a per-screen scope could only ever tighten the part of the console it wrapped.
  */
 export interface AdminPageProps {
   children: ReactNode;
   className?: string;
 }
 
-export function AdminDensityScope({ children, className }: AdminPageProps) {
-  const density = useAdminDensity();
-
-  return (
-    <div data-density={density} className={cn('flex flex-col gap-section', className)}>
-      {children}
-    </div>
-  );
+export function AdminPage({ children, className }: AdminPageProps) {
+  return <div className={cn('flex flex-col gap-section', className)}>{children}</div>;
 }
 
 export interface AdminPageHeaderProps {

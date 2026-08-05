@@ -43,6 +43,7 @@ import {
 import { MockTryOnProvider } from '../providers/mock-tryon.provider';
 import { TRYON_PROVIDER } from '../providers/tryon-provider.interface';
 import { ReferenceModelsService } from '../services/reference-models.service';
+import { TestRenderBatchEventsService } from '../services/test-render-batch-events.service';
 import { TestRenderService } from '../services/test-render.service';
 import { TryOnCacheService } from '../services/tryon-cache.service';
 import { TryOnEventsService } from '../services/tryon-events.service';
@@ -346,6 +347,8 @@ export interface TryOnTestContext {
   readonly cache: TryOnCacheService;
   readonly testRenders: TestRenderService;
   readonly events: TryOnEventsService;
+  /** The A-12 batch SSE bus (§5.11), so a batch test can assert what a watcher was told. */
+  readonly batchEvents: TestRenderBatchEventsService;
   readonly rateLimits: TryOnRateLimitService;
   readonly preview: PreviewModeService;
   readonly provider: MockTryOnProvider;
@@ -435,6 +438,7 @@ export async function createTryOnContext(
       TryOnCacheService,
       TryOnRateLimitService,
       TryOnEventsService,
+      TestRenderBatchEventsService,
       TryOnGuardService,
       TryOnRunnerService,
       TryOnService,
@@ -482,6 +486,7 @@ export async function createTryOnContext(
     cache: harness.get(TryOnCacheService),
     testRenders: harness.get(TestRenderService),
     events: harness.get(TryOnEventsService),
+    batchEvents: harness.get(TestRenderBatchEventsService),
     rateLimits: harness.get(TryOnRateLimitService),
     preview: harness.get(PreviewModeService),
     provider,

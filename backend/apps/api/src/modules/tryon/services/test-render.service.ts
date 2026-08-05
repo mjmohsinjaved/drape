@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, type MessageEvent } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectRepository } from '@nestjs/typeorm';
 
@@ -23,6 +23,7 @@ import { JobStatus } from '../enums/job-status.enum';
 import { QUOTA_PORT, type QuotaPort } from '../ports/quota.port';
 
 import { ReferenceModelsService } from './reference-models.service';
+import { TestRenderBatchEventsService } from './test-render-batch-events.service';
 import { TryOnRunnerService, type GenerationRequest } from './tryon-runner.service';
 import { categoryNameOf } from './tryon.service';
 
@@ -38,6 +39,7 @@ import type {
   RunTestRenderDto,
   TestRenderEstimateDto,
 } from '../dto/test-render.dto';
+import type { Observable } from 'rxjs';
 
 /**
  * **The A-11 test-render gate.**
@@ -82,6 +84,7 @@ export class TestRenderService {
     private readonly runner: TryOnRunnerService,
     private readonly storage: StorageService,
     private readonly events: EventEmitter2,
+    private readonly batchEvents: TestRenderBatchEventsService,
   ) {}
 
   /* -----------------------------------------------------------------------------------------
@@ -256,6 +259,38 @@ export class TestRenderService {
     this.logger.log(`Queued ${rows.length} test renders at concurrency 1 (A-12, §8.2).`);
 
     return { batchId };
+  }
+
+  /**
+   * `GET /admin/tryon/batches/:batchId/stream` — SSE progress for a batch (§5.11).
+   *
+   * The batch is resolved **before** the observable is built, so an unknown id gets a
+   * normal masked `JOB_NOT_FOUND` response rather than an open stream that never
+   * emits — the same order `TryOnJobsService.streamFor()` uses for a consumer's job.
+   * The resolved summary doubles as the snapshot the client is sent on connect.
+   *
+   * `GET /admin/tryon/batches/:batchId` stays in place as the documented fallback.
+   * PRD §8.2 expects both: SSE for delivery, a poll for every client and intermediary
+   * that cannot hold a long-lived connection.
+   */
+  async streamBatch(batchId: string): Promise<Observable<MessageEvent>> {
+    const snapshot = await this.batch(batchId);
+    return this.batchEvents.stream(batchId, snapshot);
+  }
+
+  /**
+   * Publishes the state of a batch after one of its items changed (§5.11, D-16).
+   *
+   * Called by `TestRenderProcessor` once per item, and re-reads the summary from the
+   * rows rather than counting in the processor's head: the rows are the state (§8.2),
+   * and a counter held in a process that restarts mid-batch would be wrong from then
+   * on. One indexed query per completed render, against `IDX_tryon_jobs_batchId`.
+   */
+  async publishBatchProgress(batchId: string, changedJobId: string): Promise<void> {
+    const summary = await this.batch(batchId);
+    const item = summary.items.find((candidate) => candidate.jobId === changedJobId) ?? null;
+
+    this.batchEvents.publishSummary(summary, item);
   }
 
   /** `GET /admin/tryon/batches/:batchId` — per-item progress and a summary (D-16). */

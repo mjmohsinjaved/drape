@@ -15,16 +15,6 @@ import type { Metadata } from 'next';
 
 type Props = LocaleParamsWith<{ garmentId: string }>;
 
-/**
- * The console is per-request, never prerendered.
- *
- * `lib/server-api.ts` catches every throw from its axios call, including the dynamic-usage
- * signal Next raises when `cookies()` is read during a static render — so a page that reads
- * through it would prerender to a data-less shell instead of bailing to dynamic. Saying so
- * explicitly keeps every admin screen request-scoped and its session-scoped reads honest.
- */
-export const dynamic = 'force-dynamic';
-
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { locale, garmentId } = await params;
   const t = await getTranslations({ locale, namespace: 'admin.catalog.testRender' });

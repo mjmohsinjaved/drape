@@ -3,9 +3,8 @@ import Link from 'next/link';
 import { ArrowRight, Inbox, Shirt, Users } from 'lucide-react';
 import { getTranslations } from 'next-intl/server';
 
-import { Card, CardContent, CardHeader, CardTitle, DirectionalIcon } from '@repo/ui';
+import { Button, Callout, Card, CardContent, DirectionalIcon } from '@repo/ui';
 
-import { TwoFactorEnrolment } from '@/features/auth/components/TwoFactorEnrolment';
 import { routes } from '@/lib/routes';
 
 import type { Locale } from '@/i18n/config';
@@ -50,24 +49,26 @@ export async function AdminHome({ locale, user }: AdminHomeProps) {
       </header>
 
       {/*
-        S-8 makes a second factor mandatory for admins, and the account screens live under the
-        consumer shell — so enrolment is offered here, where an admin actually lands, rather
-        than behind a link that would bounce them straight back to this page.
+        S-8 makes a second factor mandatory for admins. Enrolment itself lives on
+        `/account/security`, which an admin can now reach — the account segment is role-ANY and
+        renders inside the console shell. This is the prompt that takes them there, not a second
+        copy of the panel: one enrolment screen, in one place, in both shells.
 
-        The panel is presentation of a rule the API enforces: an admin session without a second
-        factor is refused by the API regardless of what this branch decides to draw (S-3).
+        It is presentation of a rule the API enforces. An admin session without a second factor
+        is refused by the API regardless of what this branch decides to draw (S-3).
       */}
       {user.twofaEnabled ? null : (
-        <Card>
-          <CardHeader>
-            <CardTitle as="h2" className="text-lg">
-              {t('twofaTitle')}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <TwoFactorEnrolment required />
-          </CardContent>
-        </Card>
+        <Callout
+          tone="warning"
+          title={t('twofaTitle')}
+          action={
+            <Button asChild variant="primary" size="sm">
+              <Link href={routes.accountSecurity(locale)}>{t('twofaAction')}</Link>
+            </Button>
+          }
+        >
+          {t('twofaBody')}
+        </Callout>
       )}
 
       <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">

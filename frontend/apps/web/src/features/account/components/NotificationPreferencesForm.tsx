@@ -10,7 +10,7 @@ import { SavedIndicator } from '@/components/states';
 import { useUpdateNotificationPreferences } from '@/features/account/hooks/use-account-mutations';
 import { FormErrorFeedback } from '@/features/auth/components/FormFeedback';
 
-import type { NotificationPreferences } from '@/features/account/api/types';
+import type { NotificationPreferences } from '@repo/api-client';
 
 /**
  * Notification preferences — C-7.

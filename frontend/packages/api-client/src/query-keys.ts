@@ -11,7 +11,7 @@
 
 import type { AnalyticsRangeQuery } from './types/analytics';
 import type { AuditLogQuery } from './types/audit';
-import type { CatalogFilters } from './types/catalog';
+import type { CatalogQuery } from './types/catalog';
 import type { LedgerPeriod, Uuid } from './types/common';
 import type { AdminEnquiryListQuery, MyEnquiryListQuery } from './types/enquiries';
 import type { Locale } from './types/enums';
@@ -117,7 +117,7 @@ export const queryKeys = {
   catalog: {
     all: ['catalog'] as const,
     lists: () => [...queryKeys.catalog.all, 'list'] as const,
-    list: (filters?: CatalogFilters) => [...queryKeys.catalog.lists(), filters ?? {}] as const,
+    list: (filters?: CatalogQuery) => [...queryKeys.catalog.lists(), filters ?? {}] as const,
     details: () => [...queryKeys.catalog.all, 'detail'] as const,
     detail: (idOrSlug: string) => [...queryKeys.catalog.details(), idOrSlug] as const,
     facets: () => [...queryKeys.catalog.all, 'facets'] as const,

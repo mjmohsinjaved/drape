@@ -26,7 +26,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
  * metadata, the loading skeleton and the error boundary are already in place — this segment
  * needs a body, not a decision about where it lives (ARCHITECTURE §6.6).
  */
-export default async function ConsumerAccountDataPage({ params }: Props) {
+export default async function AccountDataPage({ params }: Props) {
   const { locale } = await params;
   setRequestLocale(locale);
 

@@ -18,6 +18,7 @@ export { Breadcrumbs, type BreadcrumbsProps } from './Breadcrumbs';
 export { NavLink, type NavLinkProps } from './NavLink';
 export { SkipLink, MAIN_CONTENT_ID } from './SkipLink';
 export { AdminShortcuts } from './AdminShortcuts';
+export { AdminDensityRoot, type AdminDensityRootProps } from './AdminDensityRoot';
 export { AdminMobileMenu, type AdminMobileMenuProps } from './AdminMobileMenu';
 export { AdminSearchTrigger } from './AdminSearchTrigger';
 export {

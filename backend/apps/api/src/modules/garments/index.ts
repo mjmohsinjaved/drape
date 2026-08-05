@@ -11,6 +11,37 @@
  */
 export { GarmentsModule } from './garments.module';
 export { GarmentsService, STAR_RATE_SQL } from './services/garments.service';
+export { CatalogHealthService } from './services/catalog-health.service';
+export {
+  CATALOG_HEALTH_COHORTS,
+  CATALOG_HEALTH_COHORT_IDS,
+  DEFAULT_CATALOG_HEALTH_SAMPLE,
+  ELEVATED_FAILURE_MIN_ATTEMPTS,
+  ELEVATED_FAILURE_RATE_PERCENT,
+  MAX_CATALOG_HEALTH_SAMPLE,
+  STALE_TRY_ON_DAYS,
+  catalogHealthCohort,
+  catalogHealthScopeSql,
+  catalogHealthSqlParams,
+  isInCatalogHealthScope,
+  staleTryOnCutoff,
+  type CatalogHealthCohort,
+  type CatalogHealthCohortId,
+  type CatalogHealthContext,
+  type CatalogHealthSqlParams,
+} from './services/catalog-health.cohorts';
+export {
+  CatalogHealthCohortDto,
+  CatalogHealthQueryDto,
+  CatalogHealthResponseDto,
+  CatalogHealthThresholdsDto,
+} from './dto/catalog-health.dto';
+export {
+  GarmentImageBatchDto,
+  GarmentImageBatchEntryDto,
+  GarmentImageBatchResponseDto,
+  MAX_BATCH_GARMENT_IMAGES,
+} from './dto/garment-image-batch.dto';
 export {
   ALLOWED_PUBLISH_TRANSITIONS,
   evaluatePublishGate,

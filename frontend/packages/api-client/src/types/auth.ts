@@ -1,153 +1,200 @@
 /**
- * ARCHITECTURE.md §5.1 `auth`.
+ * ARCHITECTURE.md §5.1 `auth`, plus the two public `invites` acceptance routes §5.3 mounts on
+ * `/invites`.
  *
  * There are no bearer tokens anywhere in the frontend. Authentication is the `drape.sid` httpOnly
  * cookie; the only header the client adds is the CSRF token (§6.4, PRD B-6/B-8). Nothing in this
  * file returns a session token, and nothing in this file is ever written to `localStorage`.
+ *
+ * **These shapes are written against `modules/auth/dto/**` — the running API — not against the
+ * §5.1 prose.** Where the two disagree the API wins (B-4): a hand-written optimism here is the
+ * exact failure the typed client exists to prevent.
  */
 
 import type { IsoDateTime, Uuid } from './common';
 import type { Locale, Role, UserStatus } from './enums';
 
 /**
- * The caller's identity as `GET /auth/me` returns it — the single role-resolution call used by the
- * web middleware (B-10).
+ * `AuthUserDto` — the body of `GET /auth/me`, `POST /auth/signup` and
+ * `POST /invites/token/:token/accept`.
  *
- * **This is presentation state.** Authorisation is decided in the API only (S-3, B-10, CLAUDE.md).
+ * **This is presentation state.** It selects which interface renders and is never an
+ * authorisation decision (S-3, B-10, CLAUDE.md): the API re-reads the role on every request.
+ *
+ * The DTO carries a boolean `twofaEnabled`. There is no `twofaEnabledAt`, no `twofaPending` and
+ * no `createdAt` — a pending session is signalled by `LoginResponse.twofaRequired`, and by
+ * `TWOFA_REQUIRED` on every other route, not by a flag on the user.
  */
 export interface SessionUser {
   id: Uuid;
   role: Role;
   email: string;
   name: string;
-  phone: string | null;
   status: UserStatus;
-  locale: Locale;
   emailVerifiedAt: IsoDateTime | null;
   phoneVerifiedAt: IsoDateTime | null;
-  twofaEnabledAt: IsoDateTime | null;
-  /** True while the session is in the `twofaPending` state — only `/auth/2fa/challenge` is reachable (S-8). */
-  twofaPending: boolean;
-  createdAt: IsoDateTime;
+  /** E.164, masked to the last four digits — even for the owner. */
+  phone: string | null;
+  locale: Locale;
+  /** Whether a second factor is enrolled (S-8). */
+  twofaEnabled: boolean;
 }
 
-/** `GET /auth/me` (ANY). */
-export interface MeResponse {
-  user: SessionUser;
-}
+/**
+ * `GET /auth/me` (ANY) — the single role-resolution call the web middleware makes (B-10).
+ *
+ * The DTO is returned **bare**, not wrapped in `{ user }`. The §2.3 envelope is the only wrapper
+ * on the wire, and the response interceptor has already lifted it off.
+ */
+export type MeResponse = SessionUser;
 
 /** `GET /auth/csrf` (PUBLIC). Issues the `drape.csrf` cookie and returns the matching token. */
 export interface CsrfTokenResponse {
   csrfToken: string;
-  /** The cookie name the token was written to — `drape.csrf` by default (`CSRF_COOKIE_NAME`). */
+  /** The cookie the token was written to — `drape.csrf` by default. */
   cookieName: string;
+  /** The header the API expects it back in — `X-CSRF-Token`. */
+  headerName: string;
 }
 
-/** `POST /auth/signup` (PUBLIC, ⊘ CSRF). A `role` in the payload is stripped and audit-logged (S-4). */
+/* ------------------------------------------------------------------ signup and login */
+
+/**
+ * `POST /auth/signup` (PUBLIC, ⊘ CSRF). C-2: name, email, password and phone. Event date, event
+ * type and budget band are prompted later, in context, and are not part of this payload.
+ *
+ * There is no `botCheckToken`: the §8.4 check is not wired to a client-supplied token.
+ */
 export interface SignupRequest {
+  name: string;
   email: string;
   password: string;
-  name: string;
-  phone?: string;
+  /** E.164, e.g. `+923001234567`. Required — the DTO has no optional marker on it. */
+  phone: string;
   locale?: Locale;
-  /** §8.4 bot-protection token. Absent or invalid yields `BOT_CHECK_FAILED`. */
-  botCheckToken?: string;
+  /**
+   * **Accepted and ignored (S-4).** Declared only because the global pipe runs with
+   * `forbidNonWhitelisted`, so an undeclared property would 400 rather than be stripped. The
+   * value is audit-logged and the account is always a Consumer. No client should send it.
+   *
+   * @deprecated Never send this.
+   */
+  role?: string;
 }
 
-export interface SignupResponse {
-  user: SessionUser;
-  /** True when `quota.requireEmailVerification` is on and she must confirm before her first try-on (C-3, A-28). */
-  emailVerificationRequired: boolean;
-}
+/** `POST /auth/signup` answers the created Consumer directly — there is no wrapper object. */
+export type SignupResponse = SessionUser;
 
-/** `POST /auth/login` (PUBLIC, ⊘ CSRF). Sets `drape.sid`. Failure copy is generic by design (S-6). */
+/**
+ * `POST /auth/login` (PUBLIC, ⊘ CSRF). Sets `drape.sid`. Failure copy is generic by design (S-6).
+ *
+ * There is no `rememberMe`: the S-7 idle window is chosen by role, server-side, and is not a
+ * client preference.
+ */
 export interface LoginRequest {
   email: string;
   password: string;
-  /** Opt into the longer S-7 idle window for this device. */
-  rememberMe?: boolean;
 }
 
+/**
+ * `POST /auth/login`, `POST /auth/2fa/challenge`, `POST /auth/2fa/recovery`.
+ *
+ * `user` is `null` while `twofaRequired` is true: the session exists but is `twofaPending`, and
+ * nothing about the account is disclosed until the second factor lands (S-8).
+ */
 export interface LoginResponse {
-  user: SessionUser;
-  /** True when the session is `twofaPending` and `POST /auth/2fa/challenge` must follow (S-8). */
+  user: SessionUser | null;
   twofaRequired: boolean;
 }
 
-/** `POST /auth/2fa/challenge` (PUBLIC). Completes a `twofaPending` session with a TOTP code. */
-export interface TwoFaChallengeRequest {
-  code: string;
+/* ------------------------------------------------------------------ acknowledgement */
+
+/**
+ * `AuthAcknowledgementDto` — the single body returned by logout, session revocation, password
+ * reset, password change, email verification, phone OTP and 2FA disable.
+ *
+ * It is deliberately contentless. S-6 requires the bytes to be identical whether or not the
+ * address belongs to an account, so there is nothing here for a caller to branch on and the UI
+ * must not imply that there was. In particular the API does **not** send `sent`,
+ * `emailVerifiedAt`, `phoneVerifiedAt`, `revokedSessionCount`, `revokedCount` or
+ * `expiresInSeconds` on any of these routes.
+ */
+export interface AuthAcknowledgement {
+  accepted: boolean;
+  /** Present only where the outcome is not a secret. Never rendered raw — the API owns the copy. */
+  detail?: string;
 }
 
-export type TwoFaChallengeResponse = LoginResponse;
+/** `POST /auth/logout` (ANY). Revokes the current session and clears both cookies. */
+export type LogoutResponse = AuthAcknowledgement;
+
+/** `DELETE /auth/sessions` (ANY) — revoke every session other than the current one. */
+export type RevokeSessionsResponse = AuthAcknowledgement;
+
+/* ------------------------------------------------------------------ sessions */
+
+/** One row of `GET /auth/sessions` (ANY) — the caller's own active sessions (§4.5). */
+export interface SessionSummary {
+  id: Uuid;
+  /** True for the session making the request; the UI labels it "This device". */
+  current: boolean;
+  userAgent: string | null;
+  /** Already truncated server-side: the last octet or group is dropped (E-12). */
+  ip: string;
+  createdAt: IsoDateTime;
+  lastSeenAt: IsoDateTime;
+  expiresAt: IsoDateTime;
+}
+
+/* ------------------------------------------------------------------ two-factor (S-8) */
+
+/** `POST /auth/2fa/challenge` and `POST /auth/2fa/enable` — a six-digit TOTP code. */
+export interface TwoFaCodeRequest {
+  code: string;
+}
 
 /** `POST /auth/2fa/recovery` (PUBLIC). Completes a `twofaPending` session with a recovery code. */
 export interface TwoFaRecoveryRequest {
   recoveryCode: string;
 }
 
-export type TwoFaRecoveryResponse = LoginResponse;
-
-/** `POST /auth/2fa/setup` (ANY). */
+/**
+ * `POST /auth/2fa/setup` (ANY).
+ *
+ * The API returns the `otpauth://` **URI**, not a rendered QR image, and no `issuer` field. The
+ * enrolment screen renders the URI as a QR code itself, or offers it as a one-tap handoff to the
+ * authenticator app alongside the secret for manual entry.
+ */
 export interface TwoFaSetupResponse {
   /** Base32 TOTP secret, shown once for manual entry. */
   secret: string;
-  /** `otpauth://` provisioning URI, rendered as a QR code. */
   provisioningUri: string;
-  issuer: string;
 }
 
 /** `POST /auth/2fa/enable` (ANY). Recovery codes are returned exactly once and never again. */
-export interface TwoFaEnableRequest {
-  code: string;
-}
-
 export interface TwoFaEnableResponse {
   recoveryCodes: string[];
-  enabledAt: IsoDateTime;
-}
-
-/** `POST /auth/2fa/disable` (ANY). Rejected for admins with `TWOFA_REQUIRED_FOR_ROLE` (S-8). */
-export interface TwoFaDisableRequest {
-  /** The current password, re-asked before a security downgrade. */
-  password: string;
-  code?: string;
-}
-
-/** `POST /auth/logout` (ANY). Revokes the current session and clears cookies. No payload. */
-export interface LogoutResponse {
-  loggedOut: true;
-}
-
-/** One row of `GET /auth/sessions` (ANY) — the caller's own active sessions (§4.5). */
-export interface SessionSummary {
-  id: Uuid;
-  /** True for the session making the request; the UI labels it "This device". */
-  isCurrent: boolean;
-  ip: string;
-  userAgent: string | null;
-  lastSeenAt: IsoDateTime;
-  expiresAt: IsoDateTime;
-  absoluteExpiresAt: IsoDateTime;
-  createdAt: IsoDateTime;
-}
-
-/** `DELETE /auth/sessions` (ANY) — revoke all sessions other than the current one. */
-export interface RevokeSessionsResponse {
-  revokedCount: number;
 }
 
 /**
- * `POST /auth/password/forgot` (PUBLIC). Always 200, always this exact body, whether or not the
- * address exists (S-6).
+ * `POST /auth/2fa/disable` (ANY). Rejected for admins with `TWOFA_REQUIRED_FOR_ROLE` (S-8).
+ *
+ * The DTO names the password field `currentPassword` and requires a **live** code — turning a
+ * second factor off is exactly the action a hijacked session would attempt.
+ */
+export interface TwoFaDisableRequest {
+  currentPassword: string;
+  code: string;
+}
+
+/* ------------------------------------------------------------------ passwords */
+
+/**
+ * `POST /auth/password/forgot` (PUBLIC). Always 200, always {@link AuthAcknowledgement}, whether
+ * or not the address exists (S-6).
  */
 export interface ForgotPasswordRequest {
   email: string;
-}
-
-export interface ForgotPasswordResponse {
-  /** Deliberately non-committal: "If that address has an account, a reset link is on its way." */
-  sent: true;
 }
 
 /** `POST /auth/password/reset` (PUBLIC). Consumes the token, sets the password, revokes all sessions. */
@@ -156,30 +203,17 @@ export interface ResetPasswordRequest {
   password: string;
 }
 
-/** `POST /auth/password/change` (ANY). Revokes every session except the current one. */
+/** `POST /auth/password/change` (ANY). Rotates this session and revokes every other one. */
 export interface ChangePasswordRequest {
   currentPassword: string;
   newPassword: string;
 }
 
-export interface ChangePasswordResponse {
-  revokedSessionCount: number;
-}
-
-/** `POST /auth/email/verify/request` (ANY). Re-sends the verification email. No payload. */
-export interface RequestEmailVerificationResponse {
-  sent: true;
-  /** When the previous link is still live, the API reports when a new one may be requested. */
-  retryAfterSeconds?: number;
-}
+/* ------------------------------------------------------------------ verification (C-3) */
 
 /** `POST /auth/email/verify/confirm` (PUBLIC). */
 export interface ConfirmEmailVerificationRequest {
   token: string;
-}
-
-export interface ConfirmEmailVerificationResponse {
-  emailVerifiedAt: IsoDateTime;
 }
 
 /** `POST /auth/phone/otp/request` (CONSUMER). C-3. */
@@ -188,17 +222,7 @@ export interface RequestPhoneOtpRequest {
   phone?: string;
 }
 
-export interface RequestPhoneOtpResponse {
-  sent: true;
-  /** `OTP_TTL_SECONDS`, so the UI can render the countdown honestly. */
-  expiresInSeconds: number;
-}
-
 /** `POST /auth/phone/otp/verify` (CONSUMER). Stamps `phoneVerifiedAt`. */
 export interface VerifyPhoneOtpRequest {
   code: string;
-}
-
-export interface VerifyPhoneOtpResponse {
-  phoneVerifiedAt: IsoDateTime;
 }

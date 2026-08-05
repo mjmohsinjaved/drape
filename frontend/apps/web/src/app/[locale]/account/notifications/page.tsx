@@ -1,14 +1,13 @@
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
+import { accountPaths ,type  NotificationPreferences } from '@repo/api-client';
 import { ErrorState } from '@repo/ui';
 
-import { accountApi } from '@/features/account/api/paths';
 import { NotificationPreferencesForm } from '@/features/account/components/NotificationPreferencesForm';
 import { buildMetadata } from '@/lib/metadata';
 import { routes } from '@/lib/routes';
 import { serverGet } from '@/lib/server-api';
 
-import type { NotificationPreferences } from '@/features/account/api/types';
 import type { LocaleParams } from '@/lib/route-params';
 import type { Metadata } from 'next';
 
@@ -38,15 +37,16 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
  * - **loading** — `loading.tsx`, then the per-switch busy state.
  * - **empty** — not applicable; the set of preferences is fixed.
  * - **error** — a failed read here, a failed write with rollback inside the island (D-18).
- * - **permission denied** — handled by the layout's server-side role check (S-9).
+ * - **permission denied** — the segment is role-ANY (§5.2), so the state that applies is the
+ *   API refusing an individual call; it renders as that panel's error copy, never a raw 403 (S-9).
  * - **success** — the quiet inline confirmation an auto-saving control earns.
  */
-export default async function ConsumerAccountNotificationsPage({ params }: Props) {
+export default async function AccountNotificationsPage({ params }: Props) {
   const { locale } = await params;
   setRequestLocale(locale);
 
   const t = await getTranslations({ locale, namespace: 'account.notifications' });
-  const result = await serverGet<NotificationPreferences>(accountApi.notificationPreferences);
+  const result = await serverGet<NotificationPreferences>(accountPaths.notificationPreferences);
 
   return (
     <section className="flex flex-col gap-8">

@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { cookies, headers } from 'next/headers';
+import { unstable_rethrow } from 'next/navigation';
 
 import { createServerApiClient } from '@repo/api-client/server';
 
@@ -99,8 +100,16 @@ async function requestScopedClient() {
 }
 
 /**
- * A GET that never throws. The caller renders the error state instead of blowing up the
- * segment, which is what D-5 asks for: states are rendered, not thrown.
+ * A GET that never throws **a failure**. The caller renders the error state instead of blowing
+ * up the segment, which is what D-5 asks for: states are rendered, not thrown.
+ *
+ * The one thing it does rethrow is Next's own control flow. `requestScopedClient()` reads
+ * `cookies()`, and during a static render that read throws the dynamic-usage signal that tells
+ * Next to bail this segment out of prerendering; `redirect()` and `notFound()` travel the same
+ * way. Swallowing those turns a session-scoped page into a build-time snapshot of a signed-out,
+ * data-less shell — and because this helper deliberately never surfaces a failure, the snapshot
+ * would bake in silently rather than failing the build. `unstable_rethrow` is Next's own guard
+ * for exactly this: it rethrows the framework's internal errors and returns for everything else.
  *
  * `createServerApiClient` attaches the package's response interceptor, which has already
  * unwrapped the §2.3 envelope — `response.data` is the payload, and a paginated route arrives
@@ -122,6 +131,9 @@ export async function serverGet<T>(
     }
     return { ok: true, data: payload };
   } catch (error: unknown) {
+    // Must come first. A dynamic-usage bailout, a `redirect()` or a `notFound()` is Next talking
+    // to itself, not an API failure, and catching it is what made these routes prerenderable.
+    unstable_rethrow(error);
     return { ok: false, error: toFailure(error) };
   }
 }

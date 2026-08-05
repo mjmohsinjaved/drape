@@ -93,13 +93,14 @@ export class TestRenderProcessor {
     }
 
     this.active += 1;
+    const batchId = job.batchId;
 
     try {
       const request = await this.testRenders.buildRequest(
         job.garmentId,
         job.userId,
         job.referenceModelId ?? undefined,
-        { batchId: job.batchId ?? undefined, existingJobId: job.id },
+        { batchId: batchId ?? undefined, existingJobId: job.id },
       );
 
       await this.runner.run(request);
@@ -115,6 +116,33 @@ export class TestRenderProcessor {
       );
     } finally {
       this.active -= 1;
+      await this.announce(batchId, job.id);
+    }
+  }
+
+  /**
+   * Tells anyone watching the batch stream that one item has reached a final state
+   * (§5.11, D-16).
+   *
+   * In `finally`, so a failed render moves the counters exactly as a successful one
+   * does — a batch whose stream only advanced on success would sit at "3 of 50" while
+   * the other forty-seven failed.
+   *
+   * Its own try/catch, because publishing is not the work. A batch must not stall
+   * because nobody was listening, or because reading the summary raced a deletion; the
+   * polling endpoint (§8.2's other half) is correct either way.
+   */
+  private async announce(batchId: string | null, jobId: string): Promise<void> {
+    if (batchId === null) {
+      return;
+    }
+    try {
+      await this.testRenders.publishBatchProgress(batchId, jobId);
+    } catch (error: unknown) {
+      this.logger.warn(
+        `Batch progress could not be published; the polling endpoint still reports it. ` +
+          `${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 }

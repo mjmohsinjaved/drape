@@ -17,7 +17,7 @@ import { meetsPasswordPolicy } from '@/features/auth/lib/password-policy';
 import { apiLocale, type Locale } from '@/i18n/config';
 import { routes } from '@/lib/routes';
 
-import type { InvitePreview } from '@/features/auth/api/types';
+import type { InviteTokenPreview } from '@repo/api-client';
 
 /**
  * Invitation acceptance — S-5, `POST /invites/token/:token/accept`.
@@ -46,7 +46,7 @@ import type { InvitePreview } from '@/features/auth/api/types';
 export interface InviteAcceptanceFormProps {
   locale: Locale;
   token: string;
-  preview: InvitePreview;
+  preview: InviteTokenPreview;
 }
 
 export function InviteAcceptanceForm({ locale, token, preview }: InviteAcceptanceFormProps) {

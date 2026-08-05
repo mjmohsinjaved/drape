@@ -1,5 +1,5 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
-import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Get, Param, Post, Sse, type MessageEvent } from '@nestjs/common';
+import { ApiOkResponse, ApiOperation, ApiProduces, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 
 import {
@@ -28,6 +28,8 @@ import {
 import { BatchIdParamDto } from '../dto/tryon-params.dto';
 import { ReferenceModelsService } from '../services/reference-models.service';
 import { TestRenderService } from '../services/test-render.service';
+
+import type { Observable } from 'rxjs';
 
 /**
  * The A-11 test-render gate and the A-12 bulk queue — ARCHITECTURE §5.11.
@@ -119,11 +121,45 @@ export class AdminTryOnController {
   @Get('admin/tryon/batches/:batchId')
   @Roles(Role.ADMIN)
   @ResponseMessage('Batch retrieved successfully')
-  @ApiOperation({ summary: 'Per-item progress and a success/failure summary (D-16)' })
+  @ApiOperation({
+    summary: 'Per-item progress and a success/failure summary (D-16)',
+    description:
+      'The documented **fallback** for the SSE stream below, and PRD §8.2 expects both ' +
+      'to exist. It reads the rows, so it is correct however long ago the batch ran and ' +
+      'whatever happened to the stream in between.',
+  })
   @ApiOkResponse({ type: TestRenderBatchResponseDto })
   @ApiStandardResponses({ notFound: true })
   batch(@Param() params: BatchIdParamDto): Promise<TestRenderBatchResponseDto> {
     return this.testRenders.batch(params.batchId);
+  }
+
+  /**
+   * §5.11 — `text/event-stream`, **no envelope**.
+   *
+   * `ResponseTransformInterceptor` checks for Nest's `sse` metadata (which `@Sse()`
+   * sets) and returns the handler's observable untouched, so nothing here ends up
+   * inside `{ success, data, … }`. There is deliberately no `@ResponseMessage()` on
+   * this route: it would be metadata for an envelope that is never built.
+   *
+   * Client disconnect is handled by RxJS: Nest unsubscribes, which tears down both the
+   * batch channel subscription and the heartbeat interval inside it.
+   */
+  @Sse('admin/tryon/batches/:batchId/stream')
+  @Roles(Role.ADMIN)
+  @ApiProduces('text/event-stream')
+  @ApiOperation({
+    summary: 'Live batch progress (§5.11, A-12, D-16)',
+    description:
+      'Events: `progress` (the batch summary plus the item that changed), `completed`, ' +
+      'and a `heartbeat` every 15 s. A snapshot arrives the moment the stream opens, so ' +
+      'a console that connects to a batch already under way draws the real state rather ' +
+      'than an empty table (D-5). The stream closes after `completed`; ' +
+      '`GET /admin/tryon/batches/:batchId` is correct forever after (§8.2).',
+  })
+  @ApiStandardResponses({ notFound: true })
+  streamBatch(@Param() params: BatchIdParamDto): Promise<Observable<MessageEvent>> {
+    return this.testRenders.streamBatch(params.batchId);
   }
 
   @Get('admin/garments/:garmentId/test-render')

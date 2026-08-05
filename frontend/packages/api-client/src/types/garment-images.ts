@@ -4,82 +4,116 @@
  * Exactly one image per garment may be the try-on source (`UQ_garment_images_source`). Designating
  * a new one clears the previous flag and resets `testRenderState` to `NONE` (A-9), which in turn
  * makes the garment unpublishable until a fresh test render is approved (A-11).
+ *
+ * Written against `modules/garments/dto/garment-image-*.dto.ts`.
  */
 
-import type { IsoDateTime, QualityCheckResult, Uuid } from './common';
+import type { IsoDateTime, Uuid } from './common';
+import type { ImageQualityReport } from './garments';
 
-/** One row of `GET /admin/garments/:garmentId/images` (ADMIN), in gallery order. */
+/**
+ * `GarmentImageResponseDto`. **No storage key ever reaches the client** (§3.4) — only signed,
+ * expiring URLs.
+ *
+ * The A-10 verdict is not folded into this row: there is no `qualityScore` or `qualityChecks`
+ * here. Where a route produces both, they travel as siblings — see {@link GarmentImageWithQuality}.
+ */
 export interface GarmentImage {
   id: Uuid;
   garmentId: Uuid;
-  /** Signed URL (§3.4). The `storageKey` column never leaves the API. */
+  /** Signed, expiring URL for the full-size image. */
   url: string;
+  /** Signed 320w thumbnail URL. */
   thumbnailUrl: string | null;
+  /** The file sent upstream as `garment_image` (A-9). Exactly one per garment. */
   isTryOnSource: boolean;
   width: number;
   height: number;
   byteSize: number;
   mimeType: string;
+  /** Gallery order, ascending. */
   position: number;
-  /** D-20 alt text on catalog images. */
+  /** Alt text (D-20). Describes the piece, not the photograph. */
   altText: string | null;
-  /** Populated only for the try-on source, which is the image the A-10 validator runs against. */
-  qualityScore: number | null;
-  qualityChecks: QualityCheckResult[] | null;
   createdAt: IsoDateTime;
 }
 
 /**
- * `POST /admin/garments/:garmentId/images` (ADMIN) — finalises an already-uploaded file against
- * the garment. Runs the A-10 validator when the image is the try-on source, which can reject with
- * `GARMENT_QUALITY_BELOW_THRESHOLD`, `IMAGE_TOO_SMALL`, `IMAGE_FORMAT_UNSUPPORTED`,
- * `IMAGE_TOO_LARGE` or `IMAGE_CORRUPT`.
+ * What the try-on-source routes return — `POST /admin/garments/:garmentId/images` and
+ * `POST /admin/garment-images/:imageId/tryon-source`.
+ *
+ * The image and the A-10 verdict travel together so an admin learns in one round trip whether the
+ * piece can be published (A-10).
  */
-export interface FinaliseGarmentImageRequest {
-  /** The upload ticket redeemed by `PUT /files/upload/:ticket` (§3.5). */
-  ticket: string;
-  altText?: string | null;
-  position?: number;
-  /** Marks the new image as the try-on source in the same call (A-9). */
-  isTryOnSource?: boolean;
+export interface GarmentImageWithQuality {
+  image: GarmentImage;
+  quality: ImageQualityReport;
 }
 
-/** `PATCH /admin/garment-images/:imageId` (ADMIN) — alt text or position only. */
+/** `MAX_GALLERY_IMAGES` — the ceiling a gallery and a reorder are both bounded by. */
+export const MAX_GALLERY_IMAGES = 60;
+
+/** Alt text ceiling the API enforces, so the form can say so first. */
+export const MAX_ALT_TEXT_LENGTH = 255;
+
+/**
+ * `POST /admin/garments/:garmentId/images` — step 3 of the §3.5 upload flow.
+ *
+ * The field is `key`: the value handed back by the upload-ticket redemption. There is no `ticket`
+ * field — the ticket was already spent putting the bytes.
+ */
+export interface CreateGarmentImageRequest {
+  key: string;
+  /**
+   * Refused when the garment already has a source; use
+   * `POST /admin/garment-images/:imageId/tryon-source` to replace it, so demoting the current
+   * source is always a deliberate act (A-9).
+   */
+  isTryOnSource?: boolean;
+  altText?: string;
+  /** Defaults to the end of the gallery. */
+  position?: number;
+}
+
+/** `PATCH /admin/garment-images/:imageId` (D-20). */
 export interface UpdateGarmentImageRequest {
-  altText?: string | null;
+  altText?: string;
   position?: number;
 }
 
 /**
- * `POST /admin/garment-images/:imageId/tryon-source` (ADMIN). Clears the previous source and
- * resets `testRenderState` to `NONE` (A-9). Designating an image that is already the source is
- * `TRYON_SOURCE_ALREADY_SET`.
+ * `POST /admin/garments/:garmentId/images/reorder`.
+ *
+ * The whole ordering, never a delta — every image id of this garment, in the order they should
+ * appear. The field is `imageIds`.
  */
-export interface SetTryOnSourceResponse {
-  imageId: Uuid;
-  garmentId: Uuid;
-  /** Always `NONE` — the garment must be test-rendered again before it can be published. */
-  testRenderState: 'NONE';
-  qualityScore: number | null;
-  qualityChecks: QualityCheckResult[] | null;
-}
-
-/** `POST /admin/garments/:garmentId/images/reorder` (ADMIN) — persists gallery order. */
 export interface ReorderGarmentImagesRequest {
-  /** Every image id for the garment, in the new gallery order. */
-  orderedIds: Uuid[];
+  imageIds: Uuid[];
 }
 
-export interface ReorderGarmentImagesResponse {
+/** `POST /admin/garment-images/batch` is bounded at this many garments; a longer list is refused. */
+export const MAX_BATCH_GARMENT_IMAGES = 100;
+
+/**
+ * `POST /admin/garment-images/batch` (ADMIN) — the primary image of many garments in one request.
+ *
+ * What the admin catalog table needs to draw §6.2's 40px row thumbnail without a request per row.
+ * It is a POST because the id list is a body, not a query string.
+ */
+export interface GarmentImageBatchRequest {
+  garmentIds: Uuid[];
+}
+
+export interface GarmentImageBatchEntry {
   garmentId: Uuid;
-  orderedIds: Uuid[];
+  /**
+   * The try-on source where there is one (A-9), the first image in gallery order otherwise.
+   * `null` when the garment has no images at all — the entry is still returned, so the caller
+   * can align its rows.
+   */
+  image: GarmentImage | null;
 }
 
-/** `POST /admin/garment-images/:imageId/revalidate` (ADMIN) — re-runs the A-10 validator. */
-export interface RevalidateGarmentImageResponse {
-  imageId: Uuid;
-  qualityScore: number;
-  qualityChecks: QualityCheckResult[];
-  /** False when the score is below `quality.minScore` and an override would be needed to publish. */
-  passesThreshold: boolean;
+export interface GarmentImageBatchResponse {
+  items: GarmentImageBatchEntry[];
 }

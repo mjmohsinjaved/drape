@@ -241,6 +241,8 @@
       "title": "Good to see you, {name}",
       "description": "Enquiries, the catalog and the people using the fitting room.",
       "twofaTitle": "Set up two-factor authentication",
+      "twofaBody": "Your account handles other people's photos and enquiries, so a second step at sign-in is required before you carry on.",
+      "twofaAction": "Set it up",
       "links": {
         "enquiries": {
           "title": "Enquiries",

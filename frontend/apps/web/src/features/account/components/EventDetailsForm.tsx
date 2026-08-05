@@ -4,7 +4,7 @@ import { useState, type FormEvent } from 'react';
 
 import { useTranslations } from 'next-intl';
 
-import { BUDGET_BANDS, EVENT_TYPES, type BudgetBand, type EventType } from '@repo/api-client';
+import { BUDGET_BANDS, EVENT_TYPES, type BudgetBand, type EventType ,type  ConsumerProfile } from '@repo/api-client';
 import { Button } from '@repo/ui';
 
 import { SelectField } from '@/features/account/components/SelectField';
@@ -12,7 +12,6 @@ import { useUpdateMyProfile } from '@/features/account/hooks/use-account-mutatio
 import { TextField } from '@/features/auth/components/fields';
 import { FormErrorFeedback, FormSuccessFeedback } from '@/features/auth/components/FormFeedback';
 
-import type { ConsumerProfile } from '@/features/account/api/types';
 
 /**
  * The C-2 event details — **this is the "later, in context" the signup form promised.**

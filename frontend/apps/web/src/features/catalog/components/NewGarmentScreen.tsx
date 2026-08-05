@@ -6,7 +6,7 @@ import { useTranslations } from 'next-intl';
 
 import { Button, Callout, EmptyState, toast } from '@repo/ui';
 
-import { AdminDensityScope, AdminPageHeader } from '@/features/catalog/components/AdminPage';
+import { AdminPage, AdminPageHeader } from '@/features/catalog/components/AdminPage';
 import { GarmentForm } from '@/features/catalog/components/GarmentForm';
 import { useCatalogErrorCopy } from '@/features/catalog/hooks/use-catalog-error';
 import { useCreateGarment } from '@/features/catalog/hooks/use-garments';
@@ -62,7 +62,7 @@ export function NewGarmentScreen({ locale, categories }: NewGarmentScreenProps) 
 
   if (selectable.length === 0) {
     return (
-      <AdminDensityScope>
+      <AdminPage>
         <AdminPageHeader title={t('title')} description={t('description')} />
         <EmptyState
           title={t('noCategories.title')}
@@ -73,12 +73,12 @@ export function NewGarmentScreen({ locale, categories }: NewGarmentScreenProps) 
             </Button>
           }
         />
-      </AdminDensityScope>
+      </AdminPage>
     );
   }
 
   return (
-    <AdminDensityScope>
+    <AdminPage>
       <AdminPageHeader
         title={t('title')}
         description={t('description')}
@@ -101,6 +101,6 @@ export function NewGarmentScreen({ locale, categories }: NewGarmentScreenProps) 
         submitLabel={t('save')}
         saving={createGarment.isPending}
       />
-    </AdminDensityScope>
+    </AdminPage>
   );
 }

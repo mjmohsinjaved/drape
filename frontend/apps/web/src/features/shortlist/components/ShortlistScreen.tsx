@@ -104,7 +104,7 @@ export async function ShortlistScreen({ locale }: ShortlistScreenProps) {
         </>
       )}
 
-      <ShortlistingCaption />
+      <ShortlistingCaption>{t('caption')}</ShortlistingCaption>
 
       <DeleteMyDataLink locale={locale} />
 

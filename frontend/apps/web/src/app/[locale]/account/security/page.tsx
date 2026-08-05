@@ -1,18 +1,15 @@
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
+import { accountPaths, authPaths ,type  MyAccount,type  SessionSummary } from '@repo/api-client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, ErrorState } from '@repo/ui';
 
-import { accountApi } from '@/features/account/api/paths';
 import { ChangePasswordForm } from '@/features/account/components/ChangePasswordForm';
 import { SessionsPanel } from '@/features/account/components/SessionsPanel';
 import { TwoFactorSettings } from '@/features/account/components/TwoFactorSettings';
-import { authApi } from '@/features/auth/api/paths';
 import { buildMetadata } from '@/lib/metadata';
 import { routes } from '@/lib/routes';
 import { serverGet } from '@/lib/server-api';
 
-import type { MyAccount } from '@/features/account/api/types';
-import type { SessionSummary } from '@/features/auth/api/types';
 import type { LocaleParams } from '@/lib/route-params';
 import type { Metadata } from 'next';
 
@@ -41,18 +38,19 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
  * - **loading** — `loading.tsx` beside this file.
  * - **empty** — the sessions panel handles a list with nothing in it (D-6).
  * - **error** — a failed read renders `ErrorState`; a failed write is handled in its panel.
- * - **permission denied** — handled by the layout's server-side role check (S-9).
+ * - **permission denied** — the segment is role-ANY (§5.2), so the state that applies is the
+ *   API refusing an individual call; it renders as that panel's error copy, never a raw 403 (S-9).
  * - **success** — each panel confirms its own action in the same words (D-13).
  */
-export default async function ConsumerAccountSecurityPage({ params }: Props) {
+export default async function AccountSecurityPage({ params }: Props) {
   const { locale } = await params;
   setRequestLocale(locale);
 
   const t = await getTranslations({ locale, namespace: 'account.security' });
 
   const [accountResult, sessionsResult] = await Promise.all([
-    serverGet<MyAccount>(accountApi.me),
-    serverGet<SessionSummary[]>(authApi.sessions),
+    serverGet<MyAccount>(accountPaths.me),
+    serverGet<SessionSummary[]>(authPaths.sessions),
   ]);
 
   if (!accountResult.ok) {

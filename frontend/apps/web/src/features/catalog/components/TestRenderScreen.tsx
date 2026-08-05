@@ -28,7 +28,7 @@ import {
 } from '@repo/ui';
 
 import {
-  AdminDensityScope,
+  AdminPage,
   AdminPageHeader,
   AdminSection,
 } from '@/features/catalog/components/AdminPage';
@@ -144,7 +144,7 @@ export function TestRenderScreen({
 
   if (garmentQuery.isPending || renderQuery.isPending) {
     return (
-      <AdminDensityScope>
+      <AdminPage>
         <div role="status" aria-live="polite" aria-busy="true" className="flex flex-col gap-4">
           <VisuallyHidden>{t('loading')}</VisuallyHidden>
           <Skeleton className="h-8 w-64 rounded-sm" />
@@ -153,14 +153,14 @@ export function TestRenderScreen({
             <Skeleton ratio="garment" className="w-full rounded-md" />
           </div>
         </div>
-      </AdminDensityScope>
+      </AdminPage>
     );
   }
 
   if (garmentQuery.isError || renderQuery.isError) {
     const error = garmentQuery.error ?? renderQuery.error;
     return (
-      <AdminDensityScope>
+      <AdminPage>
         {isPermissionDenied(error) ? (
           <PermissionDeniedState />
         ) : (
@@ -179,7 +179,7 @@ export function TestRenderScreen({
             }
           />
         )}
-      </AdminDensityScope>
+      </AdminPage>
     );
   }
 
@@ -248,7 +248,7 @@ export function TestRenderScreen({
   // Nothing has been rendered yet — the empty state is the run control, not a report of absence.
   if (render.renderUrl === null && render.sourceUrl === null) {
     return (
-      <AdminDensityScope>
+      <AdminPage>
         {header}
         <EmptyState
           title={t('noSource.title')}
@@ -259,12 +259,12 @@ export function TestRenderScreen({
             </Button>
           }
         />
-      </AdminDensityScope>
+      </AdminPage>
     );
   }
 
   return (
-    <AdminDensityScope>
+    <AdminPage>
       {header}
 
       {render.errorCode !== null ? (
@@ -380,6 +380,6 @@ export function TestRenderScreen({
       ) : null}
 
       {runControls}
-    </AdminDensityScope>
+    </AdminPage>
   );
 }

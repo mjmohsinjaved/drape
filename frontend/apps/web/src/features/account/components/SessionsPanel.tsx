@@ -13,7 +13,7 @@ import {
 } from '@/features/account/hooks/use-account-mutations';
 import { FormErrorFeedback } from '@/features/auth/components/FormFeedback';
 
-import type { SessionSummary } from '@/features/auth/api/types';
+import type { SessionSummary } from '@repo/api-client';
 
 /**
  * The caller's own live sessions — `GET /auth/sessions`, `DELETE /auth/sessions[/:sessionId]`.

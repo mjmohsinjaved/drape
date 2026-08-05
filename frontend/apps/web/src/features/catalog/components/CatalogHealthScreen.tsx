@@ -22,7 +22,7 @@ import {
 import { formatRelative } from '@repo/utils';
 
 import {
-  AdminDensityScope,
+  AdminPage,
   AdminPageHeader,
   AdminSection,
 } from '@/features/catalog/components/AdminPage';
@@ -70,7 +70,7 @@ export function CatalogHealthScreen({ locale }: CatalogHealthScreenProps) {
 
   if (query.isPending) {
     return (
-      <AdminDensityScope>
+      <AdminPage>
         <AdminPageHeader title={t('title')} description={t('description')} />
         <div role="status" aria-live="polite" aria-busy="true" className="flex flex-col gap-4">
           <VisuallyHidden>{t('loading')}</VisuallyHidden>
@@ -81,13 +81,13 @@ export function CatalogHealthScreen({ locale }: CatalogHealthScreenProps) {
           </div>
           <Skeleton className="h-64 w-full rounded-md" />
         </div>
-      </AdminDensityScope>
+      </AdminPage>
     );
   }
 
   if (query.isError) {
     return (
-      <AdminDensityScope>
+      <AdminPage>
         <AdminPageHeader title={t('title')} description={t('description')} />
         {isPermissionDenied(query.error) ? (
           <PermissionDeniedState />
@@ -100,7 +100,7 @@ export function CatalogHealthScreen({ locale }: CatalogHealthScreenProps) {
             retrying={query.isFetching}
           />
         )}
-      </AdminDensityScope>
+      </AdminPage>
     );
   }
 
@@ -112,7 +112,7 @@ export function CatalogHealthScreen({ locale }: CatalogHealthScreenProps) {
     health.zeroTryOnsIn30Days.total;
 
   return (
-    <AdminDensityScope>
+    <AdminPage>
       <AdminPageHeader
         title={t('title')}
         description={t('description')}
@@ -209,7 +209,7 @@ export function CatalogHealthScreen({ locale }: CatalogHealthScreenProps) {
           />
         </>
       )}
-    </AdminDensityScope>
+    </AdminPage>
   );
 }
 
