@@ -194,7 +194,11 @@ describe('C-16 — deleting a photo really does retire its cache entries', () =>
 
     photos = moduleRef.get(PersonPhotosService, { strict: false });
     events = moduleRef.get(EventEmitter2, { strict: false });
-  });
+    // Compiling AND initialising the whole DI graph is genuinely marginal against
+    // jest's default 5s hook budget once the suite runs in parallel with the rest.
+    // This is a slow hook, not a hanging one — give it room rather than let a
+    // loaded CI machine report a flake as a failure.
+  }, 30_000);
 
   afterAll(async () => {
     await moduleRef?.close();
