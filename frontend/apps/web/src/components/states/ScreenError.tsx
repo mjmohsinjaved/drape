@@ -25,8 +25,9 @@ export interface ScreenErrorProps {
    *
    * True only when the failure came from a **read**. A retry here is `router.refresh()`, which
    * re-runs the Server Component — safe for a GET, and never used for a mutation that may have
-   * partially applied. Screens pass `isRetryableCode(...)` so a dead end like `QUOTA_EXHAUSTED`
-   * never gets a button that cannot help (§10.3).
+   * partially applied. Screens pass `isRetryableCode(code)` — the read branch of the one retry
+   * rule in `@repo/api-client` — so a dead end like `QUOTA_EXHAUSTED` never gets a button that
+   * cannot help (§10.3).
    */
   retryable?: boolean;
   /** The way onwards when a retry is not it — usually a link back to the collection (D-6). */

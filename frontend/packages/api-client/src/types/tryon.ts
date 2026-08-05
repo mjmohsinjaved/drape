@@ -59,7 +59,10 @@ export interface TryOnJob {
   cacheHit: boolean;
   /** An §2.4 `ErrorCode` value on a `FAILED` job. */
   errorCode: string | null;
-  /** The §8.3 consumer copy for `errorCode`, already user-safe. */
+  /**
+   * The §8.3 consumer copy the API pairs with `errorCode`. English only, so screens select their
+   * own translated copy from `errorCode` instead — see the note on {@link ApiError}.
+   */
   errorMessage: string | null;
   attempts: number;
   startedAt: IsoDateTime | null;

@@ -56,7 +56,7 @@ export function NewGarmentScreen({ locale, categories }: NewGarmentScreenProps) 
       });
       router.push(routes.admin.garment(locale, created.id));
     } catch (error: unknown) {
-      toast.error(errorCopy.fromError(error));
+      toast.error(errorCopy.message(error));
     }
   };
 

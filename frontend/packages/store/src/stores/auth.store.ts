@@ -7,15 +7,21 @@
  *  PRD S-3 and B-10, and CLAUDE.md: "Authorisation is decided in the API only. Anything
  *  role-shaped in the web app is presentation and must carry a comment saying so."
  *
- *  `hasRole()` decides whether to *render* an admin nav item. It never decides whether an action
- *  is permitted — the API re-reads `users.role` on every request and answers `INSUFFICIENT_ROLE`
- *  regardless of what this store believes. A user who edits this state in a console sees a menu
- *  entry and then a 403; that is the design, not a hole in it.
- *
  *  Not persisted, deliberately. It is hydrated on every load from the server-rendered
  *  `GET /auth/me` result, so there is no window in which a stale identity outlives its session.
  *  There is no token here either — the session is the httpOnly `drape.sid` cookie (B-6).
  * ─────────────────────────────────────────────────────────────────────────────────────────────
+ *
+ *  **There is no role funnel on this store, and there must not be one.** `hasRole()`,
+ *  `useHasRole()`, `selectHasRole()` and `useAuthRole()` all shipped here with zero call sites:
+ *  every screen that varies by role resolves it server-side from the session — `requireAdmin`,
+ *  `requireConsumer` and the `dashboard` / `account` layouts in `apps/web` — and the API
+ *  re-reads `users.role` on every request regardless (S-3, B-10). A second, client-side role
+ *  mechanism that nobody calls is one somebody eventually calls *instead of* the live one, and
+ *  the two answers differ exactly when it matters: after a role change, a suspension, or a
+ *  session that ended under an open tab. If a screen needs the role for presentation, take it
+ *  from the server-resolved value the layout already has, or read `user.role` off this store
+ *  directly at the one place that needs it — do not reintroduce a general predicate.
  */
 
 import { create } from 'zustand';
@@ -23,7 +29,7 @@ import { useShallow } from 'zustand/react/shallow';
 
 import { withDevtools } from '../middleware/devtools.middleware';
 
-import type { Role, SessionUser, UserStatus } from '@repo/api-client';
+import type { SessionUser, UserStatus } from '@repo/api-client';
 
 
 export interface AuthState {
@@ -37,8 +43,6 @@ export interface AuthState {
   setUser: (user: SessionUser | null) => void;
   /** Called by the api-client's auth-failure handler and by an explicit logout. */
   clear: () => void;
-  /** Presentation only. Never gate a mutation on this. */
-  hasRole: (role: Role) => boolean;
 }
 
 const initialState = {
@@ -49,15 +53,13 @@ const initialState = {
 
 export const useAuthStore = create<AuthState>()(
   withDevtools(
-    (set, get) => ({
+    (set) => ({
       ...initialState,
 
       setUser: (user) =>
         set({ user, isAuthenticated: user !== null, isHydrated: true }, false, 'auth/setUser'),
 
       clear: () => set({ ...initialState, isHydrated: true }, false, 'auth/clear'),
-
-      hasRole: (role) => get().user?.role === role,
     }),
     'auth',
   ),
@@ -76,7 +78,6 @@ export const selectAuthUser = (state: AuthState): SessionUser | null => state.us
 export const selectAuthUserId = (state: AuthState): string | null => state.user?.id ?? null;
 export const selectIsAuthenticated = (state: AuthState): boolean => state.isAuthenticated;
 export const selectIsAuthHydrated = (state: AuthState): boolean => state.isHydrated;
-export const selectAuthRole = (state: AuthState): Role | null => state.user?.role ?? null;
 export const selectAuthStatus = (state: AuthState): UserStatus | null => state.user?.status ?? null;
 export const selectAuthDisplayName = (state: AuthState): string | null => state.user?.name ?? null;
 
@@ -91,25 +92,15 @@ export const selectIsPhoneVerified = (state: AuthState): boolean =>
 /** A-19 — she is suspended, so the UI shows the hold banner instead of the generate button. */
 export const selectIsSuspended = (state: AuthState): boolean => state.user?.status === 'SUSPENDED';
 
-/** Presentation only (S-3, B-10) — decides what to *show*, never what to allow. */
-export const selectHasRole =
-  (role: Role) =>
-  (state: AuthState): boolean =>
-    state.user?.role === role;
-
 export const useAuthUser = (): SessionUser | null => useAuthStore(selectAuthUser);
 export const useAuthUserId = (): string | null => useAuthStore(selectAuthUserId);
 export const useIsAuthenticated = (): boolean => useAuthStore(selectIsAuthenticated);
 export const useIsAuthHydrated = (): boolean => useAuthStore(selectIsAuthHydrated);
-export const useAuthRole = (): Role | null => useAuthStore(selectAuthRole);
 export const useAuthStatus = (): UserStatus | null => useAuthStore(selectAuthStatus);
 export const useAuthDisplayName = (): string | null => useAuthStore(selectAuthDisplayName);
 export const useIsEmailVerified = (): boolean => useAuthStore(selectIsEmailVerified);
 export const useIsPhoneVerified = (): boolean => useAuthStore(selectIsPhoneVerified);
 export const useIsSuspended = (): boolean => useAuthStore(selectIsSuspended);
-
-/** Presentation only (S-3, B-10). */
-export const useHasRole = (role: Role): boolean => useAuthStore(selectHasRole(role));
 
 export const useAuthActions = (): Pick<AuthState, 'setUser' | 'clear'> =>
   useAuthStore(useShallow((state) => ({ setUser: state.setUser, clear: state.clear })));

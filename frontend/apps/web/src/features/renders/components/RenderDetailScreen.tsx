@@ -4,10 +4,9 @@ import { notFound } from 'next/navigation';
 import { ChevronLeft } from 'lucide-react';
 import { getFormatter, getTranslations } from 'next-intl/server';
 
-import { Badge, Button, Callout } from '@repo/ui';
+import { Badge, Button, Callout, DirectionalIcon } from '@repo/ui';
 
-import { DirectionalIcon } from '@/components/DirectionalIcon';
-import { DeniedState, ScreenError } from '@/components/states';
+import { DeniedState, ScreenError, SignedOutState } from '@/components/states';
 import { getCatalogGarment } from '@/features/catalog-browse/api/endpoints';
 import { formatMoney } from '@/features/catalog-browse/lib/format';
 import { DeleteMyDataLink } from '@/features/consent/components/DeleteMyDataLink';
@@ -15,7 +14,11 @@ import { getResultServer } from '@/features/renders/api/server';
 import { RenderViewer } from '@/features/renders/components/RenderViewer';
 import { VerdictControls } from '@/features/renders/components/VerdictControls';
 import { getShortlistServer } from '@/features/shortlist/api/server';
-import { isPermissionDenied, isRetryableCode } from '@/features/tryon/lib/error-copy';
+import {
+  isAuthenticationRequired,
+  isPermissionDenied,
+  isRetryableCode,
+} from '@/features/tryon/lib/error-copy';
 import { routes } from '@/lib/routes';
 
 import type { Locale } from '@/i18n/config';
@@ -42,9 +45,18 @@ export async function RenderDetailScreen({ locale, resultId }: RenderDetailScree
   const t = await getTranslations({ locale, namespace: 'renders' });
   const format = await getFormatter({ locale });
 
-  const result = await getResultServer(resultId);
+  // The shortlist read depends on nothing — it was sitting in the second leg behind the render,
+  // which made it a third round trip on a screen that only needs two. Only the catalog read
+  // genuinely has to wait: it needs the garment id off the render.
+  const [result, shortlist] = await Promise.all([getResultServer(resultId), getShortlistServer()]);
 
   if (!result.ok) {
+    // D-5: a session that ended under an open screen is not an authorisation refusal. Signing
+    // in is what fixes it, and the return path brings her back to this exact screen.
+    if (isAuthenticationRequired(result.error.errorCode)) {
+      return <SignedOutState />;
+    }
+
     // S-9 / D-5: an authorisation refusal is the permission-denied state, never an error
     // state and never a raw 403.
     if (isPermissionDenied(result.error.errorCode)) return <DeniedState locale={locale} />;
@@ -72,12 +84,10 @@ export async function RenderDetailScreen({ locale, resultId }: RenderDetailScree
   // The compare image (C-20) is the studio photo of the piece. Fetched only when the garment is
   // still available — a withdrawn piece has nothing to compare against, and the viewer says so
   // rather than showing a broken frame.
-  const [garment, shortlist] = await Promise.all([
+  const garment =
     render.garmentId !== null && render.garmentAvailable
-      ? getCatalogGarment(render.garmentId)
-      : Promise.resolve(null),
-    getShortlistServer(),
-  ]);
+      ? await getCatalogGarment(render.garmentId)
+      : null;
 
   const catalogUrl =
     garment !== null && garment.ok

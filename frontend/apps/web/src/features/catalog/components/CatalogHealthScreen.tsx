@@ -21,6 +21,7 @@ import {
 } from '@repo/ui';
 import { formatRelative } from '@repo/utils';
 
+import { SignedOutState } from '@/components/states';
 import {
   AdminPage,
   AdminPageHeader,
@@ -33,6 +34,7 @@ import {
 } from '@/features/catalog/components/CatalogPills';
 import {
   isPermissionDenied,
+  isSignedOut,
   useCatalogErrorCopy,
 } from '@/features/catalog/hooks/use-catalog-error';
 import { useCatalogHealth } from '@/features/catalog/hooks/use-catalog-health';
@@ -89,12 +91,15 @@ export function CatalogHealthScreen({ locale }: CatalogHealthScreenProps) {
     return (
       <AdminPage>
         <AdminPageHeader title={t('title')} description={t('description')} />
-        {isPermissionDenied(query.error) ? (
+        {/* A session that ended is not an authorisation refusal — it has its own screen. */}
+        {isSignedOut(query.error) ? (
+          <SignedOutState />
+        ) : isPermissionDenied(query.error) ? (
           <PermissionDeniedState />
         ) : (
           <ErrorState
             title={t('error.title')}
-            description={errorCopy.fromError(query.error)}
+            description={errorCopy.message(query.error)}
             onRetry={() => void query.refetch()}
             retryLabel={t('error.retry')}
             retrying={query.isFetching}

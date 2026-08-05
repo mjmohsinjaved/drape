@@ -27,6 +27,7 @@ import {
   toast,
 } from '@repo/ui';
 
+import { SignedOutState } from '@/components/states';
 import {
   AdminPage,
   AdminPageHeader,
@@ -36,6 +37,7 @@ import { PublishStatePill, TestRenderStatePill } from '@/features/catalog/compon
 import { SignedImage } from '@/features/catalog/components/SignedImage';
 import {
   isPermissionDenied,
+  isSignedOut,
   useCatalogErrorCopy,
 } from '@/features/catalog/hooks/use-catalog-error';
 import { useGarment } from '@/features/catalog/hooks/use-garments';
@@ -114,7 +116,7 @@ export function TestRenderScreen({
       });
       toast.success(t('toast.ran'));
     } catch (error: unknown) {
-      toast.error(errorCopy.fromError(error));
+      toast.error(errorCopy.message(error));
     }
   }, [errorCopy, garmentId, modelId, runRender, t]);
 
@@ -123,7 +125,7 @@ export function TestRenderScreen({
       await approve.mutateAsync({ garmentId });
       toast.success(t('toast.approved'), { description: t('toast.approvedHint') });
     } catch (error: unknown) {
-      toast.error(errorCopy.fromError(error));
+      toast.error(errorCopy.message(error));
     }
   }, [approve, errorCopy, garmentId, t]);
 
@@ -136,7 +138,7 @@ export function TestRenderScreen({
       setReason('');
       toast.success(t('toast.rejected'));
     } catch (error: unknown) {
-      toast.error(errorCopy.fromError(error));
+      toast.error(errorCopy.message(error));
     }
   }, [errorCopy, garmentId, reason, reject, t]);
 
@@ -161,12 +163,15 @@ export function TestRenderScreen({
     const error = garmentQuery.error ?? renderQuery.error;
     return (
       <AdminPage>
-        {isPermissionDenied(error) ? (
+        {/* A session that ended is not an authorisation refusal — it has its own screen. */}
+        {isSignedOut(error) ? (
+          <SignedOutState />
+        ) : isPermissionDenied(error) ? (
           <PermissionDeniedState />
         ) : (
           <ErrorState
             title={t('error.title')}
-            description={errorCopy.fromError(error)}
+            description={errorCopy.message(error)}
             onRetry={() => {
               void garmentQuery.refetch();
               void renderQuery.refetch();

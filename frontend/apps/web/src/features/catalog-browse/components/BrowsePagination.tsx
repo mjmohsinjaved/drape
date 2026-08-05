@@ -3,8 +3,8 @@ import Link from 'next/link';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
+import { DirectionalIcon } from '@repo/ui';
 
-import { DirectionalIcon } from '@/components/DirectionalIcon';
 import { toSearchParams, type BrowseFilters } from '@/features/catalog-browse/lib/filters';
 
 export interface BrowsePaginationProps {

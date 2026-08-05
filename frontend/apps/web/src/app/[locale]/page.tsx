@@ -3,10 +3,8 @@ import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
-import { Button, Card, CardContent } from '@repo/ui';
+import { Button, Card, CardContent, DirectionalIcon } from '@repo/ui';
 
-
-import { DirectionalIcon } from '@/components/DirectionalIcon';
 import { PublicShell } from '@/components/layout/PublicShell';
 import { PageSkeleton } from '@/components/states';
 import { buildMetadata } from '@/lib/metadata';

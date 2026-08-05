@@ -3,10 +3,8 @@ import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
-import { Button, EmptyState } from '@repo/ui';
+import { Button, DirectionalIcon, EmptyState } from '@repo/ui';
 
-
-import { DirectionalIcon } from '@/components/DirectionalIcon';
 import { routes } from '@/lib/routes';
 
 import type { Locale } from '@/i18n/config';

@@ -13,6 +13,7 @@ import {
   toast,
 } from '@repo/ui';
 
+import { SignedOutState } from '@/components/states';
 import { AdminPage, AdminPageHeader } from '@/features/catalog/components/AdminPage';
 import { PublishStatePill, QualityPill } from '@/features/catalog/components/CatalogPills';
 import { GarmentForm } from '@/features/catalog/components/GarmentForm';
@@ -22,6 +23,7 @@ import { QualityOverrideDialog } from '@/features/catalog/components/QualityOver
 import { QualityReport } from '@/features/catalog/components/QualityReport';
 import {
   isPermissionDenied,
+  isSignedOut,
   useCatalogErrorCopy,
 } from '@/features/catalog/hooks/use-catalog-error';
 import {
@@ -107,7 +109,7 @@ export function GarmentEditorScreen({
       });
       toast.success(t('toast.saved', { title: saved.title }));
     } catch (error: unknown) {
-      toast.error(errorCopy.fromError(error), { description: t('toast.rolledBack') });
+      toast.error(errorCopy.message(error), { description: t('toast.rolledBack') });
     }
   }, [errorCopy, garmentId, t, updateGarment, values]);
 
@@ -118,7 +120,7 @@ export function GarmentEditorScreen({
         setOverrideOpen(false);
         toast.success(t('toast.overrideRecorded'));
       } catch (error: unknown) {
-        toast.error(errorCopy.fromError(error));
+        toast.error(errorCopy.message(error));
       }
     },
     [errorCopy, garmentId, overrideQuality, t],
@@ -134,7 +136,7 @@ export function GarmentEditorScreen({
       setLiveQuality(report);
       toast.success(t('toast.revalidated', { score: report.score }));
     } catch (error: unknown) {
-      toast.error(errorCopy.fromError(error));
+      toast.error(errorCopy.message(error));
     }
   }, [errorCopy, garmentId, revalidate, t, tryOnSource]);
 
@@ -156,12 +158,15 @@ export function GarmentEditorScreen({
   if (query.isError || !garment) {
     return (
       <AdminPage>
-        {isPermissionDenied(query.error) ? (
+        {/* A session that ended is not an authorisation refusal — it has its own screen. */}
+        {isSignedOut(query.error) ? (
+          <SignedOutState />
+        ) : isPermissionDenied(query.error) ? (
           <PermissionDeniedState />
         ) : (
           <ErrorState
             title={t('error.title')}
-            description={errorCopy.fromError(query.error)}
+            description={errorCopy.message(query.error)}
             onRetry={() => void query.refetch()}
             retryLabel={t('error.retry')}
             retrying={query.isFetching}

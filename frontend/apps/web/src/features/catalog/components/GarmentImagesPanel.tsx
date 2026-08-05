@@ -110,7 +110,7 @@ export function GarmentImagesPanel({
         await reorder.mutateAsync({ garmentId, imageIds: next });
       } catch (error: unknown) {
         // The optimistic move has already been rolled back by the hook (D-18).
-        toast.error(errorCopy.fromError(error));
+        toast.error(errorCopy.message(error));
       }
     },
     [errorCopy, garmentId, images, reorder],
@@ -123,7 +123,7 @@ export function GarmentImagesPanel({
         onQualityReport?.(result.quality);
         toast.success(t('toast.sourceSet'), { description: t('toast.sourceSetHint') });
       } catch (error: unknown) {
-        toast.error(errorCopy.fromError(error));
+        toast.error(errorCopy.message(error));
       }
     },
     [errorCopy, garmentId, onQualityReport, setSource, t],
@@ -141,7 +141,7 @@ export function GarmentImagesPanel({
           body: { altText: draft },
         });
       } catch (error: unknown) {
-        toast.error(errorCopy.fromError(error));
+        toast.error(errorCopy.message(error));
       }
     },
     [altDrafts, errorCopy, garmentId, updateImage],
@@ -154,7 +154,7 @@ export function GarmentImagesPanel({
       setPendingDelete(null);
       toast.success(t('toast.deleted'));
     } catch (error: unknown) {
-      toast.error(errorCopy.fromError(error));
+      toast.error(errorCopy.message(error));
     }
   }, [errorCopy, garmentId, pendingDelete, removeImage, t]);
 
@@ -226,7 +226,7 @@ export function GarmentImagesPanel({
 
       {query.isError ? (
         <Callout tone="danger" title={t('loadFailedTitle')}>
-          {errorCopy.fromError(query.error)}
+          {errorCopy.message(query.error)}
         </Callout>
       ) : null}
 

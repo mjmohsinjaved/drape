@@ -1,7 +1,10 @@
+import { NextIntlClientProvider } from 'next-intl';
 import { setRequestLocale } from 'next-intl/server';
 
 import { AdminShell } from '@/components/layout/AdminShell';
 import { ConsumerShell } from '@/components/layout/ConsumerShell';
+import { timeZone } from '@/i18n/config';
+import { loadClientMessages } from '@/i18n/messages';
 import { Role } from '@/lib/constants';
 import { requireUser, toShellUser } from '@/lib/session';
 
@@ -36,20 +39,25 @@ export default async function AccountLayout({ children, params }: LayoutProps) {
   const { locale } = await params;
   setRequestLocale(locale);
 
-  const user = await requireUser(locale);
+  // Either shell can render here, so the provider carries both vocabularies. The role decides
+  // which shell, never what is permitted.
+  const [user, messages] = await Promise.all([
+    requireUser(locale),
+    loadClientMessages(locale, 'account'),
+  ]);
   const shellUser = toShellUser(user);
 
-  if (user.role === Role.ADMIN) {
-    return (
-      <AdminShell locale={locale} user={shellUser}>
-        {children}
-      </AdminShell>
-    );
-  }
-
   return (
-    <ConsumerShell locale={locale} user={shellUser}>
-      {children}
-    </ConsumerShell>
+    <NextIntlClientProvider locale={locale} messages={messages} timeZone={timeZone}>
+      {user.role === Role.ADMIN ? (
+        <AdminShell locale={locale} user={shellUser}>
+          {children}
+        </AdminShell>
+      ) : (
+        <ConsumerShell locale={locale} user={shellUser}>
+          {children}
+        </ConsumerShell>
+      )}
+    </NextIntlClientProvider>
   );
 }

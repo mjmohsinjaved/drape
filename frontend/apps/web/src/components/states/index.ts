@@ -7,6 +7,7 @@ export { RouteError, type RouteErrorViewProps } from './RouteError';
 export { ScreenError, type ScreenErrorProps } from './ScreenError';
 export { PartialDataNotice, type PartialDataNoticeProps } from './PartialDataNotice';
 export { DeniedState, type DeniedStateProps } from './DeniedState';
+export { SignedOutState, type SignedOutStateProps } from './SignedOutState';
 export { PagePlaceholder, type PagePlaceholderProps } from './PagePlaceholder';
 export {
   EmptyNotice,

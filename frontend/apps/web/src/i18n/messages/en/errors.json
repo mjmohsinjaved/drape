@@ -23,6 +23,11 @@
     "body": "Nothing is wrong with your account — this area belongs to the studio team. Your fitting room is where you left it.",
     "action": "Back to the fitting room"
   },
+  "signedOut": {
+    "title": "You've been signed out",
+    "body": "Your session ended while this page was open. Sign in and we'll bring you straight back here.",
+    "action": "Sign in"
+  },
   "offline": {
     "title": "You're offline",
     "body": "We'll pick up where you left off as soon as you're back. Your shortlist is saved.",

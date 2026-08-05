@@ -1,4 +1,6 @@
-import { direction, locales, type Locale } from '@/i18n/config';
+import { getDirection } from '@repo/utils';
+
+import { locales, type Locale } from '@/i18n/config';
 import { APP_NAME } from '@/lib/constants';
 import { env } from '@/lib/env';
 import { isNoIndexPath } from '@/lib/routes';
@@ -82,7 +84,7 @@ export function buildMetadata({
     other: {
       // Helps assistive tech and crawlers agree with <html dir> on RTL pages (C-41).
       'content-language': locale,
-      'x-direction': direction[locale],
+      'x-direction': getDirection(locale),
     },
   };
 }

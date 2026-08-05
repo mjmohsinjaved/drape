@@ -1,9 +1,13 @@
 /**
  * i18n contract — ARCHITECTURE §6.7 (C-41).
  *
- * Two locales. Urdu gets full RTL, not a bolted-on stylesheet: direction is decided here,
- * applied once on <html dir>, and every layout below it uses logical CSS properties only.
- * There are no `[dir='rtl']` selectors anywhere in this codebase.
+ * Two locales. Urdu gets full RTL, not a bolted-on stylesheet: direction is derived once by
+ * `getDirection` from `@repo/utils`, applied once on <html dir>, and every layout below it uses
+ * logical CSS properties only. There are no `[dir='rtl']` selectors anywhere in this codebase.
+ *
+ * **Direction is not declared here.** A hardcoded `{ en: 'ltr', ur: 'rtl' }` map lived in this
+ * file and was a second, dumber answer to a question `@repo/utils` already answers from the
+ * BCP-47 tag and its script subtag. Call `getDirection(locale)` — it is the only derivation.
  */
 import type { Locale as ApiLocale } from '@repo/api-client';
 
@@ -12,8 +16,6 @@ export const locales = ['en', 'ur'] as const;
 export type Locale = (typeof locales)[number];
 
 export const defaultLocale: Locale = 'en';
-
-export const direction: Record<Locale, 'ltr' | 'rtl'> = { en: 'ltr', ur: 'rtl' };
 
 /** Human labels, each written in its own script — never "Urdu" in English in the switcher. */
 export const localeLabels: Record<Locale, string> = { en: 'English', ur: 'اردو' };

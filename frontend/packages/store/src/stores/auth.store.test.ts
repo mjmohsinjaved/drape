@@ -3,10 +3,9 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import {
   type AuthState,
   selectAuthDisplayName,
-  selectAuthRole,
   selectAuthStatus,
+  selectAuthUser,
   selectAuthUserId,
-  selectHasRole,
   selectIsAuthHydrated,
   selectIsAuthenticated,
   selectIsEmailVerified,
@@ -82,13 +81,14 @@ describe('useAuthStore — actions', () => {
     expect(state().isHydrated).toBe(true);
   });
 
-  it('hasRole compares the session role — presentation only (S-3, B-10)', () => {
+  // S-3 / B-10: the role funnel that used to live here (`hasRole`, `useHasRole`,
+  // `selectHasRole`, `useAuthRole`) had no call sites and has been removed. Role is resolved
+  // server-side; a second client-side mechanism is one somebody uses instead of the live one.
+  it('exposes no role predicate — the API and the server layouts decide (S-3, B-10)', () => {
     state().setUser(ADMIN);
-    expect(state().hasRole('ADMIN')).toBe(true);
-    expect(state().hasRole('CONSUMER')).toBe(false);
 
-    state().clear();
-    expect(state().hasRole('ADMIN')).toBe(false);
+    expect(state()).not.toHaveProperty('hasRole');
+    expect(state().user?.role).toBe('ADMIN');
   });
 
   it('never stores a token — the session is the httpOnly cookie (B-6)', () => {
@@ -111,8 +111,6 @@ describe('useAuthStore — selectors', () => {
     expect(selectAuthUserId(signedOut)).toBeNull();
     expect(selectAuthDisplayName(signedIn)).toBe('Ayesha');
     expect(selectAuthDisplayName(signedOut)).toBeNull();
-    expect(selectAuthRole(signedIn)).toBe('CONSUMER');
-    expect(selectAuthRole(signedOut)).toBeNull();
     expect(selectAuthStatus(signedIn)).toBe('ACTIVE');
     expect(selectAuthStatus(signedOut)).toBeNull();
     expect(selectIsAuthenticated(signedIn)).toBe(true);
@@ -140,11 +138,10 @@ describe('useAuthStore — selectors', () => {
     expect(selectIsSuspended({ ...signedIn, user: { ...CONSUMER, status: 'SUSPENDED' } })).toBe(true);
   });
 
-  it('selectHasRole builds a stable selector per role', () => {
-    const isAdmin = selectHasRole('ADMIN');
-
-    expect(isAdmin({ ...signedIn, user: ADMIN })).toBe(true);
-    expect(isAdmin(signedIn)).toBe(false);
-    expect(isAdmin(signedOut)).toBe(false);
+  it('ships no role selector for a screen to gate on', () => {
+    // The whole point of removing the funnel: there is nothing here to reach for. A screen that
+    // needs the role for presentation reads `user.role` at the one place that needs it.
+    expect(selectAuthUser({ ...signedIn, user: ADMIN })?.role).toBe('ADMIN');
+    expect(selectAuthUser(signedOut)).toBeNull();
   });
 });

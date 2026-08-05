@@ -4,7 +4,7 @@ import { getTranslations } from 'next-intl/server';
 
 import { Button, EmptyState, ShortlistingCaption } from '@repo/ui';
 
-import { DeniedState, PartialDataNotice, ScreenError } from '@/components/states';
+import { DeniedState, PartialDataNotice, ScreenError, SignedOutState } from '@/components/states';
 import { DeleteMyDataLink } from '@/features/consent/components/DeleteMyDataLink';
 import { listPhotosServer } from '@/features/photos/api/server';
 import {
@@ -23,7 +23,11 @@ import {
 type  HistoryFilters as Filters } from '@/features/renders/lib/filters';
 import { getShortlistServer } from '@/features/shortlist/api/server';
 import { TryOnTray } from '@/features/tryon/components/TryOnTray';
-import { isPermissionDenied, isRetryableCode } from '@/features/tryon/lib/error-copy';
+import {
+  isAuthenticationRequired,
+  isPermissionDenied,
+  isRetryableCode,
+} from '@/features/tryon/lib/error-copy';
 import { routes } from '@/lib/routes';
 
 import type { ResultListItem, Verdict } from '@/features/renders/api/types';
@@ -68,6 +72,12 @@ export async function HistoryScreen({ locale, filters }: HistoryScreenProps) {
   ]);
 
   if (!results.ok) {
+    // D-5: a session that ended under an open screen is not an authorisation refusal. Signing
+    // in is what fixes it, and the return path brings her back to this exact screen.
+    if (isAuthenticationRequired(results.error.errorCode)) {
+      return <SignedOutState />;
+    }
+
     // S-9 / D-5: an authorisation refusal is the permission-denied state, never an error
     // state and never a raw 403.
     if (isPermissionDenied(results.error.errorCode)) return <DeniedState locale={locale} />;

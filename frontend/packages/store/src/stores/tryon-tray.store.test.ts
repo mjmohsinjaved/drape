@@ -86,7 +86,9 @@ describe('useTryOnTrayStore — actions', () => {
     expect(job?.seen).toBe(false);
   });
 
-  it('fails a job with the §8.3 consumer copy, displayed as-is', () => {
+  // The tray renders from `errorCode`, not from `errorMessage`: the server's sentence is English
+  // only. The message is kept for diagnostics, which is what this asserts.
+  it('fails a job carrying both the §8.3 code and the server sentence', () => {
     start('job-1');
     state().failJob({
       jobId: 'job-1',

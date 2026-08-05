@@ -148,3 +148,17 @@ export function toServerParams(
 export function isUnfiltered(state: CatalogListState): boolean {
   return state.search === '' && state.categoryId === null && state.publishState === null;
 }
+
+/**
+ * A stable identity for a list view — the same string on the server and in the island because
+ * both derive it from the same `parseListState` over the same query string.
+ *
+ * It exists so the island can tell whether the rows the Server Component fetched are the rows it
+ * is about to ask for. It used to test `state.page === 1` instead, which is only *sometimes* the
+ * same question: the server fetches whatever page the URL names, so every page turn threw away a
+ * page that had already arrived and re-fetched it from the browser. Two round trips for the same
+ * rows, on every page of the catalog.
+ */
+export function listStateKey(state: CatalogListState): string {
+  return serialiseListState(state).toString();
+}

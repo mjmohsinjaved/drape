@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
 import { getMyConsentServer } from '@/features/consent/api/server';
+import { listPhotosServer } from '@/features/photos/api/server';
 import { AddPhotoScreen } from '@/features/photos/components/AddPhotoScreen';
 import { RETURN_TO_PARAM } from '@/lib/constants';
 import { buildMetadata } from '@/lib/metadata';
@@ -45,7 +46,11 @@ export default async function ConsumerPhotosNewPage({ params, searchParams }: Pr
       ? candidate
       : undefined;
 
-  const consent = await getMyConsentServer();
+  // The consent check and the photo list answer unrelated questions, so they run together.
+  // `listPhotosServer` is memoised per request: this warms it for `AddPhotoScreen` rather than
+  // fetching it twice, and the screen no longer waits for consent before starting its own read.
+  const [consent] = await Promise.all([getMyConsentServer(), listPhotosServer()]);
+
   if (consent.ok && consent.data.status !== 'GRANTED') {
     const back = returnTo ?? routes.photoNew(locale);
     redirect(`${routes.consent(locale)}?${RETURN_TO_PARAM}=${encodeURIComponent(back)}`);

@@ -28,9 +28,11 @@ export interface LocaleSwitcherProps {
  * cookie on that navigation, because the server needs it and `localStorage` is not readable
  * there (§6.5, §6.7).
  *
- * Locale and direction live on `useUiStore`, not on a store of their own, and its `setLocale`
- * only mirrors what has been negotiated: a store never touches the document or the router. The
- * mirror is what keeps `useDirection()` / `useIsRtl()` correct for the rest of the tree.
+ * The locale mirror lives on `useUiStore`, and its `setLocale` only records what has been
+ * negotiated: a store never touches the document or the router. **Direction is not mirrored
+ * anywhere** — it is derived from the `[locale]` segment by `getDirection` and published once by
+ * the `DirectionProvider` in the root layout, which is also what Radix reads. A client store
+ * that lagged this navigation by a frame would flip an icon the wrong way.
  */
 export function LocaleSwitcher({ variant = 'full' }: LocaleSwitcherProps) {
   const t = useTranslations('common.locale');

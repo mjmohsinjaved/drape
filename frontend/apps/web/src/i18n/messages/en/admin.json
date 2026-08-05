@@ -804,7 +804,7 @@
     "preview": "Preview"
   },
   "errors": {
-    "GENERIC": "That didn't go through. Try again — nothing you typed has been lost.",
+    "description": "That didn't go through. Try again — nothing you typed has been lost.",
     "VALIDATION_ERROR": "Some of these details need another look. The fields with a message below them are the ones to change.",
     "NETWORK_ERROR": "You appear to be offline. Your changes are still here — try again when you're back.",
     "REQUEST_TIMEOUT": "That took too long to answer. Try again.",

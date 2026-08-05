@@ -4,7 +4,7 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 
 import { PageSkeleton } from '@/components/states';
 import { GarmentListScreen } from '@/features/catalog/components/GarmentListScreen';
-import { parseListState, toServerParams } from '@/features/catalog/schemas/list-query';
+import { listStateKey, parseListState, toServerParams } from '@/features/catalog/schemas/list-query';
 import { buildMetadata } from '@/lib/metadata';
 import { routes } from '@/lib/routes';
 import { serverGet } from '@/lib/server-api';
@@ -71,6 +71,9 @@ export default async function AdminCatalogPage({ params, searchParams }: Props) 
       <GarmentListScreen
         locale={locale}
         initialPage={initialPage}
+        // The view these rows are for. The island uses the seed only while the two agree, so a
+        // page turn reuses what has already arrived instead of re-fetching it.
+        initialPageKey={listStateKey(listState)}
         categories={categories.ok ? categories.data : []}
       />
     </Suspense>

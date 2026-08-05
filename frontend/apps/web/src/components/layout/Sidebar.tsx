@@ -4,13 +4,20 @@ import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { useUiStore } from '@repo/store';
-import { Button, ScrollArea, Separator, Tooltip, TooltipContent, TooltipTrigger } from '@repo/ui';
+import {
+  Button,
+  DirectionalIcon,
+  ScrollArea,
+  Separator,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  useDirection,
+} from '@repo/ui';
 import { cn } from '@repo/utils';
 
-import { DirectionalIcon } from '@/components/DirectionalIcon';
 import { adminNavGroups } from '@/components/layout/nav-items';
 import { NavLink } from '@/components/layout/NavLink';
-import { useIsRtl } from '@/hooks/use-direction';
 import { useHasFinePointer } from '@/hooks/use-media-query';
 
 import type { Locale } from '@/i18n/config';
@@ -37,7 +44,9 @@ export function Sidebar({ locale, variant = 'fixed', onNavigate }: SidebarProps)
   const hasFinePointer = useHasFinePointer();
   // Radix places a tooltip on a physical side, so the collapsed rail's tooltip has to be told
   // which way "outward" is. This is the only physical value in the file, and it is a prop.
-  const isRtl = useIsRtl();
+  // The direction comes from the same `DirectionProvider` that feeds Radix itself, so the
+  // tooltip and the primitive it decorates can never disagree.
+  const isRtl = useDirection() === 'rtl';
 
   // In the sheet the rail is always expanded — there is no room shortage to solve on a phone.
   const isCollapsed = variant === 'fixed' && collapsed;

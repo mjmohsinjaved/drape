@@ -1,6 +1,9 @@
+import { NextIntlClientProvider } from 'next-intl';
 import { setRequestLocale } from 'next-intl/server';
 
 import { AdminShell } from '@/components/layout/AdminShell';
+import { timeZone } from '@/i18n/config';
+import { loadClientMessages } from '@/i18n/messages';
 import { requireAdmin, toShellUser } from '@/lib/session';
 
 import type { LayoutProps } from '@/lib/route-params';
@@ -26,11 +29,17 @@ export default async function AdminLayout({ children, params }: LayoutProps) {
   const { locale } = await params;
   setRequestLocale(locale);
 
-  const user = await requireAdmin(locale);
+  // `admin` is the big one, and this is the only group whose readers can use it.
+  const [user, messages] = await Promise.all([
+    requireAdmin(locale),
+    loadClientMessages(locale, 'admin'),
+  ]);
 
   return (
-    <AdminShell locale={locale} user={toShellUser(user)}>
-      {children}
-    </AdminShell>
+    <NextIntlClientProvider locale={locale} messages={messages} timeZone={timeZone}>
+      <AdminShell locale={locale} user={toShellUser(user)}>
+        {children}
+      </AdminShell>
+    </NextIntlClientProvider>
   );
 }

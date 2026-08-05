@@ -35,10 +35,12 @@ import {
   toast,
 } from '@repo/ui';
 
+import { SignedOutState } from '@/components/states';
 import { AdminPage, AdminPageHeader } from '@/features/catalog/components/AdminPage';
 import { SignedImage } from '@/features/catalog/components/SignedImage';
 import {
   isPermissionDenied,
+  isSignedOut,
   useCatalogErrorCopy,
 } from '@/features/catalog/hooks/use-catalog-error';
 import { CategoryDeleteDialog } from '@/features/categories/components/CategoryDeleteDialog';
@@ -118,7 +120,7 @@ export function CategoriesScreen({ initialTree }: CategoriesScreenProps) {
         });
       } catch (error: unknown) {
         // D-18: the optimistic move has already been rolled back by the hook; say why.
-        toast.error(errorCopy.fromError(error));
+        toast.error(errorCopy.message(error));
       }
     },
     [errorCopy, reorder],
@@ -131,7 +133,7 @@ export function CategoriesScreen({ initialTree }: CategoriesScreenProps) {
         setFormOpen(false);
         toast.success(t('toast.created', { name: created.name }));
       } catch (error: unknown) {
-        toast.error(errorCopy.fromError(error));
+        toast.error(errorCopy.message(error));
       }
     },
     [createCategory, errorCopy, t],
@@ -144,7 +146,7 @@ export function CategoriesScreen({ initialTree }: CategoriesScreenProps) {
         setFormOpen(false);
         toast.success(t('toast.saved', { name: saved.name }));
       } catch (error: unknown) {
-        toast.error(errorCopy.fromError(error));
+        toast.error(errorCopy.message(error));
       }
     },
     [errorCopy, t, updateCategory],
@@ -162,7 +164,7 @@ export function CategoriesScreen({ initialTree }: CategoriesScreenProps) {
             : t('toast.restored', { name: category.name }),
         );
       } catch (error: unknown) {
-        toast.error(errorCopy.fromError(error));
+        toast.error(errorCopy.message(error));
       }
     },
     [archive, errorCopy, t],
@@ -175,7 +177,7 @@ export function CategoriesScreen({ initialTree }: CategoriesScreenProps) {
         setDeleting(undefined);
         toast.success(t('toast.deleted', { name: category.name }));
       } catch (error: unknown) {
-        toast.error(errorCopy.fromError(error));
+        toast.error(errorCopy.message(error));
       }
     },
     [errorCopy, remove, t],
@@ -245,12 +247,15 @@ export function CategoriesScreen({ initialTree }: CategoriesScreenProps) {
     return (
       <AdminPage>
         {header}
-        {isPermissionDenied(query.error) ? (
+        {/* A session that ended is not an authorisation refusal — it has its own screen. */}
+        {isSignedOut(query.error) ? (
+          <SignedOutState />
+        ) : isPermissionDenied(query.error) ? (
           <PermissionDeniedState />
         ) : (
           <ErrorState
             title={t('error.title')}
-            description={errorCopy.fromError(query.error)}
+            description={errorCopy.message(query.error)}
             onRetry={() => void query.refetch()}
             retryLabel={t('error.retry')}
             retrying={query.isFetching}

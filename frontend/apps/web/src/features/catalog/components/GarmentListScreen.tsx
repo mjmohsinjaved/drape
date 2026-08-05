@@ -34,6 +34,7 @@ import {
 } from '@repo/ui';
 import { formatCurrency, formatRelative } from '@repo/utils';
 
+import { SignedOutState } from '@/components/states';
 import { AdminPage, AdminPageHeader } from '@/features/catalog/components/AdminPage';
 import { BulkActionBar, type BulkOperation } from '@/features/catalog/components/BulkActionBar';
 import { BulkRunDialog } from '@/features/catalog/components/BulkRunDialog';
@@ -45,12 +46,14 @@ import {
 import { FirstRunGuide } from '@/features/catalog/components/FirstRunGuide';
 import {
   isPermissionDenied,
+  isSignedOut,
   useCatalogErrorCopy,
 } from '@/features/catalog/hooks/use-catalog-error';
 import { useGarmentList, useGarmentStateChange } from '@/features/catalog/hooks/use-garments';
 import {
   CATALOG_PAGE_SIZE,
   isUnfiltered,
+  listStateKey,
   parseListState,
   serialiseListState,
   toApiQuery,
@@ -76,6 +79,15 @@ import type { Paginated, PublishState, Uuid } from '@repo/api-client';
 export interface GarmentListScreenProps {
   locale: Locale;
   initialPage?: Paginated<AdminGarment>;
+  /**
+   * The list view `initialPage` was fetched for, as {@link listStateKey} spells it.
+   *
+   * Without it the island can only guess, and it used to guess "page 1" — so every page turn
+   * discarded rows the server had already fetched and asked for them again. With it, the seed is
+   * used whenever it matches what the island is about to request, and ignored the moment the
+   * two diverge.
+   */
+  initialPageKey?: string;
   /** The tree, for the category filter and the bulk re-categorise picker. */
   categories: AdminCategory[];
 }
@@ -98,7 +110,12 @@ const EMPTY_ROWS: AdminGarment[] = [];
  * except `/`, which is the one shortcut that has to work from anywhere on the screen and is
  * therefore ignored whenever a control already has focus.
  */
-export function GarmentListScreen({ locale, initialPage, categories }: GarmentListScreenProps) {
+export function GarmentListScreen({
+  locale,
+  initialPage,
+  initialPageKey,
+  categories,
+}: GarmentListScreenProps) {
   const t = useTranslations('admin.catalog');
   const errorCopy = useCatalogErrorCopy();
   const router = useRouter();
@@ -108,7 +125,13 @@ export function GarmentListScreen({ locale, initialPage, categories }: GarmentLi
   const [searchDraft, setSearchDraft] = useState(state.search);
   const searchRef = useRef<HTMLInputElement>(null);
 
-  const query = useGarmentList(toApiQuery(state), state.page === 1 ? initialPage : undefined);
+  // Seed the query with the server's rows whenever they *are* the rows being asked for — which
+  // is every first render of a list URL, page 4 included, not only page 1.
+  const seed = initialPageKey !== undefined && initialPageKey === listStateKey(state)
+    ? initialPage
+    : undefined;
+
+  const query = useGarmentList(toApiQuery(state), seed);
   const stateChange = useGarmentStateChange();
 
   const [selectedIds, setSelectedIds] = useState<Uuid[]>([]);
@@ -175,7 +198,7 @@ export function GarmentListScreen({ locale, initialPage, categories }: GarmentLi
         );
       } catch (error: unknown) {
         // The gates live server-side; the refusal explains which one and where to fix it (A-11).
-        toast.error(errorCopy.fromError(error), {
+        toast.error(errorCopy.message(error), {
           description: t('toast.publishBlockedHint'),
         });
       }
@@ -406,12 +429,15 @@ export function GarmentListScreen({ locale, initialPage, categories }: GarmentLi
     return (
       <AdminPage>
         {header}
-        {isPermissionDenied(query.error) ? (
+        {/* A session that ended is not an authorisation refusal — it has its own screen. */}
+        {isSignedOut(query.error) ? (
+          <SignedOutState />
+        ) : isPermissionDenied(query.error) ? (
           <PermissionDeniedState />
         ) : (
           <ErrorState
             title={t('error.title')}
-            description={errorCopy.fromError(query.error)}
+            description={errorCopy.message(query.error)}
             onRetry={() => void query.refetch()}
             retryLabel={t('error.retry')}
             retrying={query.isFetching}
@@ -584,7 +610,14 @@ export function GarmentListScreen({ locale, initialPage, categories }: GarmentLi
               </TableCell>
 
               <TableCell numeric className="hidden md:table-cell">
-                {formatCurrency(garment.price, { currency: garment.currency, locale })}
+                {/* `exact` is the console's convention: a price here is a value being edited,
+                    and a hidden 50 paisa is a data-entry trap. The consumer grid quotes the
+                    same figure in whole rupees — one formatter, two stated conventions. */}
+                {formatCurrency(garment.price, {
+                  currency: garment.currency,
+                  locale,
+                  precision: 'exact',
+                })}
               </TableCell>
 
               <TableCell>

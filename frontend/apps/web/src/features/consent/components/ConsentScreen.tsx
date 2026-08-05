@@ -4,11 +4,15 @@ import { getFormatter, getTranslations } from 'next-intl/server';
 
 import { Button, SuccessState } from '@repo/ui';
 
-import { DeniedState, ScreenError } from '@/components/states';
+import { DeniedState, ScreenError, SignedOutState } from '@/components/states';
 import { getMyConsentServer, getPolicyServer } from '@/features/consent/api/server';
 import { ConsentGate } from '@/features/consent/components/ConsentGate';
 import { DeleteMyDataLink } from '@/features/consent/components/DeleteMyDataLink';
-import { isPermissionDenied, isRetryableCode } from '@/features/tryon/lib/error-copy';
+import {
+  isAuthenticationRequired,
+  isPermissionDenied,
+  isRetryableCode,
+} from '@/features/tryon/lib/error-copy';
 import { apiLocale ,type  Locale } from '@/i18n/config';
 import { routes } from '@/lib/routes';
 
@@ -49,6 +53,12 @@ export async function ConsentScreen({ locale, returnTo }: ConsentScreenProps) {
   );
 
   if (!policy.ok) {
+    // D-5: a session that ended under an open screen is not an authorisation refusal. Signing
+    // in is what fixes it, and the return path brings her back to this exact screen.
+    if (isAuthenticationRequired(policy.error.errorCode)) {
+      return <SignedOutState />;
+    }
+
     // S-9 / D-5: an authorisation refusal is the permission-denied state, never an error
     // state and never a raw 403.
     if (isPermissionDenied(policy.error.errorCode)) return <DeniedState locale={locale} />;
@@ -70,6 +80,14 @@ export async function ConsentScreen({ locale, returnTo }: ConsentScreenProps) {
   // second record written against the same policy version. So the two are kept distinct: we say
   // we could not check, and offer the re-read.
   if (!state.ok) {
+    // D-5: a session that ended under an open screen is not an authorisation refusal. Signing
+    // in is what fixes it, and the return path brings her back to this exact screen.
+    if (isAuthenticationRequired(state.error.errorCode)) {
+      return <SignedOutState />;
+    }
+
+    // S-9 / D-5: an authorisation refusal is the permission-denied state, never an error
+    // state and never a raw 403.
     if (isPermissionDenied(state.error.errorCode)) return <DeniedState locale={locale} />;
 
     const key = `errors.${state.error.errorCode}`;

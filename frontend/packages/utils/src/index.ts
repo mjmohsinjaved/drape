@@ -25,12 +25,13 @@ export { debounce } from './debounce';
 export type { DebounceOptions, DebouncedFunction } from './debounce';
 
 export {
+  CURRENCY_PRECISION,
   DEFAULT_CURRENCY,
   DEFAULT_LOCALE,
   formatCurrency,
   getCurrencySymbol,
 } from './format-currency';
-export type { FormatCurrencyOptions } from './format-currency';
+export type { CurrencyPrecision, FormatCurrencyOptions } from './format-currency';
 
 export {
   DATE_PATTERN,

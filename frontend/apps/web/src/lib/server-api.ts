@@ -3,6 +3,7 @@ import 'server-only';
 import { cookies, headers } from 'next/headers';
 import { unstable_rethrow } from 'next/navigation';
 
+import { isApiError } from '@repo/api-client';
 import { createServerApiClient } from '@repo/api-client/server';
 
 import { ErrorCodes, type ErrorCode } from '@/lib/constants';
@@ -31,7 +32,11 @@ export interface PaginationMeta {
 export interface ServerApiFailure {
   statusCode: number;
   errorCode: ErrorCode | string;
-  /** Already user-safe and already through the §9.4 copy check — display it directly. */
+  /**
+   * The server's own message. Safe to log, **not** display copy: it is English only, and this
+   * app is bilingual (C-41). Screens select copy from {@link errorCode} through
+   * `useErrorCopy(namespace)` — see the note on `ApiError` in `@repo/api-client`.
+   */
   message: string;
   requestId?: string;
   isRetryable: boolean;
@@ -54,34 +59,31 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * D-5 state from this; they never surface a status code, a stack trace or a raw axios error.
  */
 function toFailure(error: unknown): ServerApiFailure {
-  if (isRecord(error) && isRecord(error.response)) {
-    const status = typeof error.response.status === 'number' ? error.response.status : 500;
-    const body = error.response.data;
-    if (isRecord(body)) {
-      return {
-        statusCode: status,
-        errorCode: typeof body.errorCode === 'string' ? body.errorCode : ErrorCodes.UNKNOWN_ERROR,
-        message: typeof body.message === 'string' ? body.message : '',
-        requestId: typeof body.requestId === 'string' ? body.requestId : undefined,
-        isRetryable: status >= 500 || status === 408 || status === 429,
-      };
-    }
+  // `createServerApiClient()` installs the shared response interceptor, so by the
+  // time anything reaches here it is already an `ApiError` — a flat class with
+  // `statusCode`/`errorCode`, and deliberately no `.response`. Re-deriving the
+  // failure from a raw axios shape matched nothing and collapsed every
+  // server-rendered error to NETWORK_ERROR, which made every D-5
+  // permission-denied, not-found and quota state on a Server Component
+  // unreachable. The interceptor is the single normalisation point; this only
+  // adapts its output.
+  if (isApiError(error)) {
     return {
-      statusCode: status,
-      errorCode: ErrorCodes.UNKNOWN_ERROR,
-      message: '',
-      isRetryable: status >= 500,
+      statusCode: error.statusCode,
+      errorCode: error.errorCode,
+      message: error.message,
+      requestId: error.requestId,
+      isRetryable: error.isRetryable,
     };
   }
 
-  const code = isRecord(error) && typeof error.code === 'string' ? error.code : undefined;
-  const timedOut = code === 'ECONNABORTED' || code === 'ETIMEDOUT';
-
+  // Anything that reaches here bypassed the interceptor entirely — a throw from
+  // our own code, not a response.
   return {
-    statusCode: timedOut ? 408 : 0,
-    errorCode: timedOut ? ErrorCodes.REQUEST_TIMEOUT : ErrorCodes.NETWORK_ERROR,
+    statusCode: 0,
+    errorCode: ErrorCodes.UNKNOWN_ERROR,
     message: '',
-    isRetryable: true,
+    isRetryable: false,
   };
 }
 

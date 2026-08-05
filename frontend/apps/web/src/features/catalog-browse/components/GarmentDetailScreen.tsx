@@ -9,11 +9,11 @@ import {
   Button,
   DescriptionItem,
   DescriptionList,
+  DirectionalIcon,
   ImageGallery,
   ShortlistingCaption,
 } from '@repo/ui';
 
-import { DirectionalIcon } from '@/components/DirectionalIcon';
 import { ScreenError } from '@/components/states';
 import { getCatalogGarment } from '@/features/catalog-browse/api/endpoints';
 import { facetLabel, formatMoney, imageAlt } from '@/features/catalog-browse/lib/format';

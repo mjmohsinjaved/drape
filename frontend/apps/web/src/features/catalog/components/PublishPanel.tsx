@@ -114,7 +114,7 @@ export function PublishPanel({ locale, garment, hasTryOnSource }: PublishPanelPr
       await stateChange.mutateAsync({ garmentId: garment.id, action });
       toast.success(t(`toast.${action}`, { title: garment.title }));
     } catch (error: unknown) {
-      toast.error(errorCopy.fromError(error));
+      toast.error(errorCopy.message(error));
     }
   };
 
@@ -125,7 +125,7 @@ export function PublishPanel({ locale, garment, hasTryOnSource }: PublishPanelPr
       toast.success(t('toast.deleted', { title: garment.title }));
       router.push(routes.admin.catalog(locale));
     } catch (error: unknown) {
-      toast.error(errorCopy.fromError(error));
+      toast.error(errorCopy.message(error));
     }
   };
 

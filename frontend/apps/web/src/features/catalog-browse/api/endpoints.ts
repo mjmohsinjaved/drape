@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { cache } from 'react';
+
 import { serverGet, type ServerResult } from '@/lib/server-api';
 
 import type {
@@ -19,6 +21,21 @@ import type {
  * island that only writes the query string; the server re-renders the grid from it.
  *
  * There is no browser-side catalog fetch and no proxy route handler (B-9).
+ *
+ * ═══ `cache()` on the two reads a route makes twice ═══
+ *
+ * `generateMetadata` and the page body run in the same request and both need the garment (for
+ * the social card, and for the screen) or the category tree (for the title, and for the id the
+ * grid filters by). Without `cache()` that is two identical round trips to the API on the two
+ * routes §9.1 puts a number on — first contentful paint on 4G under 2.5s — and the second one
+ * is pure latency added before the first byte.
+ *
+ * React's `cache()` is per-request, so it deduplicates within one render and never leaks a
+ * response between two visitors — which matters because these calls forward the incoming
+ * cookie. `getCurrentUser` in `lib/session.ts` is memoised for exactly the same reason.
+ *
+ * `getCatalogGarments` and `getCatalogFacets` are deliberately *not* cached: each is called once
+ * per render, and the garment query varies by filter, so a cache would only add bookkeeping.
  */
 
 export const catalogPaths = {
@@ -45,25 +62,29 @@ export async function getCatalogGarments(
   return serverGet<CatalogGarmentSummary[]>(catalogPaths.garments, { params: toParams(query) });
 }
 
-export async function getCatalogGarment(
-  slugOrId: string,
-): Promise<ServerResult<CatalogGarmentDetail>> {
-  return serverGet<CatalogGarmentDetail>(catalogPaths.garment(slugOrId));
-}
+/** Read twice per garment route — `generateMetadata` and the screen. Memoised per request. */
+export const getCatalogGarment = cache(
+  async (slugOrId: string): Promise<ServerResult<CatalogGarmentDetail>> =>
+    serverGet<CatalogGarmentDetail>(catalogPaths.garment(slugOrId)),
+);
 
 export async function getCatalogFacets(): Promise<ServerResult<CatalogFacets>> {
   return serverGet<CatalogFacets>(catalogPaths.filters);
 }
 
-export async function getPublicCategories(): Promise<ServerResult<PublicCategory[]>> {
-  return serverGet<PublicCategory[]>(catalogPaths.categories);
-}
+/** Read twice per category route — `generateMetadata` and the page. Memoised per request. */
+export const getPublicCategories = cache(
+  async (): Promise<ServerResult<PublicCategory[]>> =>
+    serverGet<PublicCategory[]>(catalogPaths.categories),
+);
 
 /**
  * Resolves a `[categorySlug]` segment to the id the catalog query needs. The category routes are
  * slug-addressed so a link is readable and shareable; the API filters by id.
+ *
+ * Cached too, so the metadata call and the page call share one traversal as well as one fetch.
  */
-export async function findCategoryBySlug(slug: string): Promise<PublicCategory | null> {
+export const findCategoryBySlug = cache(async (slug: string): Promise<PublicCategory | null> => {
   const result = await getPublicCategories();
   if (!result.ok) return null;
 
@@ -73,4 +94,4 @@ export async function findCategoryBySlug(slug: string): Promise<PublicCategory |
     if (child) return child;
   }
   return null;
-}
+});

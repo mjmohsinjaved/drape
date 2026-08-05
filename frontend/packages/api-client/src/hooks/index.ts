@@ -7,6 +7,8 @@ export {
 
 export { type ApiMutationOptions, type MutationMethod, useApiMutation } from './use-api-mutation';
 
+export { FALLBACK_COPY_KEY, type ErrorCopy, useErrorCopy } from './use-error-copy';
+
 export {
   type EventSourceStatus,
   type StreamEvent,

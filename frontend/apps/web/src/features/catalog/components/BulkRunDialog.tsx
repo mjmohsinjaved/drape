@@ -152,7 +152,7 @@ export function BulkRunDialog({
       );
       setPhase('report');
     } catch (error: unknown) {
-      setFailureMessage(errorCopy.fromError(error));
+      setFailureMessage(errorCopy.message(error));
       setPhase('confirm');
     }
   };
@@ -216,7 +216,7 @@ export function BulkRunDialog({
                   // "no answer yet" instead — otherwise it renders nothing for the frame between
                   // the dialog opening and the effect below firing the estimate.
                   loading={!estimate.isSuccess && !estimate.isError}
-                  errorMessage={estimate.isError ? errorCopy.fromError(estimate.error) : null}
+                  errorMessage={estimate.isError ? errorCopy.message(estimate.error) : null}
                   estimate={estimate.data ?? null}
                 />
               ) : null}
@@ -313,7 +313,12 @@ function EstimatePanel({ loading, errorMessage, estimate }: EstimatePanelProps) 
       <ul className="flex flex-col gap-1 text-sm">
         <li>{t('selected', { count: estimate.selected })}</li>
         <li>{t('alreadyApproved', { count: estimate.alreadyApproved })}</li>
-        <li>{t('budgetRemaining', { amount: formatCurrency(estimate.budgetRemaining) })}</li>
+        {/* A budget figure the admin is about to spend against — `exact`, never rounded. */}
+        <li>
+          {t('budgetRemaining', {
+            amount: formatCurrency(estimate.budgetRemaining, { precision: 'exact' }),
+          })}
+        </li>
         {!estimate.withinBudget ? <li className="font-medium">{t('overBudget')}</li> : null}
       </ul>
     </Callout>

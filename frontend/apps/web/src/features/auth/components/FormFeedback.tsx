@@ -4,7 +4,7 @@ import { useTranslations } from 'next-intl';
 
 import { ErrorState, PermissionDeniedState, SuccessState } from '@repo/ui';
 
-import { isPermissionDeniedError, useErrorCopy } from '@/features/auth/lib/error-copy';
+import { useErrorCopy } from '@/features/auth/lib/error-copy';
 
 import type { ApiError } from '@repo/api-client';
 import type { ReactNode } from 'react';
@@ -34,6 +34,11 @@ export interface FormErrorFeedbackProps {
 /**
  * Error, or permission denied — the code decides which.
  *
+ * `error.isPermissionDenied` is the one classification in the app (`@repo/api-client`), not a
+ * list maintained here. A dropped session is deliberately *not* in it: on a form, "your session
+ * has ended, sign in again" belongs beside the fields she has just filled in, not on a screen
+ * that replaces them.
+ *
  * Neither branch renders `error.message` or `error.requestId`: the copy is resolved locally
  * from the code so it is translated in both locales, and a correlation id is not something the
  * user can act on.
@@ -47,7 +52,7 @@ export function FormErrorFeedback({
   const t = useTranslations('auth.common');
   const copy = useErrorCopy();
 
-  if (isPermissionDeniedError(error)) {
+  if (error.isPermissionDenied) {
     return (
       <PermissionDeniedState
         size="inline"

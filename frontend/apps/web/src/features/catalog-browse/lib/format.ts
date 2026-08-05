@@ -1,16 +1,31 @@
 /**
  * Money and date formatting for the consumer screens — ARCHITECTURE §6.7.
  *
- * **Numerals stay Latin in both locales**, which is why every formatter here pins
- * `-u-nu-latn` rather than trusting the locale default: Urdu would otherwise render prices in
- * Eastern Arabic numerals, and the studio quotes figures in Latin digits.
+ * **Numerals stay Latin in both locales**: Urdu would otherwise render prices in Eastern Arabic
+ * numerals, and the studio quotes figures in Latin digits. `formatCurrency` pins `latn` through
+ * the `numberingSystem` option, which is the same thing the `-u-nu-latn` extension this file
+ * used to append to the locale tag does.
  *
  * A `null` price is A-30's "prices are not public" and must never be formatted as zero — the
  * caller renders the "price in the studio" copy instead, which is why these return `null`.
  */
 
+import { formatCurrency } from '@repo/utils';
+
 const LATIN_NUMERALS = '-u-nu-latn';
 
+/**
+ * A consumer-facing price.
+ *
+ * This used to be a second implementation of `@repo/utils`' `formatCurrency`, identical but for
+ * the rounding — so the same garment read `PKR 185,000` here and `PKR 185,000.00` in the admin
+ * console. It now delegates, and states the one thing that is genuinely different about this
+ * surface: a rental price is quoted in whole rupees (`precision: 'whole'`), because `.00` on
+ * every card in the grid is noise she has to read past.
+ *
+ * The `null` return is kept — it is not a formatting concern but A-30's "no public price", and
+ * the caller needs to tell it apart from a real zero.
+ */
 export function formatMoney(
   locale: string,
   amount: number | null | undefined,
@@ -18,18 +33,13 @@ export function formatMoney(
 ): string | null {
   if (amount === null || amount === undefined) return null;
 
-  if (currency === null || currency === undefined || currency === '') {
-    return new Intl.NumberFormat(`${locale}${LATIN_NUMERALS}`, {
-      maximumFractionDigits: 0,
-    }).format(amount);
-  }
+  const hasCurrency = currency !== null && currency !== undefined && currency !== '';
 
-  return new Intl.NumberFormat(`${locale}${LATIN_NUMERALS}`, {
-    style: 'currency',
-    currency,
-    currencyDisplay: 'narrowSymbol',
-    maximumFractionDigits: 0,
-  }).format(amount);
+  return formatCurrency(amount, {
+    locale,
+    precision: 'whole',
+    ...(hasCurrency ? { currency } : { hideSymbol: true }),
+  });
 }
 
 /** A short, unambiguous date. Dates go through `Intl` with `Asia/Karachi` (§6.7). */

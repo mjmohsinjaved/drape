@@ -5,13 +5,17 @@ import { getTranslations } from 'next-intl/server';
 
 import { Button, Card, CardContent, EmptyState, ShortlistingCaption } from '@repo/ui';
 
-import { DeniedState, ScreenError } from '@/components/states';
+import { DeniedState, ScreenError, SignedOutState } from '@/components/states';
 import { formatMoney } from '@/features/catalog-browse/lib/format';
 import { DeleteMyDataLink } from '@/features/consent/components/DeleteMyDataLink';
 import { getShortlistServer } from '@/features/shortlist/api/server';
 import { ShortlistBoard } from '@/features/shortlist/components/ShortlistBoard';
 import { TryOnTray } from '@/features/tryon/components/TryOnTray';
-import { isPermissionDenied, isRetryableCode } from '@/features/tryon/lib/error-copy';
+import {
+  isAuthenticationRequired,
+  isPermissionDenied,
+  isRetryableCode,
+} from '@/features/tryon/lib/error-copy';
 import { routes } from '@/lib/routes';
 
 import type { ShortlistBudget } from '@/features/shortlist/api/types';
@@ -40,6 +44,12 @@ export async function ShortlistScreen({ locale }: ShortlistScreenProps) {
   const result = await getShortlistServer();
 
   if (!result.ok) {
+    // D-5: a session that ended under an open screen is not an authorisation refusal. Signing
+    // in is what fixes it, and the return path brings her back to this exact screen.
+    if (isAuthenticationRequired(result.error.errorCode)) {
+      return <SignedOutState />;
+    }
+
     // S-9 / D-5: an authorisation refusal is the permission-denied state, never an error
     // state and never a raw 403.
     if (isPermissionDenied(result.error.errorCode)) return <DeniedState locale={locale} />;

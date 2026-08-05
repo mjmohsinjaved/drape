@@ -1,12 +1,12 @@
 import { getLocale, getTranslations } from 'next-intl/server';
 
-import { Toaster } from '@repo/ui';
+import { fontVariables, Toaster } from '@repo/ui';
+import { getDirection } from '@repo/utils';
 
 import { AppProviders } from '@/components/providers/AppProviders';
 import { BrandThemeProvider } from '@/components/providers/BrandThemeProvider';
-import { direction, toLocale } from '@/i18n/config';
+import { toLocale } from '@/i18n/config';
 import { buildRootMetadata } from '@/lib/metadata';
-import { fontVariables } from '@/styles/fonts';
 
 import '@/styles/globals.css';
 
@@ -36,18 +36,19 @@ export async function generateMetadata(): Promise<Metadata> {
  */
 export default async function RootLayout({ children }: { children: ReactNode }) {
   const locale = toLocale(await getLocale());
+  const dir = getDirection(locale);
 
   return (
     <html
       lang={locale}
-      dir={direction[locale]}
+      dir={dir}
       className={fontVariables}
       // The theme class is written by `ThemeProvider` before paint; React must not object.
       suppressHydrationWarning
     >
       <body className="min-h-dvh antialiased">
         <BrandThemeProvider>
-          <AppProviders direction={direction[locale]}>
+          <AppProviders direction={dir}>
             {children}
             <Toaster />
           </AppProviders>

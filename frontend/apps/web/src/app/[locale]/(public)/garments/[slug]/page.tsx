@@ -59,7 +59,13 @@ export default async function PublicGarmentsSlugPage({ params }: Props) {
   const { locale, slug } = await params;
   setRequestLocale(locale);
 
-  const signedIn = await isAuthenticated();
+  // The session read and the garment read need nothing from each other, so they overlap rather
+  // than queue: this route is on the §9.1 budget, and an awaited `/auth/me` in front of the
+  // garment fetch adds a full round trip before the first byte.
+  //
+  // `getCatalogGarment` is memoised per request, so the screen below re-reads the same promise
+  // instead of issuing a second call — this warms it, it does not duplicate it.
+  const [signedIn] = await Promise.all([isAuthenticated(), getCatalogGarment(slug)]);
 
   return <GarmentDetailScreen locale={locale} slug={slug} isAuthenticated={signedIn} />;
 }

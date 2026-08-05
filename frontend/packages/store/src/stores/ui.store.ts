@@ -2,17 +2,23 @@
  * Chrome preferences — ARCHITECTURE.md §6.5 (`useUiStore` + `useLocaleStore`).
  *
  * Persisted to `localStorage` under `drape.ui`, but **only the three durable preferences**.
- * `activeModal` and `commandPaletteOpen` are transient, and `locale`/`direction` are *not*
- * persisted here: the server needs the locale, so the `NEXT_LOCALE` cookie is its home and this
- * store only mirrors it for the current render tree. Persisting it in two places would let them
- * disagree, and the cookie would win on the server while `localStorage` won in the browser.
+ * `activeModal` and `commandPaletteOpen` are transient, and `locale` is *not* persisted here:
+ * the server needs the locale, so the `NEXT_LOCALE` cookie is its home and this store only
+ * mirrors it for the current render tree. Persisting it in two places would let them disagree,
+ * and the cookie would win on the server while `localStorage` won in the browser.
+ *
+ * **Direction is not on this store.** It used to be — a `direction` field derived from `locale`
+ * plus `selectDirection` / `selectIsRtl` / `useDirection` / `useIsRtl`, none of which had a
+ * caller. Reading direction from a client store that mirrors the locale is a second answer to a
+ * question the `[locale]` URL segment already settles server-side, and a mirror that lags by one
+ * navigation flips an icon the wrong way. The one reading direction lives on the
+ * `DirectionProvider` in `@repo/ui` — the same value Radix primitives use — derived once by
+ * `getDirection` from `@repo/utils`.
  */
 
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
 import { useShallow } from 'zustand/react/shallow';
-
-import { type Direction, getDirection } from '@repo/utils';
 
 import { devtoolsOptions } from '../middleware/devtools.middleware';
 import {
@@ -40,8 +46,6 @@ export interface UiState {
   activeModal: ActiveModal | null;
   commandPaletteOpen: boolean;
   locale: Locale;
-  /** Derived from `locale`; kept in state so `<html dir>` reads one value rather than recomputing. */
-  direction: Direction;
 
   setThemeMode: (mode: ThemeMode) => void;
   toggleSidebar: () => void;
@@ -67,7 +71,6 @@ const initialState = {
   activeModal: null,
   commandPaletteOpen: false,
   locale: DEFAULT_LOCALE,
-  direction: getDirection(DEFAULT_LOCALE),
 } satisfies Omit<
   UiState,
   | 'setThemeMode'
@@ -158,8 +161,7 @@ export const useUiStore = create<UiState>()(
         setCommandPaletteOpen: (commandPaletteOpen) =>
           set({ commandPaletteOpen }, false, 'ui/setCommandPaletteOpen'),
 
-        setLocale: (locale) =>
-          set({ locale, direction: getDirection(locale) }, false, 'ui/setLocale'),
+        setLocale: (locale) => set({ locale }, false, 'ui/setLocale'),
 
         reset: () => set({ ...initialState }, false, 'ui/reset'),
       }),
@@ -187,8 +189,6 @@ export const selectAdminDensity = (state: UiState): AdminDensity => state.adminD
 export const selectActiveModal = (state: UiState): ActiveModal | null => state.activeModal;
 export const selectCommandPaletteOpen = (state: UiState): boolean => state.commandPaletteOpen;
 export const selectLocale = (state: UiState): Locale => state.locale;
-export const selectDirection = (state: UiState): Direction => state.direction;
-export const selectIsRtl = (state: UiState): boolean => state.direction === 'rtl';
 
 /** True only for the named modal, so an unrelated modal opening does not re-render this one. */
 export const selectIsModalOpen =
@@ -203,8 +203,6 @@ export const useActiveModal = (): ActiveModal | null => useUiStore(selectActiveM
 export const useIsModalOpen = (id: string): boolean => useUiStore(selectIsModalOpen(id));
 export const useCommandPaletteOpen = (): boolean => useUiStore(selectCommandPaletteOpen);
 export const useLocale = (): Locale => useUiStore(selectLocale);
-export const useDirection = (): Direction => useUiStore(selectDirection);
-export const useIsRtl = (): boolean => useUiStore(selectIsRtl);
 
 export const useUiActions = (): Pick<
   UiState,

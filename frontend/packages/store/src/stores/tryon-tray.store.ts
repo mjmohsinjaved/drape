@@ -43,9 +43,16 @@ export interface TrayJob {
   /** Set once the job succeeds; the tray links to `queryKeys.results.detail(resultId)`. */
   resultId: string | null;
   thumbnailUrl: string | null;
-  /** An §2.4 `ErrorCode` value on a failed job. */
+  /**
+   * An §2.4 `ErrorCode` value on a failed job. **This is what the tray renders from**, through
+   * `useErrorCopy('tryon.errors')`.
+   */
   errorCode: string | null;
-  /** The §8.3 consumer copy, already user-safe — displayed as-is. */
+  /**
+   * The §8.3 consumer copy the API sent alongside the code. Kept for diagnostics, **not
+   * displayed**: it is English only and the app is bilingual (C-41). See the note on `ApiError`
+   * in `@repo/api-client`.
+   */
   errorMessage: string | null;
   cacheHit: boolean;
   /** True once she has seen it, so the unseen badge can be honest. */

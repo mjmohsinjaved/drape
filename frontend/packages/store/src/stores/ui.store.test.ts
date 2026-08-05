@@ -9,9 +9,7 @@ import {
   selectActiveModal,
   selectAdminDensity,
   selectCommandPaletteOpen,
-  selectDirection,
   selectIsModalOpen,
-  selectIsRtl,
   selectLocale,
   selectSidebarCollapsed,
   selectThemeMode,
@@ -34,7 +32,6 @@ describe('useUiStore — actions', () => {
     expect(state().activeModal).toBeNull();
     expect(state().commandPaletteOpen).toBe(false);
     expect(state().locale).toBe('EN');
-    expect(state().direction).toBe('ltr');
   });
 
   it('sets the theme mode', () => {
@@ -77,13 +74,16 @@ describe('useUiStore — actions', () => {
     expect(state().commandPaletteOpen).toBe(false);
   });
 
-  it('derives the direction from the locale — C-41 RTL', () => {
+  // Direction is NOT mirrored here: it is derived from the `[locale]` URL segment by
+  // `getDirection` and published through the `DirectionProvider` in `@repo/ui` (C-41). This
+  // store only mirrors the negotiated locale for the current render tree.
+  it('mirrors the negotiated locale and nothing derived from it', () => {
     state().setLocale('UR');
     expect(state().locale).toBe('UR');
-    expect(state().direction).toBe('rtl');
+    expect(state()).not.toHaveProperty('direction');
 
     state().setLocale('EN');
-    expect(state().direction).toBe('ltr');
+    expect(state().locale).toBe('EN');
   });
 
   it('reset restores every field', () => {
@@ -94,7 +94,6 @@ describe('useUiStore — actions', () => {
 
     expect(state().themeMode).toBe('system');
     expect(state().locale).toBe('EN');
-    expect(state().direction).toBe('ltr');
     expect(state().activeModal).toBeNull();
   });
 });
@@ -108,7 +107,6 @@ describe('useUiStore — selectors', () => {
     activeModal: { id: 'delete-garment' },
     commandPaletteOpen: true,
     locale: 'UR',
-    direction: 'rtl',
   };
 
   it('reads each field in isolation', () => {
@@ -118,8 +116,6 @@ describe('useUiStore — selectors', () => {
     expect(selectActiveModal(sample)).toEqual({ id: 'delete-garment' });
     expect(selectCommandPaletteOpen(sample)).toBe(true);
     expect(selectLocale(sample)).toBe('UR');
-    expect(selectDirection(sample)).toBe('rtl');
-    expect(selectIsRtl(sample)).toBe(true);
   });
 
   it('selectIsModalOpen matches only its own modal', () => {

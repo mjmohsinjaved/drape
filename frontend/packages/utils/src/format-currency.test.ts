@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatCurrency, getCurrencySymbol } from './format-currency';
+import { CURRENCY_PRECISION, formatCurrency, getCurrencySymbol } from './format-currency';
 
 /** Intl inserts U+00A0 / U+202F between symbol and number depending on locale and ICU build. */
 const normalise = (value: string): string => value.replace(/[\u00A0\u202F\u2009]/g, ' ');
@@ -71,6 +71,55 @@ describe('formatCurrency', () => {
   it('degrades to a plain number rather than throwing on a bad currency code', () => {
     const output = formatCurrency(1500, { currency: 'not-a-code' });
     expect(output).toContain('1,500.00');
+  });
+
+  /**
+   * The two surfaces used to run two formatters, and the same garment read `PKR 185,000.00` in
+   * the console and `PKR 185,000` in the fitting room. One formatter now, and the difference is
+   * a named argument.
+   */
+  describe('precision', () => {
+    it('defaults to exact — dropping precision is never the accident', () => {
+      expect(formatCurrency(185000.5, { hideSymbol: true })).toBe('185,000.50');
+      expect(formatCurrency(185000.5, { hideSymbol: true, precision: 'exact' })).toBe(
+        '185,000.50',
+      );
+    });
+
+    it('quotes whole rupees for the consumer screens', () => {
+      expect(formatCurrency(185000, { hideSymbol: true, precision: 'whole' })).toBe('185,000');
+      expect(formatCurrency(185000.5, { hideSymbol: true, precision: 'whole' })).toBe('185,001');
+    });
+
+    it('renders the same amount on both surfaces, differing only in rounding', () => {
+      const admin = normalise(formatCurrency(185000, { currency: 'PKR', locale: 'en' }));
+      const consumer = normalise(
+        formatCurrency(185000, { currency: 'PKR', locale: 'en', precision: 'whole' }),
+      );
+
+      expect(admin).toContain('185,000.00');
+      expect(consumer).toContain('185,000');
+      expect(consumer).not.toContain('.00');
+      // Same symbol, same grouping, same numbering system.
+      expect(admin.replace('185,000.00', '185,000')).toBe(consumer);
+    });
+
+    it('lets an explicit fraction-digit option override the convention', () => {
+      expect(
+        formatCurrency(1234.567, { hideSymbol: true, precision: 'whole', maximumFractionDigits: 1 }),
+      ).toBe('1,234.6');
+    });
+
+    it('names both conventions in CURRENCY_PRECISION', () => {
+      expect(CURRENCY_PRECISION.exact).toEqual({
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+      expect(CURRENCY_PRECISION.whole).toEqual({
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+      });
+    });
   });
 });
 
