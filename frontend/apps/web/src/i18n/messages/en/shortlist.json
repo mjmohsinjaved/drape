@@ -1,8 +1,102 @@
 {
+  "meta": {
+    "title": "Your shortlist",
+    "description": "The pieces worth seeing in person, in the order you'd like to see them."
+  },
   "list": {
     "title": "Your shortlist",
-    "description": "The pieces worth seeing in person. Drag to put them in order.",
-    "next1": "The list with drag-to-rank, and the order held optimistically during a drag.",
-    "next2": "The empty state shows how to start, and the enquiry action sits at the end."
+    "subtitle": "Put them in the order you'd like to see them in the studio. Your order travels with you across devices.",
+    "count": "{count, plural, =0 {Nothing here yet} one {1 piece} other {# pieces}}",
+    "rank": "Position {rank}",
+    "renderAlt": "Your try-on of {garment}",
+    "noRender": "Not tried on yet",
+    "tryOn": "Try it on",
+    "viewRender": "Open your try-on",
+    "viewGarment": "See the piece",
+    "priceOnRequest": "Price in the studio",
+    "unavailable": "No longer in the collection",
+    "unavailableHint": "The studio has withdrawn this one. Ask about it in your enquiry and they'll tell you what's close.",
+    "verdict": {
+      "LOVE_IT": "Love it",
+      "MAYBE": "Maybe"
+    },
+    "changeVerdict": "Change to {verdict}",
+    "remove": "Remove from shortlist",
+    "removing": "Removing",
+    "removed": "Removed from your shortlist"
+  },
+  "reorder": {
+    "handleLabel": "Reorder {garment}",
+    "handleHint": "Press space to pick this up, then use the arrow keys. Space again to drop it, Escape to put it back.",
+    "moveUp": "Move {garment} up",
+    "moveDown": "Move {garment} down",
+    "grabbed": "{garment} picked up. Position {rank} of {total}.",
+    "moved": "{garment} moved to position {rank} of {total}.",
+    "dropped": "{garment} dropped at position {rank} of {total}.",
+    "cancelled": "Move cancelled. {garment} is back at position {rank}.",
+    "saving": "Saving your order",
+    "saved": "Order saved",
+    "failed": "Your order didn't save, so we've put the list back the way it was. Try again."
+  },
+  "note": {
+    "add": "Add a note",
+    "edit": "Edit note",
+    "label": "Your note about {garment}",
+    "placeholder": "Ask about the sleeve length…",
+    "hint": "Only you and the studio see this, and only once you send an enquiry.",
+    "save": "Save note",
+    "saving": "Saving",
+    "saved": "Note saved",
+    "clear": "Clear note",
+    "cancel": "Cancel"
+  },
+  "budget": {
+    "heading": "Running total",
+    "total": "{amount}",
+    "itemCount": "{count, plural, one {across 1 piece} other {across # pieces}}",
+    "band": "Your budget: {band}",
+    "noBand": "Add a budget to your profile and we'll total against it.",
+    "setBand": "Set a budget",
+    "within": "Within your budget.",
+    "over": "{amount} above the top of your budget. That's fine — it's your call, and the studio can suggest what's close.",
+    "hidden": "Prices are shown in the studio, so there's no total here.",
+    "bands": {
+      "UNDER_100K": "Under PKR 100,000",
+      "BAND_100K_250K": "PKR 100,000 – 250,000",
+      "BAND_250K_500K": "PKR 250,000 – 500,000",
+      "BAND_500K_1M": "PKR 500,000 – 1,000,000",
+      "ABOVE_1M": "Above PKR 1,000,000"
+    }
+  },
+  "enquire": {
+    "action": "Send this to the studio",
+    "hint": "They'll come back to you with availability, fittings and anything close to a piece that's gone."
+  },
+  "empty": {
+    "title": "Start your shortlist",
+    "description": "Try a piece on and mark it Love it or Maybe. Everything you keep lands here, ready to take to the studio.",
+    "action": "Browse the collection",
+    "secondaryAction": "Revisit your try-ons"
+  },
+  "loading": "Loading your shortlist",
+  "errors": {
+    "title": "Your shortlist didn't load",
+    "description": "The connection dropped on the way. Try again — nothing has been lost.",
+    "retry": "Try again",
+    "SHORTLIST_ITEM_NOT_FOUND": "That piece has already left your shortlist. The rest are unchanged.",
+    "SHORTLIST_ITEM_NOT_OWNED": "That piece has already left your shortlist. The rest are unchanged.",
+    "SHORTLIST_EMPTY": "Add a piece to your shortlist first.",
+    "GARMENT_NOT_FOUND": "That piece has left the collection. It stays on your list so you can ask about it.",
+    "VALIDATION_ERROR": "Send the whole list when reordering. Reload the page and try again.",
+    "RESOURCE_CONFLICT": "Your shortlist changed on another device. Reload to see the current order.",
+    "ENQUIRIES_DISABLED": "Enquiries are closed right now. Your shortlist is saved either way.",
+    "RATE_LIMIT_EXCEEDED": "You're going a bit fast. Give it a minute and try again.",
+    "AUTH_REQUIRED": "Sign in to see your shortlist.",
+    "SESSION_EXPIRED": "Your session has ended. Sign in again and we'll bring you back here.",
+    "ACCOUNT_SUSPENDED": "This account is on hold. Contact the studio and we'll sort it out.",
+    "NETWORK_ERROR": "You appear to be offline. We'll save this when you're back.",
+    "REQUEST_TIMEOUT": "That took too long. Try again.",
+    "SERVICE_UNAVAILABLE": "We're briefly unavailable. Try again shortly.",
+    "INTERNAL_ERROR": "Your shortlist didn't load. Try again — we've been notified."
   }
 }

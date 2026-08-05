@@ -1,8 +1,142 @@
 {
-  "job": {
+  "meta": {
     "title": "Trying it on",
-    "description": "This takes a few seconds. Keep browsing — we'll tell you when it's ready.",
-    "next1": "The staged wait with progressing microcopy she can navigate away from.",
-    "next2": "The reveal, and every failure in the taxonomy handled with a way forward."
+    "description": "This takes a few seconds. Keep browsing — we'll tell you the moment it's ready."
+  },
+  "start": {
+    "action": "Try it on",
+    "starting": "Starting",
+    "needsPhoto": "Add a photo first",
+    "needsPhotoNote": "A try-on works from one full-length photo of you. It takes about a minute to add.",
+    "needsConsent": "Read how your photo is used",
+    "needsConsentNote": "One short read before your first try-on, then you're set.",
+    "signIn": "Sign in to try it on",
+    "signInNote": "Browsing needs no account. Trying a piece on uses your own photo, so it does.",
+    "usingPhoto": "Using your photo “{label}”",
+    "changePhoto": "Use a different photo"
+  },
+  "wait": {
+    "title": "Putting {garment} on your photo",
+    "titleGeneric": "Putting the piece on your photo",
+    "progressLabel": "Try-on progress",
+    "elapsed": "{seconds}s",
+    "stages": {
+      "QUEUED": {
+        "label": "Getting started",
+        "body": "Lining up your photo and the studio photo of the piece."
+      },
+      "UPLOADING": {
+        "label": "Sending the pair over",
+        "body": "Your photo goes across encrypted, and the processing service deletes it straight afterwards."
+      },
+      "GENERATING": {
+        "label": "Draping the piece",
+        "body": "Matching the cut to your frame. This is the part that takes the longest."
+      },
+      "FINISHING": {
+        "label": "Nearly there",
+        "body": "Sharpening the result and saving it to your try-ons."
+      }
+    },
+    "slow": {
+      "title": "Taking longer than usual — hang tight.",
+      "body": "It's still going. Carry on browsing and we'll tell you the moment it lands."
+    },
+    "keepBrowsing": "Keep browsing",
+    "keepBrowsingNote": "Leaving this screen doesn't stop the try-on. It'll be waiting in your tray.",
+    "cancel": "Stop this try-on",
+    "cancelling": "Stopping",
+    "cancelled": {
+      "title": "Stopped",
+      "description": "Nothing was used from your monthly allowance. Start again whenever you like.",
+      "action": "Back to the collection"
+    },
+    "caption": "This is an approximate guide to help you shortlist. Fabric fall, embroidery detail and length will differ in person."
+  },
+  "ready": {
+    "title": "Your try-on is ready",
+    "description": "Have a look, compare it with the studio photo, and say what you think.",
+    "action": "Open it"
+  },
+  "tray": {
+    "label": "Your try-ons in progress",
+    "open": "Try-ons",
+    "openWithCount": "Try-ons ({count})",
+    "close": "Close",
+    "heading": "In progress and just finished",
+    "inProgress": "Working on it",
+    "ready": "Ready",
+    "failed": "Didn't finish",
+    "cancelled": "Stopped",
+    "view": "Open",
+    "dismiss": "Dismiss",
+    "clearFinished": "Clear finished",
+    "empty": "Nothing in progress. Pick a piece and try it on.",
+    "thumbnailAlt": "Your try-on of {garment}",
+    "announceReady": "Your try-on of {garment} is ready.",
+    "announceFailed": "The try-on of {garment} didn't finish."
+  },
+  "quota": {
+    "label": "Try-ons left this month",
+    "remaining": "{remaining} of {limit} left this month",
+    "resets": "Resets {date}",
+    "lowWarning": "{remaining} left this month.",
+    "exhausted": {
+      "title": "You've used your try-ons this month",
+      "description": "Your shortlist is saved, and you can send an enquiry any time. Everything you've already tried on stays open and costs nothing to revisit.",
+      "shortlist": "Open your shortlist",
+      "enquire": "Send an enquiry",
+      "renders": "Revisit your try-ons",
+      "resets": "Your next batch arrives {date}."
+    }
+  },
+  "budget": {
+    "title": "Our fitting room is at capacity today",
+    "description": "We'll email you when it's back. In the meantime the collection is open, and your shortlist is exactly where you left it.",
+    "shortlist": "Open your shortlist",
+    "browse": "Keep browsing"
+  },
+  "failed": {
+    "title": "This try-on didn't finish",
+    "retry": "Try again",
+    "browse": "Try a different piece",
+    "shortlist": "Open your shortlist",
+    "noCharge": "Nothing was used from your monthly allowance."
+  },
+  "errors": {
+    "title": "The try-on didn't start",
+    "description": "Nothing was used from your monthly allowance. Try again, or pick a different piece.",
+    "retry": "Try again",
+    "CONSENT_REQUIRED": "Before your first try-on we need your go-ahead on how your photo is used.",
+    "CONSENT_STALE": "We've updated how we handle your photo. Have a read and confirm to carry on.",
+    "QUOTA_EXHAUSTED": "You've used your try-ons this month — your shortlist is saved, and you can send an enquiry any time.",
+    "BUDGET_EXHAUSTED": "Our fitting room is at capacity today — we'll email you when it's back.",
+    "RATE_LIMIT_EXCEEDED": "You're going a bit fast. Give it a minute and try again.",
+    "EMAIL_NOT_VERIFIED": "Confirm your email to start trying pieces on. We've sent you a link.",
+    "PHOTO_NOT_FOUND": "We couldn't find that photo. Pick another or add a new one.",
+    "PHOTO_NOT_OWNED": "We couldn't find that photo. Pick another or add a new one.",
+    "PHOTO_BLOCKED_BY_MODERATION": "Let's try a different photo — choose another and we'll carry on from here.",
+    "GARMENT_NOT_FOUND": "That piece is no longer listed. The rest of the collection is still here.",
+    "GARMENT_NOT_PUBLISHED": "This piece isn't available right now. Browse the rest of the collection.",
+    "TEST_RENDER_REQUIRED": "This piece isn't ready for try-on yet. Browse the rest of the collection.",
+    "IDEMPOTENCY_IN_FLIGHT": "That try-on is already running. Hang tight.",
+    "JOB_NOT_FOUND": "We couldn't find that try-on. Your finished ones are in your try-ons.",
+    "UPSTREAM_NO_GARMENT_DETECTED": "We're having trouble with this piece — we've been notified. Try another for now.",
+    "UPSTREAM_INVALID_RESPONSE": "We're having trouble with this piece — we've been notified. Try another for now.",
+    "UPSTREAM_UNSUPPORTED_FORMAT": "That photo didn't upload properly. Mind trying again?",
+    "MODERATION_REJECTED": "Let's try a different photo — choose another and we'll carry on from here.",
+    "UPSTREAM_TIMEOUT": "Taking longer than usual — hang tight.",
+    "UPSTREAM_UNAVAILABLE": "Taking longer than usual — hang tight.",
+    "UPSTREAM_RATE_LIMITED": "Taking longer than usual — hang tight.",
+    "TRYON_PROVIDER_MISCONFIGURED": "The fitting room is briefly unavailable. Try again shortly.",
+    "CANCELLED": "You stopped this try-on. Nothing was used from your monthly allowance.",
+    "IP_BLOCKED": "We can't complete that request.",
+    "AUTH_REQUIRED": "Sign in to try a piece on.",
+    "SESSION_EXPIRED": "Your session has ended. Sign in again and we'll bring you back here.",
+    "ACCOUNT_SUSPENDED": "This account is on hold. Contact the studio and we'll sort it out.",
+    "NETWORK_ERROR": "You appear to be offline. We'll pick this up when you're back.",
+    "REQUEST_TIMEOUT": "That took too long. Try again.",
+    "SERVICE_UNAVAILABLE": "We're briefly unavailable. Try again shortly.",
+    "INTERNAL_ERROR": "The try-on didn't finish. Nothing was used from your allowance — try again."
   }
 }

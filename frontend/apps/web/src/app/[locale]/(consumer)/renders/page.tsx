@@ -1,43 +1,44 @@
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
-import { PagePlaceholder } from '@/components/states';
+import { HistoryScreen } from '@/features/renders/components/HistoryScreen';
+import { parseHistoryFilters } from '@/features/renders/lib/filters';
 import { buildMetadata } from '@/lib/metadata';
 import { routes } from '@/lib/routes';
 
-import type { LocaleParams } from '@/lib/route-params';
+import type { LocaleParams, SearchParamsProp } from '@/lib/route-params';
 import type { Metadata } from 'next';
 
-type Props = LocaleParams;
+/**
+ * Rendered per request, never prerendered at build time.
+ *
+ * Every read on this route goes through the cookie-forwarding server client (B-9), and the
+ * catalog, her photos, her renders and her shortlist all change without a deploy. Without this
+ * the segment is a build-time snapshot taken against an API that may not even be reachable — and
+ * `serverGet` deliberately never throws (D-5 renders states rather than crashing), so that
+ * snapshot would bake in silently rather than failing the build.
+ */
+export const dynamic = 'force-dynamic';
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
+type Props = LocaleParams & SearchParamsProp;
+
+export async function generateMetadata({ params }: LocaleParams): Promise<Metadata> {
   const { locale } = await params;
-  const t = await getTranslations({ locale, namespace: 'results.list' });
+  const t = await getTranslations({ locale, namespace: 'renders' });
 
   return buildMetadata({
     locale,
-    title: t('title'),
-    description: t('description'),
+    title: t('meta.listTitle'),
+    description: t('meta.listDescription'),
     path: routes.renders(locale),
   });
 }
 
-/**
- * TODO(W2): replace `PagePlaceholder` with the feature component. The route, the
- * metadata, the loading skeleton and the error boundary are already in place — this segment
- * needs a body, not a decision about where it lives (ARCHITECTURE §6.6).
- */
-export default async function ConsumerRendersPage({ params }: Props) {
+/** History — every render she has produced, permanent and free to revisit (C-24 … C-31). */
+export default async function ConsumerRendersPage({ params, searchParams }: Props) {
   const { locale } = await params;
   setRequestLocale(locale);
 
-  const t = await getTranslations({ locale, namespace: 'results.list' });
+  const filters = parseHistoryFilters(await searchParams);
 
-  return (
-    <PagePlaceholder
-      title={t('title')}
-      description={t('description')}
-      workstream="W2"
-      notes={[t('next1'), t('next2')]}
-    />
-  );
+  return <HistoryScreen locale={locale} filters={filters} />;
 }

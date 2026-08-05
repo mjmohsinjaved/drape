@@ -1,0 +1,173 @@
+{
+  "meta": {
+    "listTitle": "Your photos",
+    "listDescription": "The photos you've saved for trying pieces on. Remove any of them whenever you like.",
+    "newTitle": "Add a photo",
+    "newDescription": "What makes a photo work, and how to take one in about a minute."
+  },
+  "list": {
+    "title": "Your photos",
+    "subtitle": "One photo is active at a time — that's the one your next try-on uses.",
+    "add": "Add a photo",
+    "active": "Active",
+    "makeActive": "Use this one",
+    "activating": "Switching",
+    "rename": "Rename",
+    "renameLabel": "Name this photo",
+    "renamePlaceholder": "Daylight, indoors, evening…",
+    "renameSave": "Save name",
+    "renamed": "Renamed",
+    "unnamed": "Photo from {date}",
+    "delete": "Delete",
+    "uploadedOn": "Added {date}",
+    "keptUntil": "Kept until {date}",
+    "photoAlt": "Your saved photo, {label}",
+    "limit": "You can keep up to {max} photos.",
+    "moderation": {
+      "PENDING": "Being checked",
+      "PENDINGHint": "We check every new photo before it can be used. This usually takes a moment.",
+      "BLOCKED": "Not usable",
+      "BLOCKEDHint": "This one can't be used for a try-on. Add a different photo and we'll carry on from here."
+    },
+    "deleteDialog": {
+      "title": "Delete this photo?",
+      "body": "The photo and its file are removed straight away. Your try-on images stay in your history — they're separate from the photo they came from.",
+      "confirm": "Delete photo",
+      "cancel": "Keep it",
+      "deleting": "Deleting"
+    }
+  },
+  "empty": {
+    "title": "Add your first photo",
+    "description": "One full-length photo is all it takes. From there you can try on any piece in the collection.",
+    "action": "Add a photo"
+  },
+  "guidance": {
+    "title": "What makes a photo work",
+    "subtitle": "A minute spent here means your first attempt usually passes. Each drawing shows the idea, not a person.",
+    "start": "Choose a photo",
+    "retake": "Choose a different photo",
+    "items": {
+      "fullBody": {
+        "title": "Full length, head to feet",
+        "body": "Leave a little room above your head and below your feet."
+      },
+      "frontFacing": {
+        "title": "Face the camera straight on",
+        "body": "Shoulders square, arms slightly away from your body."
+      },
+      "plainBackground": {
+        "title": "A plain wall behind you",
+        "body": "A clear background helps the outfit read correctly."
+      },
+      "fittedClothing": {
+        "title": "Close-fitting clothes",
+        "body": "Loose or layered clothing hides the shape the piece has to sit on."
+      },
+      "goodLight": {
+        "title": "Even, front-on light",
+        "body": "Daylight from a window works. Avoid strong shadows and backlight."
+      },
+      "chestHeight": {
+        "title": "Phone at chest height",
+        "body": "Ask someone to hold it level, or prop it up and use the timer."
+      }
+    },
+    "privacyNote": "Studio staff never see this photo. It's used only to generate your own try-ons."
+  },
+  "upload": {
+    "title": "Add a photo",
+    "choose": "Choose a photo",
+    "chooseHint": "JPEG, PNG, WebP or HEIC.",
+    "dropzoneLabel": "Choose a photo of yourself",
+    "checking": "Checking your photo",
+    "preparing": "Preparing your photo",
+    "uploading": "Uploading — {percent}%",
+    "finalising": "Saving your photo",
+    "progressLabel": "Upload progress",
+    "cancel": "Cancel",
+    "labelField": "Name this photo",
+    "labelHint": "Optional. Helps you tell photos apart later — “daylight”, “indoors”.",
+    "setActive": "Use this photo for my next try-on",
+    "submit": "Save photo",
+    "previewAlt": "The photo you selected",
+    "passedTitle": "This photo will work",
+    "passedBody": "Everything checks out. Save it and pick a piece to try on.",
+    "failedTitle": "This photo needs another go",
+    "failedBody": "Here's what to change. Each one is quick to fix.",
+    "tryAnother": "Choose another photo",
+    "saved": {
+      "title": "Photo saved",
+      "description": "It's ready to use. Pick a piece and try it on.",
+      "browse": "Browse the collection",
+      "photos": "Your photos"
+    }
+  },
+  "checks": {
+    "DECODE": {
+      "label": "Readable file",
+      "fail": "We couldn't open this file. Export it again from your gallery, or pick a different photo."
+    },
+    "SUPPORTED_FORMAT": {
+      "label": "Format",
+      "fail": "We accept JPEG, PNG, WebP and HEIC. This file is {type}."
+    },
+    "MAX_FILE_SIZE": {
+      "label": "File size",
+      "fail": "This file is {actual}MB. Pick one under {max}MB, or let your phone export a smaller copy."
+    },
+    "MIN_RESOLUTION": {
+      "label": "Resolution",
+      "fail": "This photo is {width}×{height}. We need at least {minWidth}×{minHeight} — take it again with the camera app rather than a screenshot."
+    },
+    "FULL_BODY_VISIBLE": {
+      "label": "Full body in frame",
+      "fail": "Your feet or your head are outside the frame. Step back, or ask whoever is holding the phone to move back a pace.",
+      "failPortrait": "This photo is wider than it is tall. Hold the phone upright so your whole outfit fits in."
+    },
+    "SINGLE_SUBJECT": {
+      "label": "One person",
+      "fail": "There's more than one person in frame. Try one where it's just you."
+    },
+    "NOT_BLURRY": {
+      "label": "Sharpness",
+      "fail": "This one came out soft. Prop the phone against something steady, or use the timer instead of holding it."
+    },
+    "ADEQUATE_LIGHTING": {
+      "label": "Light",
+      "failDark": "It's too dark to make out the outfit. Face a window, or turn on the room light.",
+      "failBright": "The light behind you is washing you out. Turn around so the light falls on you instead."
+    },
+    "PLAIN_BACKGROUND": {
+      "label": "Background",
+      "fail": "The background is busy enough to confuse the outfit. A plain wall behind you works best."
+    }
+  },
+  "errors": {
+    "title": "Your photos didn't load",
+    "description": "The connection dropped on the way. Try again — nothing has been lost.",
+    "retry": "Try again",
+    "uploadTitle": "The photo didn't save",
+    "CONSENT_REQUIRED": "Before your first try-on we need your go-ahead on how your photo is used.",
+    "CONSENT_STALE": "We've updated how we handle your photo. Have a read and confirm to carry on.",
+    "PHOTO_LIMIT_REACHED": "You can keep up to {max} photos. Delete one to add another.",
+    "PHOTO_VALIDATION_FAILED": "This photo won't work for a try-on. Choose another and we'll check it before it's saved.",
+    "PHOTO_BLOCKED_BY_MODERATION": "Let's try a different photo — choose another and we'll carry on from here.",
+    "PHOTO_NOT_FOUND": "That photo has already been removed. Pick another or add a new one.",
+    "IMAGE_TOO_SMALL": "This image is too small to work from. Take it again with the camera app rather than a screenshot.",
+    "IMAGE_FORMAT_UNSUPPORTED": "We accept HEIC, WebP, PNG and JPEG.",
+    "IMAGE_TOO_LARGE": "That file is too big. Pick a smaller one and we'll compress it for you.",
+    "IMAGE_CORRUPT": "We couldn't read that file. Export it again from your gallery.",
+    "UPLOAD_TICKET_INVALID": "That upload didn't complete. Choose the photo again and we'll start over.",
+    "UPLOAD_TICKET_EXPIRED": "That upload took longer than the link lasts. Choose the photo again.",
+    "STORAGE_WRITE_FAILED": "The photo didn't save. Try again.",
+    "RATE_LIMIT_EXCEEDED": "That's a few uploads in a row. Give it a minute and try again.",
+    "AUTH_REQUIRED": "Sign in to save a photo.",
+    "SESSION_EXPIRED": "Your session has ended. Sign in again and we'll bring you back here.",
+    "ACCOUNT_SUSPENDED": "This account is on hold. Contact the studio and we'll sort it out.",
+    "NETWORK_ERROR": "You appear to be offline. We'll finish the upload when you're back.",
+    "REQUEST_TIMEOUT": "That took too long. Try again.",
+    "SERVICE_UNAVAILABLE": "We're briefly unavailable. Try again shortly.",
+    "INTERNAL_ERROR": "The photo didn't save. Try again — we've been notified."
+  }
+}

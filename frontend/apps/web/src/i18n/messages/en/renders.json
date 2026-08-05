@@ -1,0 +1,136 @@
+{
+  "meta": {
+    "listTitle": "Your try-ons",
+    "listDescription": "Every piece you've tried on, newest first. Opening one costs nothing.",
+    "detailTitle": "Your try-on",
+    "detailDescription": "Compare it with the studio photo, look closer, and say what you think."
+  },
+  "list": {
+    "title": "Your try-ons",
+    "subtitle": "Everything you've tried on is kept here. Opening one never uses another try-on.",
+    "count": "{count, plural, =0 {No try-ons yet} one {1 try-on} other {# try-ons}}",
+    "search": {
+      "label": "Search your try-ons",
+      "placeholder": "Piece name",
+      "submit": "Search",
+      "clear": "Clear search"
+    },
+    "filters": {
+      "heading": "Narrow it down",
+      "verdict": "What you thought",
+      "category": "Category",
+      "photo": "Photo used",
+      "any": "All",
+      "clear": "Clear filters",
+      "groupByPhoto": "Group by the photo used",
+      "groupByPhotoHint": "You've used more than one photo — see how a piece looked against each.",
+      "flatList": "Show as one list"
+    },
+    "group": {
+      "heading": "From your photo “{label}”",
+      "headingUnnamed": "From a photo you've since deleted",
+      "count": "{count, plural, one {1 try-on} other {# try-ons}}",
+      "photoAlt": "Your photo, {label}"
+    },
+    "card": {
+      "renderAlt": "Your try-on of {garment}",
+      "catalogAlt": "{garment}, studio photo",
+      "triedOn": "Tried on {date}",
+      "open": "Open",
+      "unavailable": "No longer in the collection",
+      "unavailableHint": "Your try-on stays here for good. The piece itself has been withdrawn.",
+      "priceOnRequest": "Price in the studio"
+    },
+    "loadMore": "Show more",
+    "loading": "Loading your try-ons"
+  },
+  "empty": {
+    "title": "Try your first piece on",
+    "description": "Pick something from the collection and it appears here — kept for as long as you keep your account, free to revisit.",
+    "action": "Browse the collection",
+    "filteredTitle": "Widen the filter",
+    "filteredDescription": "Nothing here matches all of those at once. Clear one and the rest come back.",
+    "filteredAction": "Clear filters",
+    "searchTitle": "Try a shorter search",
+    "searchDescription": "Nothing you've tried on matches “{term}”.",
+    "searchAction": "Clear search"
+  },
+  "detail": {
+    "back": "Back to your try-ons",
+    "heading": "{garment}",
+    "triedOn": "Tried on {date}",
+    "fromPhoto": "From your photo “{label}”",
+    "fromDeletedPhoto": "From a photo you've since deleted",
+    "renderAlt": "Your try-on of {garment}",
+    "catalogAlt": "{garment}, studio photo",
+    "compareLabel": "Choose which image to show",
+    "compareCatalog": "Studio photo",
+    "compareTryOn": "Your try-on",
+    "zoomLabel": "Look closer at your try-on",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "zoomReset": "Fit to screen",
+    "noCompareImage": "The photo this came from has been deleted, so there's nothing to compare against. Your try-on is unaffected.",
+    "unavailable": "This piece is no longer in the collection. Your try-on stays here.",
+    "viewGarment": "See the piece",
+    "tryAgain": "Try it on again",
+    "tryAgainNote": "Trying the same piece on the same photo again is free — it comes straight from your history.",
+    "download": "Download",
+    "downloading": "Preparing your download",
+    "downloadNote": "Downloads carry a small studio watermark.",
+    "free": "Opening this costs nothing — no new try-on, no re-upload."
+  },
+  "verdict": {
+    "heading": "What do you think?",
+    "hint": "Love it and Maybe go to your shortlist. Not for me stays private.",
+    "LOVE_IT": "Love it",
+    "MAYBE": "Maybe",
+    "NOT_FOR_ME": "Not for me",
+    "saving": "Saving",
+    "saved": "Saved to your shortlist",
+    "savedRejected": "Noted — this one stays off your shortlist",
+    "reasonHeading": "What put you off? Optional, and it helps the studio.",
+    "reasonSkip": "Skip",
+    "reasons": {
+      "NECKLINE": "Neckline",
+      "COLOR": "Colour",
+      "TOO_HEAVY": "Too heavy",
+      "SILHOUETTE": "Silhouette",
+      "PRICE": "Price"
+    },
+    "shortlistCount": "{count, plural, =0 {Nothing on your shortlist yet} one {1 piece on your shortlist} other {# pieces on your shortlist}}",
+    "openShortlist": "Open your shortlist"
+  },
+  "delete": {
+    "action": "Delete this try-on",
+    "title": "Delete this try-on?",
+    "body": "This is permanent. The image is deleted from our systems and cannot be brought back — trying the piece on again would use another try-on from your monthly allowance.",
+    "confirm": "Delete permanently",
+    "cancel": "Keep it",
+    "deleting": "Deleting",
+    "done": "Deleted",
+    "doneBody": "It's gone for good. The rest of your try-ons are untouched."
+  },
+  "caption": "This is an approximate guide to help you shortlist. Fabric fall, embroidery detail and length will differ in person.",
+  "errors": {
+    "title": "Your try-ons didn't load",
+    "description": "The connection dropped on the way. Try again — nothing has been lost.",
+    "retry": "Try again",
+    "detailTitle": "This try-on didn't load",
+    "RESULT_NOT_FOUND": "That try-on is no longer here. The rest are in your try-ons.",
+    "RESULT_NOT_OWNED": "That try-on is no longer here. The rest are in your try-ons.",
+    "SHORTLIST_ITEM_NOT_FOUND": "That piece isn't on your shortlist.",
+    "GARMENT_NOT_FOUND": "That piece has left the collection. Your try-on is unaffected.",
+    "FILE_TOKEN_EXPIRED": "This image link has expired. Reload the page to get a fresh one.",
+    "FILE_TOKEN_INVALID": "This image link isn't valid. Reload the page.",
+    "FILE_NOT_FOUND": "We couldn't load that image. Reload the page.",
+    "RATE_LIMIT_EXCEEDED": "You're going a bit fast. Give it a minute and try again.",
+    "AUTH_REQUIRED": "Sign in to see your try-ons.",
+    "SESSION_EXPIRED": "Your session has ended. Sign in again and we'll bring you back here.",
+    "ACCOUNT_SUSPENDED": "This account is on hold. Contact the studio and we'll sort it out.",
+    "NETWORK_ERROR": "You appear to be offline. We'll load these when you're back.",
+    "REQUEST_TIMEOUT": "That took too long. Try again.",
+    "SERVICE_UNAVAILABLE": "We're briefly unavailable. Try again shortly.",
+    "INTERNAL_ERROR": "Your try-ons didn't load. Try again — we've been notified."
+  }
+}

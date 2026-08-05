@@ -1,43 +1,56 @@
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
-import { PagePlaceholder } from '@/components/states';
+import { ConsentScreen } from '@/features/consent/components/ConsentScreen';
+import { RETURN_TO_PARAM } from '@/lib/constants';
 import { buildMetadata } from '@/lib/metadata';
 import { routes } from '@/lib/routes';
 
-import type { LocaleParams } from '@/lib/route-params';
+import type { LocaleParams, SearchParamsProp } from '@/lib/route-params';
 import type { Metadata } from 'next';
 
-type Props = LocaleParams;
+/**
+ * Rendered per request, never prerendered at build time.
+ *
+ * Every read on this route goes through the cookie-forwarding server client (B-9), and the
+ * catalog, her photos, her renders and her shortlist all change without a deploy. Without this
+ * the segment is a build-time snapshot taken against an API that may not even be reachable — and
+ * `serverGet` deliberately never throws (D-5 renders states rather than crashing), so that
+ * snapshot would bake in silently rather than failing the build.
+ */
+export const dynamic = 'force-dynamic';
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
+type Props = LocaleParams & SearchParamsProp;
+
+export async function generateMetadata({ params }: LocaleParams): Promise<Metadata> {
   const { locale } = await params;
-  const t = await getTranslations({ locale, namespace: 'account.consent' });
+  const t = await getTranslations({ locale, namespace: 'consent' });
 
   return buildMetadata({
     locale,
-    title: t('title'),
-    description: t('description'),
+    title: t('meta.title'),
+    description: t('meta.description'),
     path: routes.consent(locale),
   });
 }
 
 /**
- * TODO(W2): replace `PagePlaceholder` with the feature component. The route, the
- * metadata, the loading skeleton and the error boundary are already in place — this segment
- * needs a body, not a decision about where it lives (ARCHITECTURE §6.6).
+ * The consent gate — C-11, C-12, §10.3.
+ *
+ * `?from=` carries where she was heading when the gate interrupted her, so agreeing returns her
+ * to the piece she was looking at rather than dropping her at a generic screen. The value is
+ * validated as a same-site path before use — an open redirect through a consent screen would be
+ * a particularly poor place to have one.
  */
-export default async function ConsumerConsentPage({ params }: Props) {
+export default async function ConsumerConsentPage({ params, searchParams }: Props) {
   const { locale } = await params;
   setRequestLocale(locale);
 
-  const t = await getTranslations({ locale, namespace: 'account.consent' });
+  const raw = (await searchParams)[RETURN_TO_PARAM];
+  const candidate = Array.isArray(raw) ? raw[0] : raw;
+  const returnTo =
+    typeof candidate === 'string' && candidate.startsWith('/') && !candidate.startsWith('//')
+      ? candidate
+      : undefined;
 
-  return (
-    <PagePlaceholder
-      title={t('title')}
-      description={t('description')}
-      workstream="W2"
-      notes={[t('next1'), t('next2')]}
-    />
-  );
+  return <ConsentScreen locale={locale} returnTo={returnTo} />;
 }

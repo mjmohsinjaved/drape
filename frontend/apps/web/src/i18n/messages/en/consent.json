@@ -1,0 +1,65 @@
+{
+  "meta": {
+    "title": "How your photo is used",
+    "description": "What happens to your photo, how long it is kept, who can see it, and how to remove it."
+  },
+  "gate": {
+    "eyebrow": "One thing before your first try-on",
+    "title": "How your photo is used",
+    "intro": "Read this, then decide. Nothing is ticked for you, and you can stop here — browsing the collection never needs a photo.",
+    "versionLabel": "Version {version}",
+    "effectiveFrom": "In force since {date}",
+    "staleTitle": "We've changed how your photo is handled",
+    "staleIntro": "You agreed to version {previous}. Version {current} is what applies now. Read what changed and confirm to carry on trying pieces on.",
+    "points": {
+      "purposeTitle": "Your photo is used for your try-ons and nothing else",
+      "purposeBody": "It is sent to the service that produces the try-on image, together with the studio photo of the piece. It is not used to advertise anything, and it is never shown to another shopper.",
+      "providerTitle": "The processing service deletes it straight away",
+      "providerBody": "The service that generates the image deletes your photo as soon as the try-on is produced, and does not use it to train anything.",
+      "retentionTitle": "We keep your photo for {photoDays} days after you last use your account",
+      "retentionBody": "After that it is deleted automatically. You can delete it yourself at any time, without asking anyone.",
+      "retentionRendersLifetime": "Your try-on images stay with your account for as long as you keep it, so revisiting one never costs you another try-on. You can delete any of them individually.",
+      "retentionRendersLimited": "Your try-on images are kept alongside your account and you can delete any of them individually.",
+      "staffTitle": "Studio staff cannot see your photo",
+      "staffBody": "Not on any screen, at any time. They see a try-on image only when you send an enquiry and attach it yourself.",
+      "controlTitle": "Delete my photo and results — always one tap away",
+      "controlBody": "It lives in your account menu on every screen from here on. Deleting is immediate for you and complete in our systems within 24 hours."
+    },
+    "fullPolicy": "Read the full policy",
+    "fullPolicyClose": "Close the full policy",
+    "checkboxLabel": "I've read this and I'm happy for my photo to be used to generate my try-ons.",
+    "checkboxHint": "Required. Nothing is pre-selected.",
+    "accept": "Agree and add a photo",
+    "acceptStale": "Agree to the new version",
+    "submitting": "Recording your agreement",
+    "decline": "Not now — keep browsing",
+    "declineNote": "The collection, search, filters and every piece stay open to you without a photo.",
+    "granted": {
+      "title": "Agreed",
+      "description": "Recorded on {date}, version {version}. You can withdraw it at any time by deleting your photo and results.",
+      "action": "Add a photo",
+      "manage": "Manage your data"
+    }
+  },
+  "deleteControl": {
+    "label": "Delete my photo and results",
+    "hint": "Removes your photos and every try-on image from your account."
+  },
+  "loading": "Loading the policy",
+  "errors": {
+    "title": "The policy didn't load",
+    "description": "We won't ask you to agree to something you can't read. Try again.",
+    "retry": "Try again",
+    "CONSENT_POLICY_NOT_FOUND": "We couldn't load the current policy. Try again shortly.",
+    "RESOURCE_CONFLICT": "The policy changed while this page was open. Reload to read the current version.",
+    "VALIDATION_ERROR": "Tick the box to record your agreement.",
+    "AUTH_REQUIRED": "Sign in to record your agreement.",
+    "SESSION_EXPIRED": "Your session has ended. Sign in again and we'll bring you back here.",
+    "ACCOUNT_SUSPENDED": "This account is on hold. Contact the studio and we'll sort it out.",
+    "RATE_LIMIT_EXCEEDED": "That's a few attempts in a row. Give it a minute and try again.",
+    "NETWORK_ERROR": "You appear to be offline. We'll record your agreement when you're back.",
+    "REQUEST_TIMEOUT": "That took too long. Try again.",
+    "SERVICE_UNAVAILABLE": "We're briefly unavailable. Try again shortly.",
+    "INTERNAL_ERROR": "Your agreement wasn't recorded. Try again — we've been notified."
+  }
+}
