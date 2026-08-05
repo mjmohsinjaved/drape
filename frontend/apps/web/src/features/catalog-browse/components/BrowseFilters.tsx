@@ -1,6 +1,8 @@
 'use client';
 
-import { useCallback, useId, useState, useTransition } from 'react';
+import { useCallback, useId, useState, useTransition ,type  ReactNode } from 'react';
+
+import { usePathname, useRouter } from 'next/navigation';
 
 import { Search, SlidersHorizontal, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
@@ -26,7 +28,6 @@ import {
   type BrowseFilters as Filters,
 } from '@/features/catalog-browse/lib/filters';
 import { facetLabel, formatMoney } from '@/features/catalog-browse/lib/format';
-import { usePathname, useRouter } from '@/i18n/navigation';
 
 import type { Locale } from '@/i18n/config';
 
@@ -68,8 +69,25 @@ export function BrowseFilters({
   const pathname = usePathname();
   const [isPending, startTransition] = useTransition();
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [searchDraft, setSearchDraft] = useState(filters.search ?? '');
   const searchId = useId();
+
+  /*
+    The box holds a draft, and the URL holds the truth. Those two have to be reconciled, because
+    the URL changes without this component asking: "Clear all" empties it, the chip's × removes
+    one term, the back button restores a previous set. The draft was seeded once from
+    `filters.search` and never looked at it again, so after "Clear all" the URL and the chips were
+    empty while the input still showed the old term — and the apply button re-applied it.
+
+    Adjusting state during render is React's documented answer for a value derived from props: it
+    re-runs this component before anything is committed, so no extra frame is painted. An effect
+    would paint the stale value first.
+  */
+  const [searchDraft, setSearchDraft] = useState(filters.search ?? '');
+  const [appliedSearch, setAppliedSearch] = useState(filters.search);
+  if (appliedSearch !== filters.search) {
+    setAppliedSearch(filters.search);
+    setSearchDraft(filters.search ?? '');
+  }
 
   const appliedCount = activeFilterCount(filters, lockedCategoryId === undefined);
 
@@ -161,16 +179,27 @@ export function BrowseFilters({
 
       {facets?.priceRange ? (
         <PriceBand
-          locale={locale}
           min={facets.priceRange.min}
           max={facets.priceRange.max}
-          currency={facets.priceRange.currency}
           value={{ from: filters.priceMin, to: filters.priceMax }}
           labels={{
             legend: t('filters.price'),
             from: t('filters.priceMin'),
             to: t('filters.priceMax'),
             apply: t('filters.close'),
+            /*
+              §6.7. Built by string concatenation, this read `{min} – {max}` in source order and
+              the browser's bidi algorithm reordered it under `rtl`: two left-to-right price runs
+              with a neutral dash between them are laid out right-to-left, so an Urdu reader was
+              shown the maximum first and read it as the minimum. `<bdi>` isolates each amount so
+              its own digits stay left-to-right while the pair follows the paragraph, and the ICU
+              message keeps the order a translator's decision rather than JSX's.
+            */
+            range: t.rich('filters.priceRange', {
+              min: formatMoney(locale, facets.priceRange.min, facets.priceRange.currency) ?? '',
+              max: formatMoney(locale, facets.priceRange.max, facets.priceRange.currency) ?? '',
+              bdi: (chunks) => <bdi>{chunks}</bdi>,
+            }),
           }}
           onApply={(from, to) => {
             navigate({ priceMin: from, priceMax: to });
@@ -421,26 +450,31 @@ function SortSelect({
 }
 
 function PriceBand({
-  locale,
   min,
   max,
-  currency,
   value,
   labels,
   onApply,
 }: {
-  locale: Locale;
   min: number;
   max: number;
-  currency: string;
   value: { from: number | undefined; to: number | undefined };
-  labels: { legend: string; from: string; to: string; apply: string };
+  labels: { legend: string; from: string; to: string; apply: string; range: ReactNode };
   onApply: (from: number | undefined, to: number | undefined) => void;
 }) {
   const fromId = useId();
   const toId = useId();
   const [from, setFrom] = useState(value.from?.toString() ?? '');
   const [to, setTo] = useState(value.to?.toString() ?? '');
+
+  // Same reconciliation as the search box, and the same reason: "Clear all" empties the URL, and
+  // two number inputs still showing the old band are two filters she thinks are still applied.
+  const [applied, setApplied] = useState(value);
+  if (applied.from !== value.from || applied.to !== value.to) {
+    setApplied(value);
+    setFrom(value.from?.toString() ?? '');
+    setTo(value.to?.toString() ?? '');
+  }
 
   const parse = (raw: string): number | undefined => {
     const trimmed = raw.trim();
@@ -452,9 +486,7 @@ function PriceBand({
   return (
     <fieldset className="flex flex-col gap-2">
       <legend className="pb-2 text-sm font-medium">{labels.legend}</legend>
-      <p className="pb-2 text-sm text-ink-muted">
-        {formatMoney(locale, min, currency)} – {formatMoney(locale, max, currency)}
-      </p>
+      <p className="pb-2 text-sm text-ink-muted">{labels.range}</p>
       <div className="flex flex-wrap items-end gap-2">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor={fromId}>{labels.from}</Label>

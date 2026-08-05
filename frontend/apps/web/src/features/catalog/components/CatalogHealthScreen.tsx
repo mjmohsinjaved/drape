@@ -1,5 +1,7 @@
 'use client';
 
+import Link from 'next/link';
+
 import { CameraOff, Clock, ImageOff, TriangleAlert } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
@@ -45,7 +47,6 @@ import {
   type AdminGarment,
   type CatalogHealthGroup,
 } from '@/features/catalog/types/admin-catalog';
-import { Link } from '@/i18n/navigation';
 import { routes } from '@/lib/routes';
 
 import type { Locale } from '@/i18n/config';

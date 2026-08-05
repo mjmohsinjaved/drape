@@ -2,11 +2,11 @@
 
 import * as React from 'react';
 
+import { useRouter } from 'next/navigation';
+
 import { useTranslations } from 'next-intl';
 
 import { Button, Callout } from '@repo/ui';
-
-import { useRouter } from '@/i18n/navigation';
 
 export interface PartialDataNoticeProps {
   /** One line, sentence case — what is incomplete. */

@@ -8,7 +8,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 
-import { isApiError, queryKeys, type ApiError, type Uuid } from '@repo/api-client';
+import { STALE_TIMES, isApiError, queryKeys, type ApiError, type Uuid } from '@repo/api-client';
 
 import {
   archiveCategory,
@@ -44,7 +44,9 @@ export function useAdminCategories(
 
   return useQuery<AdminCategory[], ApiError>({
     queryKey: [...ADMIN_TREE_KEY, { includeArchived }] as const,
+    // §6.4 — the tree changes on an admin edit, which invalidates this key explicitly.
     queryFn: ({ signal }) => listAdminCategories(includeArchived, signal),
+    staleTime: STALE_TIMES.catalog,
     initialData,
   });
 }

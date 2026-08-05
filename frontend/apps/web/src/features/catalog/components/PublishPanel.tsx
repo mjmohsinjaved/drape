@@ -2,6 +2,9 @@
 
 import { useState } from 'react';
 
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+
 import { AlertTriangle, ArrowRight, CheckCircle2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
@@ -24,7 +27,6 @@ import {
   DEFAULT_QUALITY_MIN_SCORE,
   type AdminGarment,
 } from '@/features/catalog/types/admin-catalog';
-import { Link, useRouter } from '@/i18n/navigation';
 import { routes } from '@/lib/routes';
 
 import type { Locale } from '@/i18n/config';

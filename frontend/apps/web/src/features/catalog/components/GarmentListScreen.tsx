@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 import { Plus, Search, Stethoscope } from 'lucide-react';
 import { useTranslations } from 'next-intl';
@@ -70,7 +71,6 @@ import {
   collectCategories,
   type AdminCategory,
 } from '@/features/categories/types/admin-categories';
-import { Link, useRouter } from '@/i18n/navigation';
 import { routes } from '@/lib/routes';
 
 import type { Locale } from '@/i18n/config';

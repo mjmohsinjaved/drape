@@ -1,5 +1,7 @@
 'use client';
 
+import Link from 'next/link';
+
 import { useTranslations } from 'next-intl';
 
 import {
@@ -13,7 +15,6 @@ import {
   type StepperStep,
 } from '@repo/ui';
 
-import { Link } from '@/i18n/navigation';
 import { routes } from '@/lib/routes';
 
 import type { AdminGarment } from '@/features/catalog/types/admin-catalog';

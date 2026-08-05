@@ -18,6 +18,7 @@ import {
 import { Badge, Button, IconButton, ImageWithFallback, Spinner } from '@repo/ui';
 
 import { useErrorMessage } from '@/features/tryon/hooks/use-error-message';
+import { useTrayReconciler } from '@/features/tryon/hooks/use-tray-reconciler';
 import { routes } from '@/lib/routes';
 
 import type { Locale } from '@/i18n/config';
@@ -32,14 +33,30 @@ export interface TryOnTrayProps {
  *
  * > "She can keep browsing; results collect in a tray and notify inline."
  *
- * A fixed, dismissible panel that follows her across the browse surface. It reads entirely from
- * `useTryOnTrayStore` (`sessionStorage`), so it survives a reload mid-generation and never
- * fetches anything itself — a `fetch` inside a store is a review failure, and so is a tray that
- * re-queries on every screen.
+ * A fixed, dismissible panel that follows her across the browse surface. Its rows come entirely
+ * from `useTryOnTrayStore` (`sessionStorage`), so it survives a reload mid-generation — a `fetch`
+ * inside a store is a review failure (§6.5).
+ *
+ * **It owns reconciliation.** `useTrayReconciler` polls the active rows on the §6.4 interval,
+ * because the tray is the thing that follows her: the wait screen used to be the only writer of
+ * terminal state, so taking its own "Keep browsing" action left the job spinning here forever.
+ * See the note on that hook.
  *
  * The notification is **inline**: a live region announces a finished job once, and the launcher
  * carries an unseen count. There is no toast that can be missed and no browser notification
  * permission prompt.
+ *
+ * ═══ Why there is no `hasHydrated` gate here ═══
+ *
+ * A component that renders from `sessionStorage` normally needs one: the server has no storage,
+ * so the two trees disagree. This one does not, and the reason is worth writing down because the
+ * shape of the code says otherwise. zustand v5 passes `api.getInitialState` to
+ * `useSyncExternalStore` as the **server snapshot**, and `getInitialState` is captured before
+ * `persist`'s synchronous rehydration lands — so React's hydration pass sees `jobs = {}`, exactly
+ * what the server rendered, and picks up the real rows on the commit after. Adding a mounted flag
+ * would cost a frame of blank tray and fix nothing. `TryOnTray.test.tsx` hydrates a real server
+ * render against a populated `sessionStorage` and asserts zero recoverable errors, so if the
+ * store ever stops going through zustand — or zustand stops doing this — the suite says so.
  */
 export function TryOnTray({ locale }: TryOnTrayProps) {
   const t = useTranslations('tryon.tray');
@@ -48,17 +65,19 @@ export function TryOnTray({ locale }: TryOnTrayProps) {
   const open = useTrayOpen();
   const unseen = useTrayUnseenCount();
   const { setTrayOpen, dismissJob, markAllSeen, clearFinished } = useTryOnTrayActions();
+  useTrayReconciler();
 
   const [announcement, setAnnouncement] = useState('');
   const announcedRef = useRef<Set<string>>(new Set());
 
   /**
    * One announcement per job, the first time it reaches a terminal state. Re-announcing on every
-   * render would make the live region unusable.
+   * render would make the live region unusable, and a job she has already opened is not news —
+   * `seen` is what tells the two apart across a navigation, since the ref is per mount.
    */
   useEffect(() => {
     for (const job of jobs) {
-      if (isJobActive(job) || announcedRef.current.has(job.jobId)) continue;
+      if (isJobActive(job) || job.seen || announcedRef.current.has(job.jobId)) continue;
       announcedRef.current.add(job.jobId);
 
       if (job.status === 'SUCCEEDED') {

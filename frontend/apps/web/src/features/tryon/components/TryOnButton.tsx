@@ -9,6 +9,7 @@ import { Button, Callout } from '@repo/ui';
 
 import { BudgetExhausted, QuotaExhausted } from '@/features/tryon/components/QuotaExhausted';
 import { useErrorMessage } from '@/features/tryon/hooks/use-error-message';
+import { useMyQuota } from '@/features/tryon/hooks/use-my-quota';
 import { useStartTryOn } from '@/features/tryon/hooks/use-start-tryon';
 import {
   isBudgetExhausted,
@@ -50,8 +51,12 @@ export function TryOnButton({
   returnTo,
 }: TryOnButtonProps) {
   const t = useTranslations('tryon.start');
+  const tQuota = useTranslations('tryon.quota');
   const messageFor = useErrorMessage('tryon');
   const { start, isStarting, errorCode } = useStartTryOn({ locale, returnTo, isAuthenticated });
+  // C-5: "Try-ons left this month" is visible wherever a try-on can be started, and this is that
+  // place. It informs; it never gates — the API's guard chain is the authority (B-2).
+  const quota = useMyQuota(isAuthenticated);
 
   if (!isAuthenticated) {
     return (
@@ -89,6 +94,12 @@ export function TryOnButton({
       >
         {t('action')}
       </Button>
+
+      {quota.data === undefined ? null : (
+        <p className="text-sm text-ink-muted">
+          {tQuota('remaining', { remaining: quota.data.remaining, limit: quota.data.limit })}
+        </p>
+      )}
 
       {errorCode !== null ? (
         <Callout

@@ -120,9 +120,16 @@ export interface PersistedTrayState {
 export const TRAY_PERSIST_VERSION = 1;
 
 /**
- * Rehydration is deliberately lossy. A tray row from a previous session carries a signed URL that
- * has almost certainly expired, and a job that was `RUNNING` when the tab closed has no stream to
- * reattach to. Anything unrecognisable is dropped rather than repaired.
+ * Rehydration keeps the rows and drops the stale parts of them.
+ *
+ * This comment used to claim rehydration was "deliberately lossy" while the code preserved a
+ * `RUNNING` row verbatim — including a signed `thumbnailUrl` that had almost certainly expired
+ * (`STORAGE_URL_TTL_RENDER_SECONDS`), and a stage frozen at whatever the tab last saw. Keeping
+ * the row is the right call: the job is still running server-side, and the tray's reconciler
+ * (`useTrayReconciler`) polls `GET /tryon/jobs/:jobId` for exactly these ids and settles them.
+ * What is *not* right is presenting a stale URL as current, so an active row's thumbnail is
+ * cleared and its stage rewound to the earliest one the reconciler will correct on its first
+ * tick. Anything unrecognisable is still dropped rather than repaired.
  */
 export function migrateTrayState(persisted: unknown, fromVersion: number): PersistedTrayState {
   const empty: PersistedTrayState = { jobs: {}, activePhotoId: null };
@@ -139,7 +146,11 @@ export function migrateTrayState(persisted: unknown, fromVersion: number): Persi
     if (typeof value !== 'object' || value === null) continue;
     const job = value as Partial<TrayJob>;
     if (typeof job.jobId !== 'string' || typeof job.garmentId !== 'string') continue;
-    jobs[jobId] = job as TrayJob;
+
+    const restored = job as TrayJob;
+    jobs[jobId] = isJobActive(restored)
+      ? { ...restored, thumbnailUrl: null, stage: 'QUEUED' }
+      : restored;
   }
 
   return {
@@ -337,6 +348,18 @@ export const selectTrayUnseenCount = (state: TryOnTrayState): number =>
 export const selectHasActiveTrayJobs = (state: TryOnTrayState): boolean =>
   Object.values(state.jobs).some(isJobActive);
 
+/**
+ * The ids the tray still has to find out about — what `useTrayReconciler` polls.
+ *
+ * Sorted so the array is stable under `useShallow`: `Object.values` follows insertion order, and
+ * a re-ordering that meant nothing would otherwise restart the poll loop.
+ */
+export const selectActiveTrayJobIds = (state: TryOnTrayState): string[] =>
+  Object.values(state.jobs)
+    .filter(isJobActive)
+    .map((job) => job.jobId)
+    .sort();
+
 /** Newest first, so the tray reads the way a feed does. */
 export const selectTrayJobsNewestFirst = (state: TryOnTrayState): TrayJob[] =>
   Object.values(state.jobs).sort((a, b) => b.startedAt - a.startedAt);
@@ -346,6 +369,9 @@ export const useTrayJob = (jobId: string): TrayJob | undefined =>
 
 export const useTrayJobIds = (): string[] =>
   useTryOnTrayStore(useShallow((state) => Object.keys(state.jobs)));
+
+export const useActiveTrayJobIds = (): string[] =>
+  useTryOnTrayStore(useShallow(selectActiveTrayJobIds));
 
 export const useTrayJobsNewestFirst = (): TrayJob[] =>
   useTryOnTrayStore(useShallow(selectTrayJobsNewestFirst));

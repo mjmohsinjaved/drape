@@ -2,6 +2,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { setRequestLocale } from 'next-intl/server';
 
 import { AdminShell } from '@/components/layout/AdminShell';
+import { SessionSync } from '@/components/providers/SessionSync';
 import { timeZone } from '@/i18n/config';
 import { loadClientMessages } from '@/i18n/messages';
 import { requireAdmin, toShellUser } from '@/lib/session';
@@ -37,6 +38,7 @@ export default async function AdminLayout({ children, params }: LayoutProps) {
 
   return (
     <NextIntlClientProvider locale={locale} messages={messages} timeZone={timeZone}>
+      <SessionSync user={user} />
       <AdminShell locale={locale} user={toShellUser(user)}>
         {children}
       </AdminShell>

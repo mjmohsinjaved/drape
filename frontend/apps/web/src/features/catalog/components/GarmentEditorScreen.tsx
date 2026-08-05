@@ -2,6 +2,8 @@
 
 import { useCallback, useState } from 'react';
 
+import Link from 'next/link';
+
 import { useTranslations } from 'next-intl';
 
 import {
@@ -46,7 +48,6 @@ import {
   type AdminGarmentImage,
   type ImageQualityReport,
 } from '@/features/catalog/types/admin-catalog';
-import { Link } from '@/i18n/navigation';
 import { routes } from '@/lib/routes';
 
 import type { AdminCategory } from '@/features/categories/types/admin-categories';

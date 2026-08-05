@@ -7,8 +7,10 @@
  * through axios. This hook owns the transport concerns that go with that:
  *
  * - **Reconnect with exponential backoff.** The native `EventSource` reconnects on its own and
- *   sends `Last-Event-ID`; we only intervene once it has given up (`readyState === CLOSED`), and
- *   then we back off rather than hammering.
+ *   sends `Last-Event-ID`, so while it is still trying (`readyState === CONNECTING`) we let it —
+ *   but we count the attempts, because otherwise a browser that retries forever means we never
+ *   fall back. Once it gives up (`readyState === CLOSED`), or once its own attempts have used up
+ *   `maxRetries`, we take over and back off rather than hammering.
  * - **A polling fallback.** §6.4: "try-on job status is driven by SSE, not polling, with a 3 s
  *   polling fallback when `EventSource` fails." The fallback also covers the case where
  *   `EventSource` does not exist at all — an old runtime, or a render on the server.
@@ -239,12 +241,41 @@ export function useEventSource(options: UseEventSourceOptions): UseEventSourceRe
       });
     }
 
+    /** Out of reconnects: hand over to the §6.4 poll, or admit the stream is dead. */
+    const giveUp = () => {
+      closeSource();
+      if (handlersRef.current.poll) {
+        startPolling();
+      } else {
+        // Pretending otherwise would leave a spinner up forever.
+        close();
+      }
+    };
+
     source.onerror = () => {
       if (terminatedRef.current) return;
 
-      // `CONNECTING` means the browser is retrying by itself and will send `Last-Event-ID` for us.
-      // Leave it alone; only step in once it has actually given up.
+      /*
+        `CONNECTING` means the browser is retrying by itself and will send `Last-Event-ID` for us,
+        so we leave the socket alone and let it — but we **count** the attempt.
+
+        This used to return early without touching `attemptRef`, and that made the documented
+        fallback unreachable for the commonest failure there is. Per the spec an ordinary
+        transport drop — a server restart, a phone losing its radio — sets `readyState` back to
+        `CONNECTING` *before* firing `error`; only a fatal non-2xx handshake reaches `CLOSED`. So
+        a plain network drop looped here forever: status stuck on `reconnecting`, `isPolling`
+        never true, and `GET /tryon/jobs/:jobId` never called. Counting these gives the browser
+        `maxRetries` goes at its own reconnect and then takes over.
+      */
       if (source.readyState === EventSource.CONNECTING) {
+        attemptRef.current += 1;
+        setRetryCount(attemptRef.current);
+
+        if (attemptRef.current >= maxRetries) {
+          giveUp();
+          return;
+        }
+
         updateStatus('reconnecting');
         return;
       }
@@ -252,13 +283,7 @@ export function useEventSource(options: UseEventSourceOptions): UseEventSourceRe
       closeSource();
 
       if (attemptRef.current >= maxRetries) {
-        // Out of reconnects. Fall back to polling if the caller gave us one; otherwise the stream
-        // is genuinely dead and pretending otherwise would leave a spinner up forever.
-        if (handlersRef.current.poll) {
-          startPolling();
-        } else {
-          close();
-        }
+        giveUp();
         return;
       }
 

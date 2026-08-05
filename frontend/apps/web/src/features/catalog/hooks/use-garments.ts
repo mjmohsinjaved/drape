@@ -9,7 +9,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 
-import { queryKeys, type ApiError, type Paginated, type Uuid } from '@repo/api-client';
+import { STALE_TIMES, queryKeys, type ApiError, type Paginated, type Uuid } from '@repo/api-client';
 
 import {
   archiveGarment,
@@ -60,6 +60,8 @@ export function useGarmentList(
     // The previous page stays on screen while the next one loads: a table replaced by a
     // full-height skeleton on every keystroke reads as a failure (D-8).
     placeholderData: keepPreviousData,
+    // §6.4 — a catalog row changes only when an admin publishes one, not every 60s.
+    staleTime: STALE_TIMES.catalog,
     initialData,
   });
 }
@@ -71,6 +73,7 @@ export function useGarment(
   return useQuery<AdminGarment, ApiError>({
     queryKey: queryKeys.garments.detail(garmentId),
     queryFn: ({ signal }) => getGarment(garmentId, signal),
+    staleTime: STALE_TIMES.catalog,
     initialData,
   });
 }

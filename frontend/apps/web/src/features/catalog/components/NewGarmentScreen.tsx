@@ -2,6 +2,9 @@
 
 import { useState } from 'react';
 
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+
 import { useTranslations } from 'next-intl';
 
 import { Button, Callout, EmptyState, toast } from '@repo/ui';
@@ -15,7 +18,6 @@ import {
   formToCreateBody,
   type GarmentFormValues,
 } from '@/features/catalog/schemas/garment-form';
-import { Link, useRouter } from '@/i18n/navigation';
 import { routes } from '@/lib/routes';
 
 import type { AdminCategory } from '@/features/categories/types/admin-categories';

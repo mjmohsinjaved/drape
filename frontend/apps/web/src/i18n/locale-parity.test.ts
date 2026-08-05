@@ -36,6 +36,10 @@ const IDENTICAL_BY_DESIGN = new Set([
   'admin.catalog.form.fields.sku', // SKU is the industry acronym, used as-is in Urdu.
   'admin.catalog.form.placeholders.sku', // An example SKU, not prose.
   'admin.catalog.images.dimensions', // "{width}×{height}" — numerals stay Latin (§6.7).
+  // "<bdi>{min}</bdi> – <bdi>{max}</bdi>" — two placeholders, a dash and the bidi-isolation tag
+  // that stops an RTL reader seeing the maximum first. No prose to translate; the only thing a
+  // translator could change is the order, and both locales want the same one.
+  'browse.filters.priceRange',
   'admin.catalog.editor.description', // "SKU {sku}".
   'renders.detail.heading', // "{garment}" — the piece's own name.
   'shortlist.budget.total', // "{amount}" — a formatted number.

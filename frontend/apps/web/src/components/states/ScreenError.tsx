@@ -2,11 +2,11 @@
 
 import * as React from 'react';
 
+import { useRouter } from 'next/navigation';
+
 import { useTranslations } from 'next-intl';
 
 import { ErrorState } from '@repo/ui';
-
-import { useRouter } from '@/i18n/navigation';
 
 export interface ScreenErrorProps {
   /** Already resolved through the screen's own `errors.*` namespace (D-7). */

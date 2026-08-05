@@ -2,6 +2,8 @@
 
 import { useCallback, useRef, useState } from 'react';
 
+import { useRouter } from 'next/navigation';
+
 import { useQueryClient } from '@tanstack/react-query';
 
 import { isApiError, queryKeys } from '@repo/api-client';
@@ -9,7 +11,6 @@ import { useTryOnTrayActions } from '@repo/store';
 
 import { newIdempotencyKey, startTryOn } from '@/features/tryon/api/endpoints';
 import { resolveErrorCode } from '@/features/tryon/lib/error-copy';
-import { useRouter } from '@/i18n/navigation';
 import { routes } from '@/lib/routes';
 
 import type { TryOnJob } from '@/features/tryon/api/types';

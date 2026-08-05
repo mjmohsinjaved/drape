@@ -5,6 +5,17 @@
     "body": "Something went wrong on our side. Try again — nothing you saved has been lost.",
     "action": "Try again"
   },
+  "codes": {
+    "description": "Something went wrong on our side. Try again — nothing you saved has been lost.",
+    "NETWORK_ERROR": "The connection dropped before the screen finished loading. Check your network, then try again.",
+    "REQUEST_TIMEOUT": "The screen took too long to answer. Try again.",
+    "AUTH_REQUIRED": "Your session ended while this page was open. Sign in and we'll bring you straight back here.",
+    "SESSION_EXPIRED": "Your session has run out. Sign in and we'll bring you straight back here.",
+    "INSUFFICIENT_ROLE": "This part isn't open to your account. Your fitting room is where you left it.",
+    "RATE_LIMIT_EXCEEDED": "That was a lot of requests in a short time. Wait a moment, then try again.",
+    "SERVICE_UNAVAILABLE": "The service is busy right now. Try again in a moment.",
+    "INTERNAL_ERROR": "Something went wrong on our side. Try again — nothing you saved has been lost."
+  },
   "scoped": {
     "catalog": {
       "title": "The collection didn't load"

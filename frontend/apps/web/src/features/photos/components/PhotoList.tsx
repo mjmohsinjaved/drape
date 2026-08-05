@@ -2,6 +2,8 @@
 
 import { useCallback, useState } from 'react';
 
+import { useRouter } from 'next/navigation';
+
 import { Pencil, Star, Trash2 } from 'lucide-react';
 import { useFormatter, useTranslations } from 'next-intl';
 
@@ -18,7 +20,6 @@ import {
 import { activatePhoto, deletePhoto, renamePhoto } from '@/features/photos/api/endpoints';
 import { useErrorMessage } from '@/features/tryon/hooks/use-error-message';
 import { resolveErrorCode } from '@/features/tryon/lib/error-copy';
-import { useRouter } from '@/i18n/navigation';
 
 import type { PersonPhoto } from '@/features/photos/api/types';
 

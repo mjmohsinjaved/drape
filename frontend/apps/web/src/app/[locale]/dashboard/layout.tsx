@@ -3,6 +3,7 @@ import { setRequestLocale } from 'next-intl/server';
 
 import { AdminShell } from '@/components/layout/AdminShell';
 import { ConsumerShell } from '@/components/layout/ConsumerShell';
+import { SessionSync } from '@/components/providers/SessionSync';
 import { timeZone } from '@/i18n/config';
 import { loadClientMessages } from '@/i18n/messages';
 import { Role } from '@/lib/constants';
@@ -43,6 +44,7 @@ export default async function DashboardLayout({ children, params }: LayoutProps)
 
   return (
     <NextIntlClientProvider locale={locale} messages={messages} timeZone={timeZone}>
+      <SessionSync user={user} />
       {user.role === Role.ADMIN ? (
         <AdminShell locale={locale} user={shellUser}>
           {children}

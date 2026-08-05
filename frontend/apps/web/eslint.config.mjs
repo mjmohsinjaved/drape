@@ -29,6 +29,47 @@ export default [
             'Use @repo/api-client (browser) or @/lib/server-api (Server Components). No raw fetch in components — B-9.',
         },
       ],
+      /*
+        §6.6 — one navigation convention, and this is the rule that keeps it.
+
+        `routes.*` returns a finished, locale-prefixed URL. next-intl's navigation primitives
+        prepend the active locale to whatever href they are given (`routing` declares
+        `localePrefix: 'always'`), so composing the two yields `/en/en/…` — a path that matches
+        no route and renders the root `not-found.tsx`. That is exactly how the try-on reveal
+        started 404ing. Navigate with `next/link` + `next/navigation` instead.
+      */
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: 'next-intl/navigation',
+              message:
+                'Do not build navigation primitives from `routing` — they prepend the locale that `routes.*` already carries, producing /en/en/…. Use next/link + next/navigation with routes.* (§6.6).',
+            },
+            {
+              name: '@/i18n/navigation',
+              message:
+                'Removed. Locale-aware navigation double-prefixes a `routes.*` href (/en/en/…). Use next/link + next/navigation with routes.* (§6.6).',
+            },
+          ],
+          patterns: [
+            {
+              group: ['**/i18n/navigation'],
+              message:
+                'Removed. Locale-aware navigation double-prefixes a `routes.*` href (/en/en/…). Use next/link + next/navigation with routes.* (§6.6).',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    // The one file allowed to reach for `next-intl/navigation`: the test that pins *why*
+    // mixing it with `routes.*` is forbidden by asserting the /en/en/… it would produce.
+    files: ['src/lib/routes.test.ts'],
+    rules: {
+      'no-restricted-imports': 'off',
     },
   },
   {

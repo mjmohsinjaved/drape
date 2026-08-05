@@ -2,6 +2,8 @@
 
 import { useCallback, useId, useState, useTransition } from 'react';
 
+import { usePathname, useRouter } from 'next/navigation';
+
 import { Search } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
@@ -14,7 +16,6 @@ import {
   type HistoryFilters as Filters,
   type VerdictFilter,
 } from '@/features/renders/lib/filters';
-import { usePathname, useRouter } from '@/i18n/navigation';
 
 import type { PersonPhoto } from '@/features/photos/api/types';
 
@@ -51,7 +52,16 @@ export function HistoryFilters({
   const pathname = usePathname();
   const [isPending, startTransition] = useTransition();
 
+  // The draft is seeded from the URL and has to keep following it: `clear()` empties the query
+  // string, and an input still showing the old term is a filter she thinks is still applied.
+  // Adjusting state during render re-runs this component before anything paints.
   const [searchDraft, setSearchDraft] = useState(filters.search ?? '');
+  const [appliedSearch, setAppliedSearch] = useState(filters.search);
+  if (appliedSearch !== filters.search) {
+    setAppliedSearch(filters.search);
+    setSearchDraft(filters.search ?? '');
+  }
+
   const searchId = useId();
   const verdictId = useId();
   const categoryId = useId();

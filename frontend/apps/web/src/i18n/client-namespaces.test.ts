@@ -50,10 +50,25 @@ function isClientModule(source: string): boolean {
   return /^\s*['"]use client['"]/m.test(source.slice(0, 400));
 }
 
+/**
+ * Every hook that reaches into the message tree, not just `useTranslations`.
+ *
+ * `useErrorCopy('renders.errors')` and `useErrorMessage('tryon')` both call `useTranslations`
+ * one module away, so a component that used only those walked straight through this guard and
+ * would have rendered raw keys on any route group that had not declared the namespace. There is
+ * no live violation today; the matcher is widened so there cannot be a silent one tomorrow.
+ *
+ * Server-side `getTranslations` is deliberately absent: it reads the request config, which
+ * always carries all fifteen namespaces, and costs the client bundle nothing.
+ */
+const MESSAGE_HOOKS = ['useTranslations', 'useErrorCopy', 'useErrorMessage'] as const;
+
 function namespacesUsedIn(source: string): string[] {
-  return [...source.matchAll(/useTranslations\(\s*['"`]([a-zA-Z][\w.]*)['"`]/g)].map(
-    (match) => (match[1] ?? '').split('.')[0] ?? '',
+  const pattern = new RegExp(
+    `\\b(?:${MESSAGE_HOOKS.join('|')})\\(\\s*['"\`]([a-zA-Z][\\w.]*)['"\`]`,
+    'g',
   );
+  return [...source.matchAll(pattern)].map((match) => (match[1] ?? '').split('.')[0] ?? '');
 }
 
 /** Namespaces reachable from `file` **once inside a client boundary**. */

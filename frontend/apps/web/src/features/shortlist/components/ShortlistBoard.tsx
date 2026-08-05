@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 import { ChevronDown, ChevronUp, GripVertical, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
@@ -18,7 +19,6 @@ import {
 } from '@/features/shortlist/api/endpoints';
 import { useErrorMessage } from '@/features/tryon/hooks/use-error-message';
 import { resolveErrorCode } from '@/features/tryon/lib/error-copy';
-import { useRouter } from '@/i18n/navigation';
 import { routes } from '@/lib/routes';
 
 import type { ShortlistItem } from '@/features/shortlist/api/types';

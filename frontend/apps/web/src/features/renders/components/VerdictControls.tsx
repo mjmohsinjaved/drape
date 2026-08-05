@@ -3,6 +3,7 @@
 import { useCallback, useState } from 'react';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 import { Heart, HelpCircle, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
@@ -12,7 +13,6 @@ import { Button, Callout } from '@repo/ui';
 import { recordVerdict } from '@/features/renders/api/endpoints';
 import { useErrorMessage } from '@/features/tryon/hooks/use-error-message';
 import { resolveErrorCode } from '@/features/tryon/lib/error-copy';
-import { useRouter } from '@/i18n/navigation';
 import { routes } from '@/lib/routes';
 
 import type { RejectReason, Verdict } from '@/features/renders/api/types';

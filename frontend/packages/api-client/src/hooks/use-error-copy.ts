@@ -36,9 +36,18 @@ import {
  * `ApiError.message`, and nothing ever renders a `requestId` as if it were an explanation.
  *
  *   const copy = useErrorCopy('renders.errors');
- *   copy.message(query.error);        // translated, in this screen's voice
- *   copy.isPermissionDenied(error);   // the D-5 permission-denied state?
- *   copy.isRetryable(error);          // is offering "try again" honest?
+ *   copy.message(query.error);           // translated, in this screen's voice
+ *   copy.isPermissionDenied(error);      // the D-5 permission-denied state?
+ *   copy.isRetryableRead(error);         // a failed read — is "try again" honest?
+ *   copy.isRetryableMutation(error);     // a failed write — is re-sending it honest?
+ *
+ * ═══ There is no plain `isRetryable` ═══
+ *
+ * There was, and it answered the **mutation** question — `isRetryableCode(code, statusCode)` —
+ * for callers that were almost always holding a read. The two genuinely differ: a 409 on a write
+ * will conflict again, while the same code arriving without a status is a read the caller can
+ * repeat. One name for two answers is a defect waiting for its first caller, so the name is gone
+ * and both questions have to be asked by their own name.
  */
 
 /** The key every namespace carries for a code it has no specific sentence for (D-7). */
@@ -55,8 +64,21 @@ export interface ErrorCopy {
   isPermissionDenied: (error: unknown) => boolean;
   /** True when the session is gone and the next step is signing in. */
   isAuthenticationRequired: (error: unknown) => boolean;
-  /** True when offering "try again" is honest rather than a dead end (§10.3). */
-  isRetryable: (error: unknown) => boolean;
+  /**
+   * A failed **read**: is offering "try again" honest rather than a dead end (§10.3)?
+   *
+   * The status is deliberately not consulted. Re-issuing a GET that answered 409 or 404 is a
+   * legitimate thing to offer — the resource may have moved on — and only the codes that name a
+   * permanent dead end (`QUOTA_EXHAUSTED`, `CONSENT_REQUIRED`, …) rule it out.
+   */
+  isRetryableRead: (error: unknown) => boolean;
+  /**
+   * A failed **write**: can re-sending the identical request plausibly succeed?
+   *
+   * Status-aware, and therefore much narrower: a 4xx other than 408/429 will fail the same way
+   * the second time, so offering the button would be a lie.
+   */
+  isRetryableMutation: (error: unknown) => boolean;
 }
 
 /**
@@ -81,7 +103,9 @@ export function useErrorCopy(namespace: string): ErrorCopy {
       message: (error) => fromCode(resolveErrorCode(error)),
       isPermissionDenied: (error) => isPermissionDenied(resolveErrorCode(error)),
       isAuthenticationRequired: (error) => isAuthenticationRequired(resolveErrorCode(error)),
-      isRetryable: (error) => isRetryableCode(resolveErrorCode(error), resolveStatusCode(error)),
+      isRetryableRead: (error) => isRetryableCode(resolveErrorCode(error)),
+      isRetryableMutation: (error) =>
+        isRetryableCode(resolveErrorCode(error), resolveStatusCode(error)),
     }),
     [fromCode],
   );

@@ -39,7 +39,17 @@ export interface ServerApiFailure {
    */
   message: string;
   requestId?: string;
-  isRetryable: boolean;
+  /*
+    There is no `isRetryable` here.
+
+    There was, copied from `ApiError.isRetryable` — which is the **mutation** answer,
+    `isRetryableCode(code, statusCode)`. Every value on this type is the result of a *read*: a
+    Server Component's GET. Not one screen ever read the field (they all call
+    `isRetryableCode(error.errorCode)`, the read branch, directly), so the wrong answer never
+    reached a button — but it was sitting here waiting for the first caller who trusted the name.
+    Ask the question by name: `isRetryableCode(errorCode)` for this, `copy.isRetryableMutation`
+    for a write.
+  */
 }
 
 export type ServerResult<T> =
@@ -73,7 +83,6 @@ function toFailure(error: unknown): ServerApiFailure {
       errorCode: error.errorCode,
       message: error.message,
       requestId: error.requestId,
-      isRetryable: error.isRetryable,
     };
   }
 
@@ -83,7 +92,6 @@ function toFailure(error: unknown): ServerApiFailure {
     statusCode: 0,
     errorCode: ErrorCodes.UNKNOWN_ERROR,
     message: '',
-    isRetryable: false,
   };
 }
 

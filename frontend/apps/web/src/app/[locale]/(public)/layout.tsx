@@ -2,6 +2,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { setRequestLocale } from 'next-intl/server';
 
 import { PublicShell } from '@/components/layout/PublicShell';
+import { SessionSync } from '@/components/providers/SessionSync';
 import { timeZone } from '@/i18n/config';
 import { loadClientMessages } from '@/i18n/messages';
 import { getCurrentUser, toShellUser } from '@/lib/session';
@@ -30,6 +31,7 @@ export default async function PublicLayout({ children, params }: LayoutProps) {
 
   return (
     <NextIntlClientProvider locale={locale} messages={messages} timeZone={timeZone}>
+      <SessionSync user={user} />
       <PublicShell locale={locale} user={user ? toShellUser(user) : undefined}>
         {children}
       </PublicShell>

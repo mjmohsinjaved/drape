@@ -2,6 +2,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { setRequestLocale } from 'next-intl/server';
 
 import { ConsumerShell } from '@/components/layout/ConsumerShell';
+import { SessionSync } from '@/components/providers/SessionSync';
 import { timeZone } from '@/i18n/config';
 import { loadClientMessages } from '@/i18n/messages';
 import { requireConsumer, toShellUser } from '@/lib/session';
@@ -33,6 +34,7 @@ export default async function ConsumerLayout({ children, params }: LayoutProps) 
 
   return (
     <NextIntlClientProvider locale={locale} messages={messages} timeZone={timeZone}>
+      <SessionSync user={user} />
       <ConsumerShell locale={locale} user={toShellUser(user)}>
         {children}
       </ConsumerShell>

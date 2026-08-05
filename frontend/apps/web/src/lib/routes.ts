@@ -8,8 +8,27 @@ import type { Locale } from '@/i18n/config';
  * canonical, not the middleware. If a route changes shape, it changes here once.
  *
  * Every route carries its locale, because `[locale]` is a root segment that is always
- * present in the URL (§6.7). Inside Client Components prefer the locale-aware `Link` from
- * `@/i18n/navigation`; use these builders when you need the string itself.
+ * present in the URL (§6.7).
+ *
+ * ═══ The one navigation convention ═══
+ *
+ * **A builder here returns a finished, locale-prefixed URL, and it is handed to the plain
+ * `next/link` and `next/navigation` primitives.** Nothing in the app navigates through
+ * `next-intl`'s `createNavigation` helpers.
+ *
+ * That is not a preference, it is the only combination that works. `routing` declares
+ * `localePrefix: 'always'`, so every next-intl primitive *prepends* the active locale to the
+ * href it is given. Handed `/en/renders/x` — which is what every builder below returns — it
+ * produces `/en/en/renders/x`, a path that matches no route and falls through to the root
+ * `not-found.tsx`. The reveal at the end of a try-on was landing there (PRD §10.3).
+ *
+ * The locale has to live here rather than in the navigation layer, because `generateMetadata`,
+ * `middleware.ts` and every server-side `redirect()` need a complete URL and cannot call a React
+ * hook. One prefixed route map plus locale-agnostic primitives is a single rule; a prefixed map
+ * for the server and a bare one for the client is two, and mixing them is what shipped.
+ *
+ * `@repo/config-eslint`'s `no-restricted-imports` entry for `next-intl/navigation` keeps it that
+ * way, and `routes.test.ts` pins both halves of the invariant.
  */
 
 const root = (locale: Locale): string => `/${locale}`;

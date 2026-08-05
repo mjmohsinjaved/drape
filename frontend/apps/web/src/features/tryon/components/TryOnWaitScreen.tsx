@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 import { useTranslations } from 'next-intl';
 
@@ -21,7 +22,6 @@ import {
   needsAnotherPhoto,
   resolveErrorCode,
 } from '@/features/tryon/lib/error-copy';
-import { useRouter } from '@/i18n/navigation';
 import { routes } from '@/lib/routes';
 
 import type { Locale } from '@/i18n/config';

@@ -3,6 +3,7 @@
 import { useCallback, useId, useState } from 'react';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 import { useTranslations } from 'next-intl';
 
@@ -12,7 +13,6 @@ import { grantConsent } from '@/features/consent/api/endpoints';
 import { useErrorMessage } from '@/features/tryon/hooks/use-error-message';
 import { resolveErrorCode } from '@/features/tryon/lib/error-copy';
 import { apiLocale ,type  Locale } from '@/i18n/config';
-import { useRouter } from '@/i18n/navigation';
 import { routes } from '@/lib/routes';
 
 import type { PolicyDocument } from '@/features/consent/api/types';

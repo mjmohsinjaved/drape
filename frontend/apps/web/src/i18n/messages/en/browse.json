@@ -30,6 +30,7 @@
     "price": "Price",
     "priceMin": "Lowest price",
     "priceMax": "Highest price",
+    "priceRange": "<bdi>{min}</bdi> – <bdi>{max}</bdi>",
     "any": "Any",
     "facetCount": "{count} pieces",
     "count": "{count, plural, =0 {No pieces} one {1 piece} other {# pieces}}",

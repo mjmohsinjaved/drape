@@ -30,6 +30,7 @@
     "price": "قیمت",
     "priceMin": "کم سے کم قیمت",
     "priceMax": "زیادہ سے زیادہ قیمت",
+    "priceRange": "<bdi>{min}</bdi> – <bdi>{max}</bdi>",
     "any": "کوئی بھی",
     "facetCount": "{count} ملبوسات",
     "count": "{count, plural, =0 {کوئی ملبوس نہیں} one {1 ملبوس} other {# ملبوسات}}",

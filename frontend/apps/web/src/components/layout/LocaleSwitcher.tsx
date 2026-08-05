@@ -47,8 +47,18 @@ export function LocaleSwitcher({ variant = 'full' }: LocaleSwitcherProps) {
     setLocale(apiLocale[next]);
     // `[locale]` is a root segment, so the swap is a single replacement at the front.
     const nextPath = pathname.replace(/^\/[a-z]{2}(?=\/|$)/, `/${next}`);
+    /*
+      The query string is part of where she is. `usePathname` drops it, so switching language on
+      `/en/browse?color=maroon&page=3` used to land on `/ur/browse` — every filter and the page
+      number gone, which reads as the app having thrown her work away for choosing her own
+      language. It is read from `location` rather than `useSearchParams` on purpose: this control
+      sits in the header of every page, and `useSearchParams` opts the whole tree out of static
+      rendering unless it is wrapped in its own Suspense boundary. Inside an event handler
+      `location.search` is current by definition.
+    */
+    const query = typeof window === 'undefined' ? '' : window.location.search;
     startTransition(() => {
-      router.replace(nextPath);
+      router.replace(`${nextPath}${query}`);
       router.refresh();
     });
   }
