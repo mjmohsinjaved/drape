@@ -77,9 +77,20 @@ function asRecord(value: unknown): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
-/** Applies one `FindOperator` (`In`, `IsNull`, `Not`, `LessThan`, `Like`, …) to a value. */
+/**
+ * Applies one `FindOperator` (`In`, `IsNull`, `Not`, `LessThan`, `Like`, …) to a value.
+ *
+ * Operators nest — `Not(In([…]))` is a `not` wrapping an `in` — and TypeORM's `value`
+ * getter **unwraps** to the innermost value, so reading `value` off a `Not(In([…]))` hands
+ * back the bare array and loses the `in`. `child` is the nested operator, and honouring it
+ * is the difference between `Not(In([…]))` excluding those rows and matching every row.
+ */
 function matchesOperator(operator: FindOperator<unknown>, actual: unknown): boolean {
-  const { type, value } = operator;
+  const { type, value, child } = operator;
+
+  if (child !== undefined && type === 'not') {
+    return !matchesOperator(child, actual);
+  }
 
   switch (type) {
     case 'in':

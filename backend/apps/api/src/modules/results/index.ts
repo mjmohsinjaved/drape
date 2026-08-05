@@ -18,6 +18,18 @@ export { ResultsService } from './services/results.service';
 export { ResultDownloadService, type WatermarkedRender } from './services/result-download.service';
 export { MarketingOptInDto } from './dto/marketing-opt-in.dto';
 export { ResultIdParamDto } from './dto/result-id-param.dto';
-export { RESULT_SORT_KEYS, ResultQueryDto, type ResultSortKey } from './dto/result-query.dto';
+export {
+  NO_VERDICT,
+  RESULT_SORT_KEYS,
+  RESULT_VERDICT_FILTERS,
+  ResultQueryDto,
+  type ResultSortKey,
+  type ResultVerdictFilter,
+} from './dto/result-query.dto';
 export { ResultGroupDto, ResultResponseDto } from './dto/result-response.dto';
-export { toResultResponse, type SignRenderUrl } from './mappers/result.mapper';
+export { ResultVerdictDto } from './dto/result-verdict.dto';
+export {
+  toResultResponse,
+  type ResultVerdictProjection,
+  type SignRenderUrl,
+} from './mappers/result.mapper';

@@ -15,6 +15,7 @@ import { StorageModule } from '@library/storage';
 
 import { GlobalProvidersModule } from '@api/bootstrap/global-providers';
 import { validateEnv } from '@api/config/env.validation';
+import { AnalyticsModule } from '@api/modules/analytics/analytics.module';
 import { AuditModule } from '@api/modules/audit/audit.module';
 import { AuthModule } from '@api/modules/auth/auth.module';
 import { CatalogModule } from '@api/modules/catalog/catalog.module';
@@ -26,9 +27,15 @@ import { GarmentImagesModule } from '@api/modules/garments/garment-images.module
 import { GarmentsModule } from '@api/modules/garments/garments.module';
 import { HealthModule } from '@api/modules/health/health.module';
 import { InvitesModule } from '@api/modules/invites/invites.module';
+import { ModerationModule } from '@api/modules/moderation/moderation.module';
+// Aliased: `@library/notifications` exports a module of the same name. That one is the
+// transport (providers and templates); this one is the outbox, the in-app feed and the
+// E-14 alerts.
+import { NotificationsModule as NotificationsFeatureModule } from '@api/modules/notifications/notifications.module';
 import { PersonPhotosModule } from '@api/modules/person-photos/person-photos.module';
 import { QuotaModule } from '@api/modules/quota/quota.module';
 import { ResultsModule } from '@api/modules/results/results.module';
+import { RetentionModule } from '@api/modules/retention/retention.module';
 import { SettingsModule } from '@api/modules/settings/settings.module';
 import { ShareModule } from '@api/modules/share/share.module';
 import { ShortlistModule } from '@api/modules/shortlist/shortlist.module';
@@ -116,7 +123,10 @@ import { UsersModule } from '@api/modules/users/users.module';
     ShortlistModule,
     ShareModule,
     EnquiriesModule,
-    // Still to land: ModerationModule, AnalyticsModule, RetentionModule.
+    ModerationModule,
+    AnalyticsModule,
+    NotificationsFeatureModule,
+    RetentionModule,
     // --- end feature modules ---
   ],
 })

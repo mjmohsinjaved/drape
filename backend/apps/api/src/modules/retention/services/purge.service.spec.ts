@@ -13,8 +13,10 @@
  * directly, against a store full of expired photographs *and* the renders made from
  * them, rather than inferred from the absence of a query.
  */
-import { ConfigService } from '@nestjs/config';
+import { type ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+
+import type { StorageService, StoredObject } from '@library/storage';
 
 import { PersonPhoto } from '@api/modules/person-photos/entities/person-photo.entity';
 import { PhotoModerationState } from '@api/modules/person-photos/enums/photo-moderation-state.enum';
@@ -29,7 +31,6 @@ import { DeletionSubject } from '../enums/deletion-subject.enum';
 import { PurgeService, purgeDateFor } from './purge.service';
 
 import type { InMemoryRepository } from '../../../../test/fixtures';
-import type { StorageService, StoredObject } from '@library/storage';
 import type { DataSource, EntityManager } from 'typeorm';
 
 const NOW = new Date('2026-08-15T12:00:00.000Z');
@@ -122,15 +123,13 @@ function build(rows: { photos?: PersonPhoto[]; renders?: TryOnResult[] } = {}): 
 
   const deletedKeys: string[] = [];
   const storage = createMock<StorageService>(['head', 'delete']);
-  storage.head.mockImplementation(
-    async (key: string): Promise<StoredObject | null> => ({
-      key,
-      byteSize: 1_000,
-      contentType: 'image/jpeg',
-      etag: 'd'.repeat(64),
-      lastModified: NOW,
-    }),
-  );
+  storage.head.mockImplementation(async (key: string): Promise<StoredObject | null> => ({
+    key,
+    byteSize: 1_000,
+    contentType: 'image/jpeg',
+    etag: 'd'.repeat(64),
+    lastModified: NOW,
+  }));
   storage.delete.mockImplementation(async (key: string) => {
     deletedKeys.push(key);
     return true;

@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { GarmentsModule } from '@api/modules/garments/garments.module';
-import { ResultsModule } from '@api/modules/results/results.module';
+import { TryOnResult } from '@api/modules/results/entities/tryon-result.entity';
 import { UsersModule } from '@api/modules/users/users.module';
 
 import { ShortlistController } from './controllers/shortlist.controller';
@@ -14,23 +14,28 @@ import { ShortlistService } from './services/shortlist.service';
  *
  * ### Entities registered here
  *
- * `ShortlistItem` only — it is the one table this module owns (§4.33), and it is the
- * single source of truth for a verdict. Verdicts are deliberately **not** stored on
- * `tryon_results`.
+ * `ShortlistItem` — the one table this module owns (§4.33), and the single source of
+ * truth for a verdict. Verdicts are deliberately **not** stored on `tryon_results`.
+ *
+ * `TryOnResult` is registered alongside it purely as a reader, for the render thumbnail
+ * shown beside an item. It used to arrive through `ResultsModule`'s `TypeOrmModule`
+ * re-export; it is registered directly now because `results` projects the verdict onto
+ * its own DTOs (§5.12) and therefore depends on **this** module. Only one of the two
+ * edges can exist without a cycle, and the honest direction is the one that follows the
+ * write: `results` delegates every verdict here, and reads `tryon_results` here stay
+ * exactly what they were — a signed thumbnail URL and nothing else. Every rule about
+ * that table still lives in the module that owns it (§2.9 rule 5).
  *
  * ### What it imports, and why each one
  *
  * | Module | For |
  * | --- | --- |
  * | `GarmentsModule` | the live title, price and publish state of each shortlisted piece |
- * | `ResultsModule` | the render thumbnail shown beside an item, read through `tryon_results` |
  * | `UsersModule` | `consumer_profiles.budgetBand` — the figure C-32's running total is measured against |
  *
- * Each is imported for its `TypeOrmModule` re-export, the same accommodation
+ * Both are imported for their `TypeOrmModule` re-export, the same accommodation
  * `catalog` documents: the entity classes appear only as injection tokens and as
- * types, and every rule about those tables still lives in the module that owns them
- * (§2.9 rule 5). `StorageModule` is `@Global()`, so signing a thumbnail URL needs no
- * import.
+ * types. `StorageModule` is `@Global()`, so signing a thumbnail URL needs no import.
  *
  * ### What it exports
  *
@@ -50,7 +55,7 @@ import { ShortlistService } from './services/shortlist.service';
  *   belongs to `analytics`, which reads them.
  */
 @Module({
-  imports: [TypeOrmModule.forFeature([ShortlistItem]), GarmentsModule, ResultsModule, UsersModule],
+  imports: [TypeOrmModule.forFeature([ShortlistItem, TryOnResult]), GarmentsModule, UsersModule],
   controllers: [ShortlistController],
   providers: [ShortlistService],
   exports: [ShortlistService, TypeOrmModule],

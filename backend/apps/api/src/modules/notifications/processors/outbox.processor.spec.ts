@@ -12,8 +12,13 @@
  *     exactly one provider call, because the claim is a conditional `UPDATE` and the
  *     loser matches no rows.
  */
-import { NotificationErrorCode, type SendResult } from '@library/notifications';
+import {
+  NotificationErrorCode,
+  type NotificationsService,
+  type SendResult,
+} from '@library/notifications';
 
+import type { User } from '@api/modules/users/entities/user.entity';
 import { Locale } from '@api/modules/users/enums/locale.enum';
 
 import { createInMemoryRepository, createMock } from '../../../../test/fixtures';
@@ -29,8 +34,6 @@ import { NotificationStatus } from '../enums/notification-status.enum';
 import { backoffMs, OutboxProcessor } from './outbox.processor';
 
 import type { InMemoryRepository } from '../../../../test/fixtures';
-import type { NotificationsService } from '@library/notifications';
-import type { User } from '@api/modules/users/entities/user.entity';
 
 const NOW = new Date('2026-08-15T12:00:00.000Z');
 const RECIPIENT = 'a1111111-1111-4111-8111-111111111111';
@@ -233,11 +236,7 @@ describe('OutboxProcessor', () => {
 
       // Two concurrent ticks. The claim is a conditional UPDATE re-asserting
       // `status = PENDING`, so only one of them can own the row.
-      const second = new OutboxProcessor(
-        outbox,
-        createInMemoryRepository<User>(),
-        notifications,
-      );
+      const second = new OutboxProcessor(outbox, createInMemoryRepository<User>(), notifications);
 
       await Promise.all([processor.drainOnce(NOW), second.drainOnce(NOW)]);
 

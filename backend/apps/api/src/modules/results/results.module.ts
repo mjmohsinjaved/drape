@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { GarmentsModule } from '@api/modules/garments/garments.module';
 import { SettingsModule } from '@api/modules/settings';
+import { ShortlistModule } from '@api/modules/shortlist/shortlist.module';
 
 import { ResultsController } from './controllers/results.controller';
 import { TryOnResult } from './entities/tryon-result.entity';
@@ -23,6 +24,12 @@ import { ResultsService } from './services/results.service';
  *    that a single indexed `IN` query per page rather than a service call per row.
  *  - **`SettingsModule`** — the A-27 brand asset and brand name for the C-23 download
  *    watermark.
+ *  - **`ShortlistModule`** — the verdict. §5.12 puts `verdict` and `rejectReason` on
+ *    the history DTO and a `POST /results/:resultId/verdict` route on this controller,
+ *    and §4.20 puts the row itself on `shortlist_items` and nowhere else. So the read
+ *    is a keyed projection through that module's `TypeOrmModule` re-export, and the
+ *    write is delegated whole to `ShortlistService.recordVerdict()`. No verdict is
+ *    decided or stored here.
  *
  * What it exports:
  *  - **`ResultWriterService`** — the write path `tryon` depends on. Deliberately
@@ -36,7 +43,12 @@ import { ResultsService } from './services/results.service';
  * `StorageModule` and `ConfigModule` are `@Global()` in the composition root.
  */
 @Module({
-  imports: [TypeOrmModule.forFeature([TryOnResult]), GarmentsModule, SettingsModule],
+  imports: [
+    TypeOrmModule.forFeature([TryOnResult]),
+    GarmentsModule,
+    SettingsModule,
+    ShortlistModule,
+  ],
   controllers: [ResultsController],
   providers: [ResultsService, ResultWriterService, ResultDownloadService],
   exports: [ResultsService, ResultWriterService, ResultDownloadService, TypeOrmModule],

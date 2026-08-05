@@ -14,7 +14,9 @@
  * assertions prove it reaches neither the response nor the URL signer.
  */
 import { ErrorCode, Locale, Role, UserStatus, type ICurrentUser } from '@library/common';
+import type { StorageService } from '@library/storage';
 
+import type { AuditService } from '@api/modules/audit/services/audit.service';
 import { PersonPhoto } from '@api/modules/person-photos/entities/person-photo.entity';
 import { PhotoModerationState } from '@api/modules/person-photos/enums/photo-moderation-state.enum';
 import { TryOnJob } from '@api/modules/tryon/entities/tryon-job.entity';
@@ -29,10 +31,8 @@ import { ModerationState } from '../enums/moderation-state.enum';
 
 import { ModerationQueueService } from './moderation-queue.service';
 
-import type { ModerationQueryDto } from '../dto/moderation-query.dto';
-import type { AuditService } from '@api/modules/audit/services/audit.service';
 import type { InMemoryRepository } from '../../../../test/fixtures';
-import type { StorageService } from '@library/storage';
+import type { ModerationQueryDto } from '../dto/moderation-query.dto';
 import type { DataSource, EntityManager } from 'typeorm';
 
 const NOW = new Date('2026-08-15T12:00:00.000Z');
@@ -110,7 +110,7 @@ function query(overrides: Partial<ModerationQueryDto> = {}): ModerationQueryDto 
     sortBy: 'createdAt',
     sortOrder: 'ASC',
     ...overrides,
-  } as ModerationQueryDto;
+  };
 }
 
 interface Harness {
@@ -185,10 +185,7 @@ describe('ModerationQueueService', () => {
 
       // The signer was handed the blurred key and the admin's own id, and nothing else.
       expect(harness.storage.signedUrl).toHaveBeenCalledWith(BLURRED_KEY, ADMIN.id);
-      expect(harness.storage.signedUrl).not.toHaveBeenCalledWith(
-        ORIGINAL_KEY,
-        expect.anything(),
-      );
+      expect(harness.storage.signedUrl).not.toHaveBeenCalledWith(ORIGINAL_KEY, expect.anything());
     });
 
     it('leaks no reference to the original anywhere in the serialised response', async () => {

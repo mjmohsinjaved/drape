@@ -23,10 +23,13 @@ import {
   type IPaginated,
 } from '@library/common';
 
+import { ShortlistItemResponseDto } from '@api/modules/shortlist/dto/shortlist-response.dto';
+
 import { MarketingOptInDto } from '../dto/marketing-opt-in.dto';
 import { ResultIdParamDto } from '../dto/result-id-param.dto';
 import { ResultQueryDto } from '../dto/result-query.dto';
 import { ResultGroupDto, ResultResponseDto } from '../dto/result-response.dto';
+import { ResultVerdictDto } from '../dto/result-verdict.dto';
 import { ResultDownloadService } from '../services/result-download.service';
 import { ResultsService } from '../services/results.service';
 
@@ -126,6 +129,29 @@ export class ResultsController {
     response.setHeader('X-Content-Type-Options', 'nosniff');
 
     return new StreamableFile(file.bytes);
+  }
+
+  @Post(':resultId/verdict')
+  @Roles(Role.CONSUMER)
+  @ResponseMessage('Verdict saved')
+  @ApiOperation({
+    summary: 'Record Love it / Maybe / Not for me on the piece in this render (C-20, C-21)',
+    description:
+      'The verdict she reaches from the render she is looking at. It writes the same single ' +
+      '`(userId, garmentId)` row as `POST /shortlist` (§4.20) — this route exists so the ' +
+      'result view does not have to know the garment id, not so there can be a second ' +
+      'verdict. The piece is read from the render, so a client cannot record a verdict ' +
+      'against a piece she never saw. Refused with `GARMENT_NOT_FOUND` once the garment is ' +
+      'gone (C-29): the render survives, the decision has nowhere to live.',
+  })
+  @ApiOkResponse({ type: ShortlistItemResponseDto })
+  @ApiStandardResponses({ notFound: true })
+  verdict(
+    @Param() params: ResultIdParamDto,
+    @Body() dto: ResultVerdictDto,
+    @CurrentUser() user: ICurrentUser,
+  ): Promise<ShortlistItemResponseDto> {
+    return this.results.recordVerdict(user, params.resultId, dto);
   }
 
   @Post(':resultId/marketing-opt-in')

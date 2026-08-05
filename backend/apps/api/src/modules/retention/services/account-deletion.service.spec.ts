@@ -13,13 +13,16 @@
  *     that "completed" a request by updating it would leave every request looking
  *     outstanding forever, and the E-14 alert would fire on a system that was working.
  */
-import { ConfigService } from '@nestjs/config';
+import { type ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 
 import { Locale, Role, UserStatus, type ICurrentUser } from '@library/common';
+import type { StorageService, StoredObject } from '@library/storage';
 
 import { Enquiry } from '@api/modules/enquiries/entities/enquiry.entity';
 import { EnquiryStatus } from '@api/modules/enquiries/enums/enquiry-status.enum';
+import type { NotificationsInboxService } from '@api/modules/notifications/services/notifications-inbox.service';
+import type { OutboxService } from '@api/modules/notifications/services/outbox.service';
 import { PersonPhoto } from '@api/modules/person-photos/entities/person-photo.entity';
 import { PhotoModerationState } from '@api/modules/person-photos/enums/photo-moderation-state.enum';
 import { TryOnResult } from '@api/modules/results/entities/tryon-result.entity';
@@ -38,9 +41,6 @@ import { DeletionSubject } from '../enums/deletion-subject.enum';
 import { AccountDeletionService } from './account-deletion.service';
 
 import type { InMemoryRepository } from '../../../../test/fixtures';
-import type { NotificationsInboxService } from '@api/modules/notifications/services/notifications-inbox.service';
-import type { OutboxService } from '@api/modules/notifications/services/outbox.service';
-import type { StorageService, StoredObject } from '@library/storage';
 import type { DataSource, EntityManager } from 'typeorm';
 
 const NOW = new Date('2026-08-15T12:00:00.000Z');
@@ -160,7 +160,10 @@ function build(): Harness {
   const renders = [buildRender(), buildRender()];
 
   const repositories = new Map<unknown, InMemoryRepository<{ id: string }>>();
-  const registry = <T extends { id: string }>(entity: unknown, rows: readonly T[]) => {
+  const registry = <T extends { id: string }>(
+    entity: unknown,
+    rows: readonly T[],
+  ): InMemoryRepository<T> => {
     const repository = createInMemoryRepository<T>({ rows });
     repositories.set(entity, repository as unknown as InMemoryRepository<{ id: string }>);
     return repository;
@@ -280,15 +283,13 @@ function build(): Harness {
   const deletedKeys: string[] = [];
   const deletedPrefixes: string[] = [];
   const storage = createMock<StorageService>(['head', 'delete', 'deletePrefix']);
-  storage.head.mockImplementation(
-    async (key: string): Promise<StoredObject | null> => ({
-      key,
-      byteSize: 1_000,
-      contentType: 'application/octet-stream',
-      etag: 'd'.repeat(64),
-      lastModified: NOW,
-    }),
-  );
+  storage.head.mockImplementation(async (key: string): Promise<StoredObject | null> => ({
+    key,
+    byteSize: 1_000,
+    contentType: 'application/octet-stream',
+    etag: 'd'.repeat(64),
+    lastModified: NOW,
+  }));
   storage.delete.mockImplementation(async (key: string) => {
     deletedKeys.push(key);
     return true;
@@ -430,7 +431,7 @@ describe('AccountDeletionService', () => {
       expect(rowsOf(harness, TryOnCache)).toHaveLength(0);
     });
 
-    it('anonymises her enquiries rather than deleting the studio\'s commercial record', async () => {
+    it("anonymises her enquiries rather than deleting the studio's commercial record", async () => {
       const harness = build();
 
       await harness.service.sweep(NOW);
