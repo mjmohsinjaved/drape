@@ -15,7 +15,18 @@ import { StorageModule } from '@library/storage';
 
 import { GlobalProvidersModule } from '@api/bootstrap/global-providers';
 import { validateEnv } from '@api/config/env.validation';
+import { AuditModule } from '@api/modules/audit/audit.module';
+import { AuthModule } from '@api/modules/auth/auth.module';
+import { CatalogModule } from '@api/modules/catalog/catalog.module';
+import { CategoriesModule } from '@api/modules/categories/categories.module';
+import { ConsentsModule } from '@api/modules/consents/consents.module';
+import { FilesModule } from '@api/modules/files/files.module';
+import { GarmentImagesModule } from '@api/modules/garments/garment-images.module';
+import { GarmentsModule } from '@api/modules/garments/garments.module';
 import { HealthModule } from '@api/modules/health/health.module';
+import { InvitesModule } from '@api/modules/invites/invites.module';
+import { SettingsModule } from '@api/modules/settings/settings.module';
+import { UsersModule } from '@api/modules/users/users.module';
 
 /**
  * The composition root.
@@ -77,12 +88,23 @@ import { HealthModule } from '@api/modules/health/health.module';
     HealthModule,
 
     // --- feature modules (W1+) ---
-    // Append one line per module as it lands, in the §4.33 order:
-    // AuthModule, UsersModule, InvitesModule, SettingsModule, ConsentsModule,
-    // CategoriesModule, GarmentsModule, CatalogModule, PersonPhotosModule,
-    // TryOnModule, ResultsModule, ShortlistModule, ShareModule, EnquiriesModule,
-    // QuotaModule, ModerationModule, AnalyticsModule, AuditModule,
-    // NotificationsFeatureModule, RetentionModule, FilesModule.
+    // Listed in the §4.33 ownership order. AuthModule is first because it binds
+    // SESSION_RESOLVER, which the global SessionAuthGuard injects — without it
+    // the application refuses to boot rather than authorising anything.
+    AuthModule,
+    UsersModule,
+    InvitesModule,
+    SettingsModule,
+    ConsentsModule,
+    AuditModule,
+    CategoriesModule,
+    GarmentsModule,
+    GarmentImagesModule,
+    CatalogModule,
+    FilesModule,
+    // Still to land: PersonPhotosModule, TryOnModule, ResultsModule,
+    // ShortlistModule, ShareModule, EnquiriesModule, QuotaModule,
+    // ModerationModule, AnalyticsModule, RetentionModule.
     // --- end feature modules ---
   ],
 })

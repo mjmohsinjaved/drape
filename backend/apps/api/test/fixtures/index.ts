@@ -11,5 +11,6 @@
  * call. Neither opens a connection, reads a file or binds a port — there is no PostgreSQL on
  * the development machine, and a unit test must never need one (CLAUDE.md).
  */
+export * from './in-memory-data-source';
 export * from './in-memory-repository';
 export * from './testing-module';

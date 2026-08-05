@@ -1,4 +1,15 @@
 {
   "extends": "./tsconfig.json",
-  "exclude": ["node_modules", "dist", "coverage", "test", "**/test/**", "**/*spec.ts"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    "coverage",
+    "test",
+    "**/test/**",
+    "**/*spec.ts",
+    // Test doubles and factories live beside the code they exercise, but they
+    // reference jest globals and must never reach the production bundle.
+    "**/testing/**",
+    "**/*.fixtures.ts"
+  ]
 }

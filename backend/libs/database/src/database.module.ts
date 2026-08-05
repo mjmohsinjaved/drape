@@ -6,6 +6,33 @@ import { DatabaseConnectionService } from './database-connection.service';
 import { buildSharedDatabaseOptions } from './database.config';
 
 /**
+ * Reads one setting as the string `EnvReader` is documented to take.
+ *
+ * `ConfigModule.forRoot({ validate })` stores the **validated** object, not the raw
+ * strings: `validateEnv` coerces `DATABASE_POOL_MAX` to a `number` and `DATABASE_SSL`
+ * to a `boolean`, and `ConfigService.get` hands those back. Passing them straight
+ * into `buildSharedDatabaseOptions` — whose parsers are string parsers — made the
+ * factory throw `value.trim is not a function` before the pool was ever built, which
+ * is to say the API could not start at all. The API's environment and the TypeORM
+ * CLI's `process.env` must reach the shared builder in the same shape; this is the
+ * one place that knows both sides, so the normalisation belongs here.
+ */
+function readAsString(config: ConfigService, key: string): string | undefined {
+  const value = config.get<unknown>(key);
+
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
+    return value.toString();
+  }
+  // `undefined`, `null`, or something that is not a §7 scalar at all. Absent is the
+  // honest answer: `buildSharedDatabaseOptions` then applies its documented default,
+  // or throws for `DATABASE_URL`, which is what E-2 asks of a missing credential.
+  return undefined;
+}
+
+/**
  * The one place the API opens a database connection (B-3: the API is the only process with
  * database credentials).
  *
@@ -25,7 +52,7 @@ import { buildSharedDatabaseOptions } from './database.config';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (configService: ConfigService): TypeOrmModuleOptions => ({
-        ...buildSharedDatabaseOptions((key) => configService.get<string>(key)),
+        ...buildSharedDatabaseOptions((key) => readAsString(configService, key)),
 
         // Re-asserted after the spread so that no future edit to the shared builder — and no
         // environment variable, ever — can turn schema sync on. §0: "no exceptions".
