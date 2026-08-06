@@ -114,7 +114,27 @@ describe('HttpTryOnProvider', () => {
     expect(result.attempts).toBe(1);
   });
 
-  it('sends the key as a bearer header and the correlation id, and nothing else identifying', async () => {
+  /**
+   * The published contract, pinned.
+   *
+   * Every one of these was written from inference before the vendor's own page was read, and
+   * two of them were wrong — the path was `/try-on` and the key went out as
+   * `Authorization: Bearer`. Neither could fail a test, because `TRYON_DRIVER=mock` everywhere
+   * means the suite never exercises the real driver's shape. So the shape is asserted here.
+   */
+  it('posts to the documented endpoint with the documented multipart field names', async () => {
+    const provider = providerFor();
+    post.mockResolvedValue(respond(200, await pngBytes(), 'image/png'));
+
+    await provider.generate(request);
+
+    const [path, body] = post.mock.calls[0] as [string, FormData];
+    expect(path).toBe('/generate');
+    expect(body.has('garment_image')).toBe(true);
+    expect(body.has('person_image')).toBe(true);
+  });
+
+  it('sends the key in X-API-KEY and the correlation id, and nothing else identifying', async () => {
     const provider = providerFor();
     post.mockResolvedValue(respond(200, await pngBytes(), 'image/png'));
 
@@ -125,7 +145,9 @@ describe('HttpTryOnProvider', () => {
       unknown,
       { headers: Record<string, string> },
     ];
-    expect(config.headers.Authorization).toBe(`Bearer ${API_KEY}`);
+    // TryOnCloud reads `X-API-KEY`, not `Authorization: Bearer` — the key is sent whole.
+    expect(config.headers['X-API-KEY']).toBe(API_KEY);
+    expect(config.headers.Authorization).toBeUndefined();
     expect(config.headers['X-Correlation-Id']).toBe('job-0001');
     // A job id, never a user id, a photo id or a storage key (E-12).
     expect(JSON.stringify(config.headers)).not.toContain('person-photos/');

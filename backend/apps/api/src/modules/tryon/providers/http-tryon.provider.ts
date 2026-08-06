@@ -18,8 +18,20 @@ import {
 } from './tryon-provider.interface';
 import { runWithRetry } from './tryon-retry';
 
-/** The upstream path. Versioned by `TRYONCLOUD_BASE_URL`, not by this constant. */
-const GENERATE_PATH = '/try-on';
+/**
+ * The upstream path. Versioned by `TRYONCLOUD_BASE_URL`, not by this constant — the
+ * documented base is `https://www.tryoncloud.com/api/v1`, so this is `/generate` under it.
+ */
+const GENERATE_PATH = '/generate';
+
+/**
+ * The auth header TryOnCloud actually reads.
+ *
+ * It is `X-API-KEY`, not `Authorization: Bearer` — keys carry a `tk_dev_v1_` prefix and are
+ * sent whole. This was written as a bearer token before the published contract was checked,
+ * which would have failed every real call while the mock driver kept the suite green.
+ */
+const API_KEY_HEADER = 'X-API-KEY';
 
 /** Multipart field names TryOnCloud expects. */
 const GARMENT_FIELD = 'garment_image';
@@ -196,7 +208,7 @@ export class HttpTryOnProvider implements TryOnProvider {
     try {
       response = await this.client.post<ArrayBuffer>(GENERATE_PATH, form, {
         headers: {
-          Authorization: `Bearer ${this.config.readApiKey() ?? ''}`,
+          [API_KEY_HEADER]: this.config.readApiKey() ?? '',
           'X-Api-Version': this.config.apiVersion,
           'X-Correlation-Id': request.correlationId,
           // axios advertises `gzip, deflate, br` whatever `decompress` says, so without
