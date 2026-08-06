@@ -22,6 +22,7 @@ import {
 
 
 import { accountMenuNav } from '@/components/layout/nav-items';
+import { LinkPending } from '@/components/navigation/LinkPending';
 import { useLogout } from '@/features/auth/hooks/use-auth-mutations';
 import { routes } from '@/lib/routes';
 
@@ -97,9 +98,18 @@ export function UserMenu({ locale, name, email, initials, extraItems }: UserMenu
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
 
+        {/*
+          A menu closes the moment an item is picked, so without an indicator the account menu's
+          only response to a tap is to vanish — which reads as the tap having missed. `end-1`
+          places the spinner in the row's trailing gutter, absolutely, so no row changes height
+          and the menu does not resize under the pointer while it is being used.
+        */}
         {extraItems?.map((item) => (
           <DropdownMenuItem key={item.key} asChild>
-            <Link href={item.href}>{item.label}</Link>
+            <Link href={item.href} className="relative pending-dim">
+              {item.label}
+              <LinkPending size="xs" placement="corner" />
+            </Link>
           </DropdownMenuItem>
         ))}
         {extraItems && extraItems.length > 0 && <DropdownMenuSeparator />}
@@ -108,9 +118,10 @@ export function UserMenu({ locale, name, email, initials, extraItems }: UserMenu
           const Icon = item.icon;
           return (
             <DropdownMenuItem key={item.key} asChild>
-              <Link href={item.href(locale)}>
+              <Link href={item.href(locale)} className="relative pending-dim">
                 <Icon aria-hidden="true" className="size-4" />
                 {t(`nav.${item.labelKey}`)}
+                <LinkPending size="xs" placement="corner" />
               </Link>
             </DropdownMenuItem>
           );

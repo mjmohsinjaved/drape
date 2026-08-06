@@ -1,6 +1,8 @@
 import { PageSkeleton } from '@/components/states';
 
-/** Aspect-matched skeleton, not a bare spinner (D-5, D-8). */
+/**
+ * D-5, D-8. The team table under the console page header.
+ */
 export default function AdminTeamLoading() {
-  return <PageSkeleton variant="table" />;
+  return <PageSkeleton variant="table" lead="header" />;
 }

@@ -1,6 +1,8 @@
 import { PageSkeleton } from '@/components/states';
 
-/** Aspect-matched skeleton, not a bare spinner (D-5, D-8). */
+/**
+ * D-5, D-8. The same grid as `/browse`, under the category heading.
+ */
 export default function PublicBrowseCategorySlugLoading() {
-  return <PageSkeleton variant="grid" />;
+  return <PageSkeleton variant="grid" lead="header" />;
 }

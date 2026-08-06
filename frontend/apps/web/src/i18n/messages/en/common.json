@@ -2,6 +2,7 @@
   "appName": "Drape",
   "tagline": "Try pieces on to shortlist them before you visit the studio.",
   "loading": "Loading",
+  "navigating": "Loading the next page",
   "skipToContent": "Skip to content",
   "actions": {
     "retry": "Try again",

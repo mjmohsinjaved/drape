@@ -6,6 +6,7 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Button, Card, CardContent, DirectionalIcon, EmptyState, ErrorState } from '@repo/ui';
 
 import { PublicShell } from '@/components/layout/PublicShell';
+import { LinkPending } from '@/components/navigation/LinkPending';
 import {
   getCatalogGarments,
   getPublicCategories,
@@ -134,12 +135,19 @@ async function CategoryRail({ locale }: { locale: Locale }) {
           <Link
             key={category.id}
             href={routes.browseCategory(locale, category.slug)}
-            className="focus-ring touch-target flex items-center justify-between gap-4 rounded-lg px-3 py-3 transition-colors hover:bg-surface-raised"
+            className="focus-ring touch-target pending-dim relative flex items-center justify-between gap-4 rounded-lg px-3 py-3 transition-colors hover:bg-surface-raised"
           >
             <span className="text-base">{categoryName(category, locale)}</span>
             <DirectionalIcon>
               <ArrowRight aria-hidden="true" className="size-4 text-ink-subtle" />
             </DirectionalIcon>
+            {/*
+              The rail is the first thing most visitors touch, and a category page is a fresh
+              server fetch — the longest wait on the landing screen. The indicator is a client
+              island inside an otherwise server-rendered row; nothing else about the rail moves
+              to the client.
+            */}
+            <LinkPending size="xs" placement="corner" />
           </Link>
         ))}
       </CardContent>

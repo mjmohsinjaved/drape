@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { NextIntlClientProvider } from 'next-intl';
 import { setRequestLocale } from 'next-intl/server';
 
+import { NavigationProgressBar } from '@/components/navigation/NavigationProgressBar';
 import { isLocale, locales, timeZone ,type  Locale } from '@/i18n/config';
 import { loadClientMessages } from '@/i18n/messages';
 
@@ -47,6 +48,13 @@ export default async function LocaleLayout({ children, params }: LocaleLayoutPro
 
   return (
     <NextIntlClientProvider locale={locale} messages={messages} timeZone={timeZone}>
+      {/*
+        The route-transition bar (D-8, D-11, D-20). It lives here rather than in the root layout
+        because its label is translated and `NextIntlClientProvider` starts at this segment; the
+        counter it reads from is above it, in `AppProviders`. It is a fixed overlay, so mounting
+        it before `children` costs no layout and covers both shells.
+      */}
+      <NavigationProgressBar />
       {children}
     </NextIntlClientProvider>
   );

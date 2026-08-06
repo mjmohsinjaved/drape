@@ -1,6 +1,8 @@
 import { PageSkeleton } from '@/components/states';
 
-/** Aspect-matched skeleton, not a bare spinner (D-5, D-8). */
+/**
+ * D-5, D-8. A list of shared links under the screen heading.
+ */
 export default function ConsumerShareLoading() {
-  return <PageSkeleton variant="list" />;
+  return <PageSkeleton variant="list" lead="header" />;
 }

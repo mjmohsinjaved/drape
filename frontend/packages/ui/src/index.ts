@@ -123,6 +123,9 @@ export * from './components/skeleton';
  * Feedback
  * ================================================================== */
 export * from './components/toast';
+/* The route-transition bar and the per-link pending counter behind it (D-8, D-11, D-20).
+   Presentational and framework-free: the app supplies the `useLinkStatus()` reader. */
+export * from './components/navigation-progress';
 export * from './components/callout';
 export * from './components/confirm-dialog';
 export * from './components/stepper';

@@ -1,6 +1,6 @@
 'use client';
 
-import { useTransition } from 'react';
+import { useState, useTransition } from 'react';
 
 import { usePathname, useRouter } from 'next/navigation';
 
@@ -8,7 +8,15 @@ import { Check, Languages } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 
 import { useUiActions } from '@repo/store';
-import { Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@repo/ui';
+import {
+  Button,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  Spinner,
+  useReportNavigationPending,
+} from '@repo/ui';
 
 
 
@@ -41,9 +49,22 @@ export function LocaleSwitcher({ variant = 'full' }: LocaleSwitcherProps) {
   const router = useRouter();
   const { setLocale } = useUiActions();
   const [isPending, startTransition] = useTransition();
+  /*
+    Which language was picked, so the indicator sits on the row that was pressed rather than on
+    the control that opened the menu. This switch is a full document navigation — a swapped
+    `[locale]` segment plus a `router.refresh()` — and on mobile data it is one of the slowest
+    things in the app, which is exactly the case §9.1 is written against.
+  */
+  const [switchingTo, setSwitchingTo] = useState<Locale | null>(null);
+
+  // Not a `<Link>`, so there is no `useLinkStatus()` to read — but it is still a navigation, and
+  // the bar at the top of the viewport has to cover it or the slowest transition in the app is
+  // the one with no feedback.
+  useReportNavigationPending(isPending);
 
   function switchTo(next: Locale) {
     if (next === active) return;
+    setSwitchingTo(next);
     setLocale(apiLocale[next]);
     // `[locale]` is a root segment, so the swap is a single replacement at the front.
     const nextPath = pathname.replace(/^\/[a-z]{2}(?=\/|$)/, `/${next}`);
@@ -78,20 +99,36 @@ export function LocaleSwitcher({ variant = 'full' }: LocaleSwitcherProps) {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        {locales.map((locale) => (
-          <DropdownMenuItem
-            key={locale}
-            onSelect={() => switchTo(locale)}
-            // The list itself is not translated: each label is in its own script.
-            lang={locale}
-          >
-            <Check
-              aria-hidden="true"
-              className={locale === active ? 'size-4' : 'size-4 opacity-0'}
-            />
-            {localeLabels[locale]}
-          </DropdownMenuItem>
-        ))}
+        {locales.map((locale) => {
+          // Derived, not stored: the moment the transition ends the row stops being pending, so
+          // there is no second piece of state to reset and nothing to leave stuck on screen.
+          const isSwitchingToThis = isPending && switchingTo === locale;
+
+          return (
+            <DropdownMenuItem
+              key={locale}
+              onSelect={() => switchTo(locale)}
+              // The list itself is not translated: each label is in its own script.
+              lang={locale}
+            >
+              {/*
+                The spinner takes the tick's slot rather than sitting beside it — same `size-4`
+                box, so the row does not change width and the label does not move. The
+                announcement is left to the one polite region `NavigationProgress` owns, so this
+                is decoration only (D-20).
+              */}
+              {isSwitchingToThis ? (
+                <Spinner size="xs" label={null} aria-hidden="true" className="size-4" />
+              ) : (
+                <Check
+                  aria-hidden="true"
+                  className={locale === active ? 'size-4' : 'size-4 opacity-0'}
+                />
+              )}
+              {localeLabels[locale]}
+            </DropdownMenuItem>
+          );
+        })}
       </DropdownMenuContent>
     </DropdownMenu>
   );

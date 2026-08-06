@@ -1,6 +1,8 @@
 import { PageSkeleton } from '@/components/states';
 
-/** Aspect-matched skeleton, not a bare spinner (D-5, D-8). */
+/**
+ * D-5, D-8. Header, then the sign-in and security panels.
+ */
 export default function AccountSecurityLoading() {
-  return <PageSkeleton variant="form" />;
+  return <PageSkeleton variant="form" lead="header" />;
 }

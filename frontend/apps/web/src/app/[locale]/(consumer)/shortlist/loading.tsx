@@ -1,6 +1,8 @@
 import { PageSkeleton } from '@/components/states';
 
-/** Aspect-matched skeleton, not a bare spinner (D-5, D-8). */
+/**
+ * D-5, D-8. Ranked rows with `w-20` `aspect-card` thumbnails, under the screen heading.
+ */
 export default function ConsumerShortlistLoading() {
-  return <PageSkeleton variant="list" />;
+  return <PageSkeleton variant="list" lead="header" />;
 }

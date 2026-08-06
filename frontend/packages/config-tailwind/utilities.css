@@ -179,3 +179,59 @@
     background-position: 200% 0;
   }
 }
+
+/* ---------------------------------------------------------------- *
+ * Navigation progress (D-8, D-11, §6.7)
+ *
+ * The fill of the app-wide route-transition bar. It grows with
+ * `inline-size` from the container's reading-start edge — a block child
+ * with a percentage inline-size is placed at the inline start, so the bar
+ * fills left-to-right in `en` and right-to-left in `ur` with no mirrored
+ * transform and no [dir='rtl'] selector.
+ *
+ * The curve decelerates and stops short of 100%: a route transition has no
+ * knowable duration, so the bar must never claim to be finished while it is
+ * still waiting. Completion is a fade-out, not a snap to full.
+ *
+ * Under prefers-reduced-motion globals.css clamps the duration to 1ms, so
+ * this settles instantly on the final frame — a static bar, no sliding.
+ * `NavigationProgress` also branches on the preference in JS, so the two
+ * agree rather than one repairing the other.
+ * ---------------------------------------------------------------- */
+@utility nav-progress-fill {
+  animation: drape-nav-progress 10s var(--ease-out) forwards;
+}
+
+@keyframes drape-nav-progress {
+  0% {
+    inline-size: 0%;
+  }
+  12% {
+    inline-size: 32%;
+  }
+  35% {
+    inline-size: 58%;
+  }
+  70% {
+    inline-size: 78%;
+  }
+  100% {
+    inline-size: 92%;
+  }
+}
+
+/* ---------------------------------------------------------------- *
+ * Pending navigation (D-13)
+ *
+ * A control whose own navigation is in flight dims while it waits, so the
+ * thing that was clicked answers as well as the top of the page. The state
+ * is published by the pending indicator *inside* the link — `useLinkStatus`
+ * can only be read from there — so the ancestor reads it with `:has()`
+ * rather than through a prop it has no way to receive.
+ * ---------------------------------------------------------------- */
+@utility pending-dim {
+  &:has([data-nav-pending]) {
+    opacity: 0.65;
+    cursor: progress;
+  }
+}

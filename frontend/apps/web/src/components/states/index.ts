@@ -2,7 +2,13 @@
  * The D-5 state shells, in one import. Every screen in `apps/web` reaches its states from
  * here so no screen invents its own wording or its own layout for them.
  */
-export { PageSkeleton, type PageSkeletonProps, type SkeletonVariant } from './Skeletons';
+export {
+  AuthPageSkeleton,
+  PageSkeleton,
+  type PageSkeletonProps,
+  type SkeletonLead,
+  type SkeletonVariant,
+} from './Skeletons';
 export { RouteError, type RouteErrorViewProps } from './RouteError';
 export { ScreenError, type ScreenErrorProps } from './ScreenError';
 export { PartialDataNotice, type PartialDataNoticeProps } from './PartialDataNotice';

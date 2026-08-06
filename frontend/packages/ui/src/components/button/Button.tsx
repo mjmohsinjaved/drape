@@ -6,6 +6,7 @@ import { Slot } from '@radix-ui/react-slot';
 import { cva, type VariantProps } from 'class-variance-authority';
 
 import { cn } from '../../lib/cn';
+import { useNavigationPending } from '../navigation-progress/NavigationPendingProvider';
 import { Spinner } from '../spinner/Spinner';
 
 /**
@@ -23,6 +24,9 @@ export const buttonVariants = cva(
     'select-none',
     'transition-[background-color,border-color,color,box-shadow,translate] duration-fast ease-out',
     'focus-visible:outline-none focus-visible:shadow-[var(--shadow-focus)]',
+    // A button that is a link dims while its own navigation is in flight. The state comes from
+    // the indicator slotted inside the anchor, because `useLinkStatus()` is only readable there.
+    'pending-dim',
     'disabled:pointer-events-none disabled:opacity-50 disabled:cursor-not-allowed',
     'aria-disabled:pointer-events-none aria-disabled:opacity-50',
     // Icons inherit the label's colour and never grow with it.
@@ -105,6 +109,42 @@ export interface ButtonProps
   endIcon?: React.ReactNode;
 }
 
+/**
+ * Put the app's pending indicator *inside* an `asChild` button's own element.
+ *
+ * `<Button asChild><Link/></Button>` is how every navigating call-to-action in this app is
+ * written — around ninety of them. None of them can pass `loading`, because whether the
+ * navigation is in flight is only knowable from `useLinkStatus()`, which reads a context that
+ * `<Link>` publishes *around its own children*. The Button sits outside that context; only the
+ * link's children are inside it.
+ *
+ * So the child element is cloned with one extra child at the front — exactly where the
+ * non-`asChild` branch puts its spinner, so a link-button and a real button show the same
+ * treatment in the same place. The indicator renders `null` unless its enclosing link is
+ * pending, which is also what happens when it is slotted onto something that is not a link at
+ * all (`useLinkStatus()` outside a `<Link>` reports idle rather than throwing).
+ *
+ * Guards, in order: no provider (the design system used standalone), a non-element child, and a
+ * child that takes no children — cloning children into a void element throws.
+ */
+function withPendingIndicator(
+  children: React.ReactNode,
+  LinkPending: React.ComponentType | null,
+): React.ReactNode {
+  if (LinkPending === null) return children;
+  if (!React.isValidElement<{ children?: React.ReactNode }>(children)) return children;
+  if (children.props.children === undefined) return children;
+
+  return React.cloneElement(
+    children,
+    undefined,
+    <>
+      <LinkPending />
+      {children.props.children}
+    </>,
+  );
+}
+
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function Button(
   {
     className,
@@ -124,6 +164,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function 
   ref,
 ) {
   const Component = asChild ? Slot : 'button';
+  const { LinkPending } = useNavigationPending();
 
   return (
     <Component
@@ -139,7 +180,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function 
       {/* Slot accepts exactly one child, so an `asChild` button composes its own
           content — the caller owns the icons in that case. */}
       {asChild ? (
-        children
+        withPendingIndicator(children, LinkPending)
       ) : (
         <>
           {loading ? <Spinner size="sm" label={loadingLabel} /> : startIcon}

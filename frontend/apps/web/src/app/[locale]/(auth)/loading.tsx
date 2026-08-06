@@ -1,6 +1,12 @@
-import { PageSkeleton } from '@/components/states';
+import { AuthPageSkeleton } from '@/components/states';
 
-/** Group-level fallback, shown while the shell above a leaf segment resolves (D-5, D-8). */
+/**
+ * D-5, D-8. Group-level fallback, shown while the shell above a leaf segment resolves.
+ *
+ * `(auth)/layout.tsx` supplies no chrome — each page renders `AuthShell` itself — so this
+ * fallback reproduces the centred card, header height and gutters. A bare page skeleton here
+ * painted edge to edge and the real form then snapped into a 448 px card below a 64 px header.
+ */
 export default function AuthGroupLoading() {
-  return <PageSkeleton variant="form" />;
+  return <AuthPageSkeleton fields={2} />;
 }

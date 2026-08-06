@@ -2,8 +2,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, type RenderResult } from '@testing-library/react';
 import { NextIntlClientProvider } from 'next-intl';
 
-import { ThemeProvider } from '@repo/ui';
+import { NavigationPendingProvider, ThemeProvider } from '@repo/ui';
 
+import { LinkPending } from '@/components/navigation/LinkPending';
 import { timeZone, type Locale } from '@/i18n/config';
 import { loadClientMessages, type ClientNamespaceGroup } from '@/i18n/messages';
 
@@ -38,10 +39,16 @@ export async function renderWithProviders(
   // reads or sets the theme cannot render without it. Leaving it out meant a component using
   // `useTheme()` was untestable through this harness — which is why the theme control had no
   // test while it was writing to a store nobody read.
+  // `NavigationPendingProvider` is here for the same reason `ThemeProvider` is: `AppProviders`
+  // has it at the app root and it is a genuine dependency, not decoration. `Button` asks it for
+  // the indicator to slot into an `asChild` link, so a call-to-action rendered without it is a
+  // call-to-action that behaves differently in the test than it does in the app.
   const wrap = (node: ReactNode): ReactElement => (
     <NextIntlClientProvider locale={locale} messages={messages} timeZone={timeZone}>
       <ThemeProvider>
-        <QueryClientProvider client={queryClient}>{node}</QueryClientProvider>
+        <NavigationPendingProvider linkPending={LinkPending}>
+          <QueryClientProvider client={queryClient}>{node}</QueryClientProvider>
+        </NavigationPendingProvider>
       </ThemeProvider>
     </NextIntlClientProvider>
   );

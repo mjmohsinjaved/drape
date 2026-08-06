@@ -6,5 +6,5 @@ import { PageSkeleton } from '@/components/states';
  * grid skeleton here would reflow the whole page the moment the real rows arrived.
  */
 export default function ConsumerRendersLoading() {
-  return <PageSkeleton variant="list" count={6} />;
+  return <PageSkeleton variant="list" lead="header" count={6} />;
 }

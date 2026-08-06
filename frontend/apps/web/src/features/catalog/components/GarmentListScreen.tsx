@@ -35,6 +35,7 @@ import {
 } from '@repo/ui';
 import { formatCurrency, formatRelative } from '@repo/utils';
 
+import { LinkPending } from '@/components/navigation/LinkPending';
 import { SignedOutState } from '@/components/states';
 import { AdminPage, AdminPageHeader } from '@/features/catalog/components/AdminPage';
 import { BulkActionBar, type BulkOperation } from '@/features/catalog/components/BulkActionBar';
@@ -590,11 +591,18 @@ export function GarmentListScreen({
               */}
               <TableCell>
                 <div className="flex flex-col">
+                  {/*
+                    A row link in a dense console list: the admin opens dozens of these in a
+                    sitting, and repeated clicks on an unresponsive row are how duplicate work
+                    gets started. The spinner is placed absolutely so no row changes height and
+                    the table does not reflow mid-scan (D-8).
+                  */}
                   <Link
                     href={routes.admin.garment(locale, garment.id)}
-                    className="font-medium text-ink hover:text-brand"
+                    className="pending-dim relative font-medium text-ink hover:text-brand"
                   >
                     {garment.title}
+                    <LinkPending size="xs" placement="corner" />
                   </Link>
                   <code className="text-2xs text-ink-subtle">{garment.sku}</code>
                   {garment.flaggedForReview ? (
