@@ -65,14 +65,33 @@ export const DropdownMenuItem = React.forwardRef<
   React.ComponentRef<typeof DropdownMenuPrimitive.Item>,
   DropdownMenuItemProps
 >(function DropdownMenuItem({ className, destructive, shortcut, children, ...props }, ref) {
+  // `asChild` turns the Item into a Radix `Slot`, and a Slot accepts exactly one
+  // child: it takes the branch `React.Children.count(children) === 1`, and a JSX
+  // body of `{children}{expr}` is always counted as two — even when `expr` is
+  // `null`, because `Children.count` counts empty slots. Injecting the shortcut
+  // wrapper unconditionally therefore made every `<DropdownMenuItem asChild>`
+  // throw "failed to slot onto its children" at render.
+  //
+  // So when the caller owns the element, hand the child through untouched. A
+  // shortcut has nowhere to go in that case anyway — the caller's own element is
+  // what renders — so it is dropped deliberately rather than silently breaking
+  // the item.
+  const asChild = props.asChild === true;
+
   return (
     <DropdownMenuPrimitive.Item
       ref={ref}
       className={cn(itemBase, destructive && 'text-danger focus:bg-danger-tint', className)}
       {...props}
     >
-      {children}
-      {shortcut ? <span className="ms-auto ps-4">{shortcut}</span> : null}
+      {asChild ? (
+        children
+      ) : (
+        <>
+          {children}
+          {shortcut ? <span className="ms-auto ps-4">{shortcut}</span> : null}
+        </>
+      )}
     </DropdownMenuPrimitive.Item>
   );
 });

@@ -3,8 +3,14 @@
 import { Check, Monitor, Moon, Sun } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
-import { useUiStore } from '@repo/store';
-import { Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@repo/ui';
+import {
+  Button,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  useTheme,
+} from '@repo/ui';
 
 const MODES = ['light', 'dark', 'system'] as const;
 
@@ -16,12 +22,16 @@ const ICONS = { light: Sun, dark: Moon, system: Monitor } as const;
  * Light ("Daylight") / dark ("Lamplight") / follow the system.
  *
  * Dark mode is opt-in via `class="dark"` on `<html>`, resolved from `prefers-color-scheme`
- * plus the stored preference (§6.1). The store owns the preference; this control only sets it.
+ * plus the stored preference (§6.1).
+ *
+ * The preference belongs to `ThemeProvider`, and only to it: the provider owns the class on
+ * `<html>`, the `localStorage` key and the `ThemeScript` that applies both before first paint.
+ * This control used to write a *second* copy into the ui store, which nothing applied — so
+ * picking "Daylight" swapped this button's icon and changed nothing else on the page.
  */
 export function ThemeToggle() {
   const t = useTranslations('common.theme');
-  const mode = useUiStore((state) => state.themeMode);
-  const setThemeMode = useUiStore((state) => state.setThemeMode);
+  const { mode, setMode } = useTheme();
 
   const ActiveIcon = ICONS[mode as ThemeMode] ?? Monitor;
 
@@ -36,7 +46,7 @@ export function ThemeToggle() {
         {MODES.map((option) => {
           const Icon = ICONS[option];
           return (
-            <DropdownMenuItem key={option} onSelect={() => setThemeMode(option)}>
+            <DropdownMenuItem key={option} onSelect={() => setMode(option)}>
               <Icon aria-hidden="true" className="size-4" />
               {t(option)}
               <Check

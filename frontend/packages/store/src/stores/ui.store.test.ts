@@ -12,7 +12,6 @@ import {
   selectIsModalOpen,
   selectLocale,
   selectSidebarCollapsed,
-  selectThemeMode,
   useUiStore,
 } from './ui.store';
 
@@ -26,7 +25,6 @@ describe('useUiStore — actions', () => {
   });
 
   it('starts on the documented defaults', () => {
-    expect(state().themeMode).toBe('system');
     expect(state().sidebarCollapsed).toBe(false);
     expect(state().adminDensity).toBe('comfortable');
     expect(state().activeModal).toBeNull();
@@ -35,8 +33,6 @@ describe('useUiStore — actions', () => {
   });
 
   it('sets the theme mode', () => {
-    state().setThemeMode('dark');
-    expect(state().themeMode).toBe('dark');
   });
 
   it('toggles and sets the sidebar independently', () => {
@@ -87,12 +83,9 @@ describe('useUiStore — actions', () => {
   });
 
   it('reset restores every field', () => {
-    state().setThemeMode('dark');
     state().setLocale('UR');
     state().openModal('x');
     state().reset();
-
-    expect(state().themeMode).toBe('system');
     expect(state().locale).toBe('EN');
     expect(state().activeModal).toBeNull();
   });
@@ -101,7 +94,6 @@ describe('useUiStore — actions', () => {
 describe('useUiStore — selectors', () => {
   const sample: UiState = {
     ...state(),
-    themeMode: 'dark',
     sidebarCollapsed: true,
     adminDensity: 'compact',
     activeModal: { id: 'delete-garment' },
@@ -110,7 +102,6 @@ describe('useUiStore — selectors', () => {
   };
 
   it('reads each field in isolation', () => {
-    expect(selectThemeMode(sample)).toBe('dark');
     expect(selectSidebarCollapsed(sample)).toBe(true);
     expect(selectAdminDensity(sample)).toBe('compact');
     expect(selectActiveModal(sample)).toEqual({ id: 'delete-garment' });
@@ -131,13 +122,13 @@ describe('ui persistence — key, version and migration', () => {
   });
 
   it('migrates a well-formed payload untouched', () => {
-    const persisted = { themeMode: 'dark', sidebarCollapsed: true, adminDensity: 'compact' };
+    const persisted = { sidebarCollapsed: true, adminDensity: 'compact' };
 
     expect(migrateUiState(persisted, UI_PERSIST_VERSION)).toEqual(persisted);
   });
 
   it('falls back to defaults for a payload that is not an object', () => {
-    const defaults = { themeMode: 'system', sidebarCollapsed: false, adminDensity: 'comfortable' };
+    const defaults = { sidebarCollapsed: false, adminDensity: 'comfortable' };
 
     expect(migrateUiState(null, 0)).toEqual(defaults);
     expect(migrateUiState('corrupt', 0)).toEqual(defaults);
@@ -146,22 +137,20 @@ describe('ui persistence — key, version and migration', () => {
 
   it('repairs individual invalid fields rather than dropping the whole payload', () => {
     const result = migrateUiState(
-      { themeMode: 'neon', sidebarCollapsed: 'yes', adminDensity: 'compact' },
+      { sidebarCollapsed: 'yes', adminDensity: 'compact' },
       0,
     );
 
     expect(result).toEqual({
-      themeMode: 'system',
       sidebarCollapsed: false,
       adminDensity: 'compact',
     });
   });
 
   it('discards a payload written by a newer version than this build understands', () => {
-    const fromTheFuture = { themeMode: 'dark', sidebarCollapsed: true, adminDensity: 'compact' };
+    const fromTheFuture = { sidebarCollapsed: true, adminDensity: 'compact' };
 
     expect(migrateUiState(fromTheFuture, UI_PERSIST_VERSION + 1)).toEqual({
-      themeMode: 'system',
       sidebarCollapsed: false,
       adminDensity: 'comfortable',
     });
@@ -169,7 +158,7 @@ describe('ui persistence — key, version and migration', () => {
 
   it('never persists the locale — the NEXT_LOCALE cookie owns it', () => {
     const persisted = migrateUiState(
-      { themeMode: 'dark', sidebarCollapsed: false, adminDensity: 'comfortable', locale: 'UR' },
+      { sidebarCollapsed: false, adminDensity: 'comfortable', locale: 'UR' },
       UI_PERSIST_VERSION,
     );
 

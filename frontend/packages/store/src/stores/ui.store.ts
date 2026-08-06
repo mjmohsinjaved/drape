@@ -40,14 +40,12 @@ export interface ActiveModal {
 }
 
 export interface UiState {
-  themeMode: ThemeMode;
   sidebarCollapsed: boolean;
   adminDensity: AdminDensity;
   activeModal: ActiveModal | null;
   commandPaletteOpen: boolean;
   locale: Locale;
 
-  setThemeMode: (mode: ThemeMode) => void;
   toggleSidebar: () => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
   setAdminDensity: (density: AdminDensity) => void;
@@ -65,7 +63,6 @@ export interface UiState {
 const DEFAULT_LOCALE: Locale = 'EN';
 
 const initialState = {
-  themeMode: 'system',
   sidebarCollapsed: false,
   adminDensity: 'comfortable',
   activeModal: null,
@@ -73,7 +70,6 @@ const initialState = {
   locale: DEFAULT_LOCALE,
 } satisfies Omit<
   UiState,
-  | 'setThemeMode'
   | 'toggleSidebar'
   | 'setSidebarCollapsed'
   | 'setAdminDensity'
@@ -84,23 +80,27 @@ const initialState = {
   | 'reset'
 >;
 
-/** Exactly what lands in `localStorage`. Everything else is transient or server-owned. */
+/**
+ * Exactly what lands in `localStorage`. Everything else is transient or server-owned.
+ *
+ * **The theme is deliberately not here.** `ThemeProvider` in `@repo/ui` owns it: it holds the
+ * mode, writes its own `localStorage` key, toggles the `dark` class on `<html>`, and ships the
+ * inline `ThemeScript` that applies it before first paint. A second copy in this store had no
+ * one applying it, so the theme control changed its own icon and nothing else.
+ */
 export interface PersistedUiState {
-  themeMode: ThemeMode;
   sidebarCollapsed: boolean;
   adminDensity: AdminDensity;
 }
 
 /** Bump on any change to {@link PersistedUiState}, and extend `migrateUiState` in the same commit. */
-export const UI_PERSIST_VERSION = 1;
+export const UI_PERSIST_VERSION = 2;
 
 const PERSISTED_DEFAULTS: PersistedUiState = {
-  themeMode: initialState.themeMode,
   sidebarCollapsed: initialState.sidebarCollapsed,
   adminDensity: initialState.adminDensity,
 };
 
-const THEME_MODES: readonly ThemeMode[] = ['light', 'dark', 'system'];
 const ADMIN_DENSITIES: readonly AdminDensity[] = ['comfortable', 'compact'];
 
 /**
@@ -109,6 +109,10 @@ const ADMIN_DENSITIES: readonly AdminDensity[] = ['comfortable', 'compact'];
  * Version 0 is anything written before this store was versioned. Rather than trusting its shape,
  * each field is validated individually and falls back to its default — a preference is not worth a
  * crash, and a hand-edited `localStorage` entry must not be able to poison the store.
+ *
+ * Version 1 payloads carry a `themeMode` this store no longer owns. It is simply not read: the
+ * key is dropped on the next write, and `ThemeProvider` has been reading its own key the whole
+ * time, so nobody's theme changes under them.
  */
 export function migrateUiState(persisted: unknown, fromVersion: number): PersistedUiState {
   if (typeof persisted !== 'object' || persisted === null) return { ...PERSISTED_DEFAULTS };
@@ -117,7 +121,6 @@ export function migrateUiState(persisted: unknown, fromVersion: number): Persist
   // can edit it by hand.
   const candidate = persisted as Record<string, unknown>;
 
-  const themeMode = THEME_MODES.find((mode) => mode === candidate.themeMode) ?? PERSISTED_DEFAULTS.themeMode;
 
   const adminDensity =
     ADMIN_DENSITIES.find((density) => density === candidate.adminDensity) ??
@@ -131,7 +134,7 @@ export function migrateUiState(persisted: unknown, fromVersion: number): Persist
   // Future versions branch here. `fromVersion` is read so the parameter is never silently unused.
   return fromVersion > UI_PERSIST_VERSION
     ? { ...PERSISTED_DEFAULTS }
-    : { themeMode, sidebarCollapsed, adminDensity };
+    : { sidebarCollapsed, adminDensity };
 }
 
 export const useUiStore = create<UiState>()(
@@ -140,7 +143,6 @@ export const useUiStore = create<UiState>()(
       (set) => ({
         ...initialState,
 
-        setThemeMode: (themeMode) => set({ themeMode }, false, 'ui/setThemeMode'),
 
         toggleSidebar: () =>
           set(
@@ -170,7 +172,6 @@ export const useUiStore = create<UiState>()(
         version: UI_PERSIST_VERSION,
         storage: localJsonStorage<PersistedUiState>(),
         partialize: (state) => ({
-          themeMode: state.themeMode,
           sidebarCollapsed: state.sidebarCollapsed,
           adminDensity: state.adminDensity,
         }),
@@ -183,7 +184,6 @@ export const useUiStore = create<UiState>()(
 
 /* ------------------------------------------------------------------- selectors */
 
-export const selectThemeMode = (state: UiState): ThemeMode => state.themeMode;
 export const selectSidebarCollapsed = (state: UiState): boolean => state.sidebarCollapsed;
 export const selectAdminDensity = (state: UiState): AdminDensity => state.adminDensity;
 export const selectActiveModal = (state: UiState): ActiveModal | null => state.activeModal;
@@ -196,7 +196,6 @@ export const selectIsModalOpen =
   (state: UiState): boolean =>
     state.activeModal?.id === id;
 
-export const useThemeMode = (): ThemeMode => useUiStore(selectThemeMode);
 export const useSidebarCollapsed = (): boolean => useUiStore(selectSidebarCollapsed);
 export const useAdminDensity = (): AdminDensity => useUiStore(selectAdminDensity);
 export const useActiveModal = (): ActiveModal | null => useUiStore(selectActiveModal);
@@ -206,7 +205,6 @@ export const useLocale = (): Locale => useUiStore(selectLocale);
 
 export const useUiActions = (): Pick<
   UiState,
-  | 'setThemeMode'
   | 'toggleSidebar'
   | 'setSidebarCollapsed'
   | 'setAdminDensity'
@@ -217,7 +215,6 @@ export const useUiActions = (): Pick<
 > =>
   useUiStore(
     useShallow((state) => ({
-      setThemeMode: state.setThemeMode,
       toggleSidebar: state.toggleSidebar,
       setSidebarCollapsed: state.setSidebarCollapsed,
       setAdminDensity: state.setAdminDensity,

@@ -2,6 +2,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, type RenderResult } from '@testing-library/react';
 import { NextIntlClientProvider } from 'next-intl';
 
+import { ThemeProvider } from '@repo/ui';
+
 import { timeZone, type Locale } from '@/i18n/config';
 import { loadClientMessages, type ClientNamespaceGroup } from '@/i18n/messages';
 
@@ -31,9 +33,16 @@ export async function renderWithProviders(
     },
   });
 
+  // `ThemeProvider` is here because `AppProviders` has it at the app root, and it is a genuine
+  // dependency rather than decoration: it owns the `dark` class on `<html>`, so any island that
+  // reads or sets the theme cannot render without it. Leaving it out meant a component using
+  // `useTheme()` was untestable through this harness — which is why the theme control had no
+  // test while it was writing to a store nobody read.
   const wrap = (node: ReactNode): ReactElement => (
     <NextIntlClientProvider locale={locale} messages={messages} timeZone={timeZone}>
-      <QueryClientProvider client={queryClient}>{node}</QueryClientProvider>
+      <ThemeProvider>
+        <QueryClientProvider client={queryClient}>{node}</QueryClientProvider>
+      </ThemeProvider>
     </NextIntlClientProvider>
   );
 
