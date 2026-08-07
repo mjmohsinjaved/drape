@@ -6,7 +6,6 @@ import {
   ConflictException,
   ErrorCode,
   ForbiddenException,
-  isAdmin,
   Locale,
   NotFoundException,
   UserStatus,
@@ -16,13 +15,7 @@ import {
 import { NotificationsService, TemplateId } from '@library/notifications';
 import type { SendResult } from '@library/notifications';
 
-import {
-  AUTH_CONFIG,
-  AUTH_ROUTES,
-  REVOKE_REASONS,
-  TWOFA_MAX_CHALLENGE_ATTEMPTS,
-  USER_DIRECTORY,
-} from '../auth.constants';
+import { AUTH_CONFIG, AUTH_ROUTES, REVOKE_REASONS, USER_DIRECTORY } from '../auth.constants';
 import { AUTH_EVENTS } from '../auth.events';
 import { AuthOutcome } from '../enums/auth-outcome.enum';
 import { VerificationPurpose } from '../enums/verification-purpose.enum';
@@ -31,7 +24,6 @@ import { toAuthUserDto, toNotificationLocale, toSessionSummaryDto } from '../map
 import { AuthAttemptService } from './auth-attempt.service';
 import { PasswordService } from './password.service';
 import { SessionService, type IssuedSession } from './session.service';
-import { TotpService } from './totp.service';
 import { VerificationTokenService } from './verification-token.service';
 
 import type { AuthConfig } from '../config/auth.config';
@@ -40,13 +32,9 @@ import type {
   AuthUserDto,
   LoginResponseDto,
   SessionSummaryDto,
-  TwoFactorEnabledDto,
-  TwoFactorSetupDto,
 } from '../dto/auth-response.dto';
 import type { ChangePasswordDto } from '../dto/password.dto';
 import type { SignupDto } from '../dto/signup.dto';
-import type { DisableTwoFactorDto } from '../dto/two-factor.dto';
-import type { Session } from '../entities/session.entity';
 import type { AuthUser, UserDirectory } from '../interfaces/user-directory.interface';
 
 /** Facts about the request, taken from Express — never from the body (S-3). */
@@ -79,7 +67,7 @@ const MINUTE_MS = 60_000;
 const HOUR_MS = 60 * MINUTE_MS;
 
 /**
- * The `auth` feature service — ARCHITECTURE §5.1, PRD S-1 … S-8, C-2, C-3, C-7.
+ * The `auth` feature service — ARCHITECTURE §5.1, PRD S-1 … S-7, C-2, C-3, C-7.
  *
  * ### The three rules that shape this file
  *
@@ -90,9 +78,9 @@ const HOUR_MS = 60 * MINUTE_MS;
  * 2. **Nothing enumerates accounts (S-6).** Login and password reset return the same
  *    bytes for a known and an unknown address, and the absent-account branch runs a
  *    real Argon2 verification against a dummy hash so the timing matches too.
- * 3. **The session id rotates on every privilege change.** Login, 2FA completion and
- *    password change all mint a new row and retire the old one, and password change,
- *    deactivation and suspension revoke every other session (A-2, A-19).
+ * 3. **The session id rotates on every privilege change.** Login and password change
+ *    both mint a new row and retire the old one, and password change, deactivation
+ *    and suspension revoke every other session (A-2, A-19).
  *
  * No method here logs a password, a token or an OTP (E-12). Audit rows are written
  * by the `audit` module's `@OnEvent` listener from the events emitted here, never
@@ -107,7 +95,6 @@ export class AuthService {
     @Inject(USER_DIRECTORY) private readonly users: UserDirectory,
     private readonly passwordService: PasswordService,
     private readonly sessionService: SessionService,
-    private readonly totpService: TotpService,
     private readonly tokens: VerificationTokenService,
     private readonly attempts: AuthAttemptService,
     private readonly notifications: NotificationsService,
@@ -191,7 +178,6 @@ export class AuthService {
       user,
       ip: facts.ip,
       userAgent: facts.userAgent,
-      twofaPending: false,
       now,
     });
 
@@ -199,7 +185,7 @@ export class AuthService {
   }
 
   /* ---------------------------------------------------------------------- */
-  /* Login (S-1, S-6, S-7, S-8)                                              */
+  /* Login (S-1, S-6, S-7)                                                   */
   /* ---------------------------------------------------------------------- */
 
   /**
@@ -253,13 +239,10 @@ export class AuthService {
     // is the durable fact, and it is the one worth checking.
     this.assertNotBeingDeleted(user);
 
-    const twofaRequired = user.twofaEnabledAt !== null;
-
     const issued = await this.sessionService.issue({
       user,
       ip: facts.ip,
       userAgent: facts.userAgent,
-      twofaPending: twofaRequired,
       now,
     });
 
@@ -279,16 +262,6 @@ export class AuthService {
       route: AUTH_ROUTES.LOGIN,
     });
 
-    if (isAdmin(user.role) && !twofaRequired) {
-      // S-8 makes 2FA mandatory for admins. The session is still issued — an admin
-      // with no second factor yet (the E-4 seed, or an invite accepted moments ago)
-      // would otherwise have no way to enrol one — but it is **not** a fully
-      // authorised admin session: `SessionResolverService` refuses it with
-      // `TWOFA_REQUIRED` on every route outside `ADMIN_ENROLMENT_ROUTES`, so the
-      // enforcement is the API's, not the console's (S-3, S-11).
-      this.logger.warn(`admin ${user.id} signed in without a second factor enrolled (S-8)`);
-    }
-
     this.events.emit(AUTH_EVENTS.LOGGED_IN, {
       userId: user.id,
       role: user.role,
@@ -296,58 +269,9 @@ export class AuthService {
       userAgent: facts.userAgent,
       occurredAt: now,
       sessionId: issued.session.id,
-      twofaRequired,
     });
 
-    return {
-      // Nothing about the account is returned until the second factor is done.
-      body: { user: twofaRequired ? null : toAuthUserDto(user), twofaRequired },
-      issued,
-    };
-  }
-
-  /* ---------------------------------------------------------------------- */
-  /* Two-factor challenge (S-8)                                              */
-  /* ---------------------------------------------------------------------- */
-
-  /** Completes a `twofaPending` session with a TOTP code. */
-  async completeTwoFactorChallenge(
-    sessionToken: string | undefined,
-    code: string,
-    facts: RequestFacts,
-  ): Promise<AuthResult<LoginResponseDto>> {
-    const { session, user, now } = await this.loadPendingSession(sessionToken, facts);
-
-    if (!this.totpService.verifyEncrypted(user.twofaSecret, code)) {
-      await this.recordChallengeFailure(session, user, facts, now);
-      throw new AuthException(ErrorCode.TWOFA_INVALID);
-    }
-
-    return this.completePendingSession(session, user, facts, now);
-  }
-
-  /** Completes a `twofaPending` session with a single-use recovery code. */
-  async completeRecovery(
-    sessionToken: string | undefined,
-    recoveryCode: string,
-    facts: RequestFacts,
-  ): Promise<AuthResult<LoginResponseDto>> {
-    const { session, user, now } = await this.loadPendingSession(sessionToken, facts);
-
-    const stored = user.twofaRecoveryCodes ?? [];
-    const index = await this.totpService.findRecoveryCodeIndex(stored, recoveryCode);
-
-    if (index === -1) {
-      await this.recordChallengeFailure(session, user, facts, now);
-      throw new AuthException(ErrorCode.TWOFA_INVALID);
-    }
-
-    // Single use: the hash is dropped before the session is completed, so a replay
-    // of the same code cannot win a race with the first use.
-    const remaining = stored.filter((_hash, position) => position !== index);
-    await this.users.update(user.id, { twofaRecoveryCodes: remaining });
-
-    return this.completePendingSession(session, user, facts, now);
+    return { body: { user: toAuthUserDto(user) }, issued };
   }
 
   /* ---------------------------------------------------------------------- */
@@ -568,7 +492,6 @@ export class AuthService {
             user,
             ip: facts.ip,
             userAgent: facts.userAgent,
-            twofaPending: false,
             now,
           })
         : await this.sessionService.rotate(current, {
@@ -735,248 +658,8 @@ export class AuthService {
   }
 
   /* ---------------------------------------------------------------------- */
-  /* Two-factor enrolment (S-8, C-7)                                         */
-  /* ---------------------------------------------------------------------- */
-
-  /**
-   * `POST /auth/2fa/setup` — mints a secret and the provisioning URI.
-   *
-   * The ciphertext is stored immediately but `twofaEnabledAt` stays null, so 2FA is
-   * not in force until a live code confirms the phone actually holds the secret.
-   * Re-running setup before confirming simply replaces the pending secret.
-   */
-  async setupTwoFactor(caller: ICurrentUser): Promise<TwoFactorSetupDto> {
-    const user = await this.requireUser(caller.id);
-    this.assertAccountUsable(user);
-    this.assertNotBeingDeleted(user);
-
-    if (user.twofaEnabledAt !== null) {
-      throw new ConflictException(ErrorCode.TWOFA_ALREADY_ENABLED);
-    }
-
-    const enrolment = this.totpService.enrol(user.email);
-    await this.users.update(user.id, { twofaSecret: enrolment.encryptedSecret });
-
-    return { secret: enrolment.secret, provisioningUri: enrolment.provisioningUri };
-  }
-
-  /** `POST /auth/2fa/enable` — confirms a code and returns the recovery codes once. */
-  async enableTwoFactor(
-    caller: ICurrentUser,
-    code: string,
-    facts: RequestFacts,
-  ): Promise<TwoFactorEnabledDto> {
-    const now = new Date();
-    const user = await this.requireUser(caller.id);
-    this.assertAccountUsable(user);
-
-    if (user.twofaEnabledAt !== null) {
-      throw new ConflictException(ErrorCode.TWOFA_ALREADY_ENABLED);
-    }
-    if (!this.totpService.verifyEncrypted(user.twofaSecret, code)) {
-      await this.attempts.record({
-        email: user.email,
-        userId: user.id,
-        ip: facts.ip,
-        userAgent: facts.userAgent,
-        outcome: AuthOutcome.TWOFA_FAILED,
-        route: AUTH_ROUTES.TWOFA,
-      });
-      throw new AuthException(ErrorCode.TWOFA_INVALID);
-    }
-
-    const recovery = await this.totpService.generateRecoveryCodes();
-    await this.users.update(user.id, {
-      twofaEnabledAt: now,
-      twofaRecoveryCodes: [...recovery.hashes],
-    });
-
-    this.events.emit(AUTH_EVENTS.TWOFA_ENABLED, {
-      userId: user.id,
-      role: user.role,
-      ip: facts.ip,
-      userAgent: facts.userAgent,
-      occurredAt: now,
-    });
-
-    // Returned exactly once. Only the hashes were stored, so there is no second
-    // chance to see these and no way for an operator to recover them later.
-    return { recoveryCodes: [...recovery.codes] };
-  }
-
-  /**
-   * `POST /auth/2fa/disable` — **rejected for admins** (S-8).
-   *
-   * "2FA mandatory for Admin, optional for Consumer." An admin asking to turn it off
-   * gets `TWOFA_REQUIRED_FOR_ROLE`, before the password is even checked: there is no
-   * credential that makes this allowed, so there is nothing to verify.
-   */
-  async disableTwoFactor(
-    caller: ICurrentUser,
-    dto: DisableTwoFactorDto,
-    facts: RequestFacts,
-  ): Promise<AuthAcknowledgementDto> {
-    const now = new Date();
-    const user = await this.requireUser(caller.id);
-
-    if (isAdmin(user.role)) {
-      throw new ForbiddenException(ErrorCode.TWOFA_REQUIRED_FOR_ROLE);
-    }
-
-    this.assertAccountUsable(user);
-
-    if (!(await this.passwordService.verify(user.passwordHash, dto.currentPassword))) {
-      throw new AuthException(ErrorCode.INVALID_CREDENTIALS);
-    }
-    if (!this.totpService.verifyEncrypted(user.twofaSecret, dto.code)) {
-      throw new AuthException(ErrorCode.TWOFA_INVALID);
-    }
-
-    await this.users.update(user.id, {
-      twofaSecret: null,
-      twofaEnabledAt: null,
-      twofaRecoveryCodes: null,
-    });
-
-    this.events.emit(AUTH_EVENTS.TWOFA_DISABLED, {
-      userId: user.id,
-      role: user.role,
-      ip: facts.ip,
-      userAgent: facts.userAgent,
-      occurredAt: now,
-    });
-
-    return GENERIC_ACKNOWLEDGEMENT;
-  }
-
-  /* ---------------------------------------------------------------------- */
   /* Internals                                                               */
   /* ---------------------------------------------------------------------- */
-
-  /**
-   * Loads the `twofaPending` session a challenge refers to.
-   *
-   * The route is `@Public()`, so `SessionAuthGuard` has deliberately *not* populated
-   * `request.user` — a pending session is not an authenticated caller. The cookie is
-   * read here instead.
-   *
-   * **The S-6 lockout is asserted here, keyed by the account.** It used to be checked
-   * on exactly one path — password login — which left the second factor as the only
-   * credential in the product with no backoff at all: `@Throttle` keys on the IP
-   * before the session is resolved, so rotating egress addresses defeated it
-   * completely.
-   */
-  private async loadPendingSession(
-    sessionToken: string | undefined,
-    facts: RequestFacts,
-  ): Promise<{ session: Session; user: AuthUser; now: Date }> {
-    const now = new Date();
-    if (sessionToken === undefined) {
-      throw new AuthException(ErrorCode.AUTH_REQUIRED);
-    }
-
-    const session = await this.sessionService.findByToken(sessionToken);
-    if (session === null || session.revokedAt !== null) {
-      throw new AuthException(ErrorCode.SESSION_INVALID);
-    }
-    if (this.sessionService.isExpired(session, now)) {
-      throw new AuthException(ErrorCode.SESSION_EXPIRED);
-    }
-    if (!session.twofaPending) {
-      // Nothing to complete. Reported as an invalid session rather than "already
-      // done", so a replayed challenge reveals nothing.
-      throw new AuthException(ErrorCode.SESSION_INVALID);
-    }
-
-    const user = await this.requireUser(session.userId);
-    this.assertAccountUsable(user);
-
-    await this.attempts.assertNotLockedOut(
-      user.email,
-      facts.ip,
-      now,
-      this.config.lockoutThreshold,
-      this.config.lockoutMaxMinutes,
-    );
-
-    return { session, user, now };
-  }
-
-  /**
-   * Records one wrong second-factor code and, past the cap, kills the pending session.
-   *
-   * The ledger row is what the S-6 backoff reads on the next attempt; revoking the
-   * session is what bounds the total guessing budget, because the attacker then has to
-   * present the password again to get another `twofaPending` session — and that path
-   * has its own lockout.
-   */
-  private async recordChallengeFailure(
-    session: Session,
-    user: AuthUser,
-    facts: RequestFacts,
-    now: Date,
-  ): Promise<void> {
-    await this.attempts.record({
-      email: user.email,
-      userId: user.id,
-      ip: facts.ip,
-      userAgent: facts.userAgent,
-      outcome: AuthOutcome.TWOFA_FAILED,
-      route: AUTH_ROUTES.TWOFA,
-    });
-
-    const failures = await this.attempts.countTwoFactorFailures(user.email, now);
-    if (failures < TWOFA_MAX_CHALLENGE_ATTEMPTS) {
-      return;
-    }
-
-    await this.sessionService.revoke(session, REVOKE_REASONS.TWOFA_FAILED, now);
-
-    // Logged and emitted, never returned: the client is told `TWOFA_INVALID` either
-    // way, so a caller cannot use the response to learn that the cap exists or where
-    // it sits.
-    this.logger.warn(
-      `two-factor challenge failed ${failures} times for user ${user.id}; pending session revoked (S-6, S-8)`,
-    );
-    this.events.emit(AUTH_EVENTS.TWOFA_CHALLENGE_LOCKED, {
-      userId: user.id,
-      role: user.role,
-      ip: facts.ip,
-      userAgent: facts.userAgent,
-      occurredAt: now,
-      failureCount: failures,
-      sessionId: session.id,
-    });
-  }
-
-  /** Rotates a completed pending session — the second privilege change of a login. */
-  private async completePendingSession(
-    session: Session,
-    user: AuthUser,
-    facts: RequestFacts,
-    now: Date,
-  ): Promise<AuthResult<LoginResponseDto>> {
-    const issued = await this.sessionService.rotate(session, {
-      user,
-      ip: facts.ip,
-      userAgent: facts.userAgent,
-      now,
-    });
-    await this.sessionService.markTwoFactorVerified(issued.session, now);
-
-    await this.users.update(user.id, { lastLoginAt: now, lastActiveAt: now });
-
-    await this.attempts.record({
-      email: user.email,
-      userId: user.id,
-      ip: facts.ip,
-      userAgent: facts.userAgent,
-      outcome: AuthOutcome.SUCCESS,
-      route: AUTH_ROUTES.TWOFA,
-    });
-
-    return { body: { user: toAuthUserDto(user), twofaRequired: false }, issued };
-  }
 
   private async recordFailedLogin(
     email: string,

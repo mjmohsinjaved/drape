@@ -49,7 +49,7 @@ const DEAD_INVITE_CODES = ['INVITE_NOT_FOUND', 'INVITE_EXPIRED', 'INVITE_ALREADY
  * - **empty** — the three dead-token cases: what happened, and who to ask for a new invitation.
  * - **error** — a transport failure, with a retry.
  * - **permission denied** — not applicable; whoever holds the link has no account yet.
- * - **success** — the form hands over to two-factor enrolment, which S-8 makes mandatory next.
+ * - **success** — the account exists and is signed in, with a link through to the console.
  */
 export default async function AuthInviteTokenPage({ params }: Props) {
   const { locale, token } = await params;

@@ -39,7 +39,6 @@ export function toAuthUserDto(user: AuthUser): AuthUserDto {
     // a response body must not be masked more weakly than a log line (E-12).
     phone: user.phone === null ? null : maskPhone(user.phone),
     locale: user.locale,
-    twofaEnabled: user.twofaEnabledAt !== null,
   };
 }
 

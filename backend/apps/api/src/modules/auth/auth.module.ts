@@ -25,7 +25,6 @@ import { PasswordService } from './services/password.service';
 import { SessionResolverService } from './services/session-resolver.service';
 import { SessionRevocationService } from './services/session-revocation.service';
 import { SessionService } from './services/session.service';
-import { TotpService } from './services/totp.service';
 import { VerificationTokenService } from './services/verification-token.service';
 
 /**
@@ -97,7 +96,6 @@ import { VerificationTokenService } from './services/verification-token.service'
     },
     PasswordService,
     CsrfService,
-    TotpService,
     SessionService,
     VerificationTokenService,
     AuthAttemptService,
@@ -132,7 +130,6 @@ import { VerificationTokenService } from './services/verification-token.service'
     // reach for these.
     SessionService,
     PasswordService,
-    TotpService,
     AuthService,
   ],
 })

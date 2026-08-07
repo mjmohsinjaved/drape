@@ -37,7 +37,7 @@ export class AuthAttempt extends AppendOnlyEntity {
   @Column({ type: 'enum', enum: AuthOutcome, enumName: 'auth_outcome_enum' })
   outcome: AuthOutcome;
 
-  /** `LOGIN`, `SIGNUP`, `PASSWORD_RESET`, `OTP`, `TWOFA`. */
+  /** `LOGIN`, `SIGNUP`, `PASSWORD_RESET`, `OTP`. Retired rows may also carry `TWOFA`. */
   @Column({ type: 'varchar', length: 64 })
   route: string;
 

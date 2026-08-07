@@ -26,8 +26,6 @@ export interface IssueSessionInput {
   readonly user: Pick<AuthUser, 'id' | 'role'>;
   readonly ip: string;
   readonly userAgent: string | null;
-  /** True when 2FA is enabled and the TOTP step has not been completed yet (S-8). */
-  readonly twofaPending: boolean;
   readonly now: Date;
 }
 
@@ -82,8 +80,8 @@ export interface RevokeAllOptions extends RevokeOptions {
  *
  * ### Rotation and revocation
  *
- * The session id is rotated on every privilege change — login, 2FA completion and
- * password change — which is what stops a fixated pre-login cookie from becoming an
+ * The session id is rotated on every privilege change — login and password change —
+ * which is what stops a fixated pre-login cookie from becoming an
  * authenticated one. Deactivation, suspension and password change revoke **every**
  * row for the user (A-2, A-19), so the next request from any device fails guard 3.
  */
@@ -131,8 +129,6 @@ export class SessionService {
       lastSeenAt: input.now,
       expiresAt: new Date(input.now.getTime() + this.idleWindowMs(role)),
       absoluteExpiresAt: new Date(input.now.getTime() + this.absoluteWindowMs(role)),
-      twofaPending: input.twofaPending,
-      twofaVerifiedAt: null,
       revokedAt: null,
       revokedReason: null,
     });
@@ -154,12 +150,9 @@ export class SessionService {
    * attacker who plants a pre-login cookie does not end up holding the post-login
    * one.
    */
-  async rotate(
-    current: Session,
-    input: Omit<IssueSessionInput, 'twofaPending'> & { twofaPending?: boolean },
-  ): Promise<IssuedSession> {
+  async rotate(current: Session, input: IssueSessionInput): Promise<IssuedSession> {
     await this.revoke(current, REVOKE_REASONS.ROTATED, input.now);
-    return this.issue({ ...input, twofaPending: input.twofaPending ?? false });
+    return this.issue(input);
   }
 
   /** Looks a session up by the raw cookie value. */
@@ -214,13 +207,6 @@ export class SessionService {
       { lastSeenAt: session.lastSeenAt, expiresAt: session.expiresAt },
     );
     return true;
-  }
-
-  /** Marks the TOTP step complete and clears `twofaPending`. */
-  async markTwoFactorVerified(session: Session, now: Date): Promise<void> {
-    session.twofaPending = false;
-    session.twofaVerifiedAt = now;
-    await this.sessions.update({ id: session.id }, { twofaPending: false, twofaVerifiedAt: now });
   }
 
   /** Revokes one session. Idempotent — a second call leaves the first reason intact. */

@@ -74,7 +74,7 @@ Two roles exist. Every authenticated user is one or the other, stored as a singl
 - **S-5** Admin accounts are created only by the deployment seed script or by invitation from an existing Admin, accepted through a single-use emailed token.
 - **S-6** Shared authentication behavior: Argon2 password hashing; password reset by single-use emailed token expiring in 30 minutes; generic responses on reset and login so the forms cannot enumerate accounts; rate limiting by email and by IP; lockout with exponential backoff after repeated failures.
 - **S-7** Session duration: Admin 12 hours of inactivity, Consumer 30 days.
-- **S-8** 2FA mandatory for Admin, optional for Consumer.
+- **S-8** Authentication is by email and password alone. There is no second factor for either role — no TOTP, no emailed or texted sign-in PIN, no recovery codes. (Superseded: this requirement previously made 2FA mandatory for Admin and optional for Consumer.)
 - **S-9** A Consumer requesting an Admin URL receives a clear no-access screen with a link back to the fitting room — never a raw 403, and never a redirect that reveals whether the resource exists.
 - **S-10** Admins cannot view consumer photos. They see renders only where a consumer has submitted an enquiry, plus blurred thumbnails in the moderation queue. Enforced in the query layer and covered by test.
 - **S-11** Authorisation is enforced server-side on every route and mutation. Every Admin-only route carries an authorisation test.
@@ -191,7 +191,7 @@ Mobile-first, targeting a mid-range Android on mobile data.
 - **C-4** Login at the shared `/login`. On success she lands on `/dashboard`, which renders the fitting room for her role.
 - **C-5** Monthly generation quota per account, default 15, shown as a persistent counter. Resets monthly; raisable for an individual by an Admin.
 - **C-6** Per-hour and per-IP rate limits apply independently of quota.
-- **C-7** Account settings: update profile, change password, enable 2FA, manage notification preferences.
+- **C-7** Account settings: update profile, change password, manage notification preferences.
 
 ### 7.2 Consumer dashboard
 
@@ -332,7 +332,7 @@ Failed jobs never consume quota or budget.
 - API key server-side only, rotated quarterly
 - Storage access via short-lived pre-signed URLs scoped to the owning user
 - Session cookies httpOnly, Secure, SameSite
-- Argon2 password hashing; 2FA mandatory for Admin
+- Argon2 password hashing; email and password are the only credentials (S-8)
 - Role resolved server-side on every request, per S-3
 - Object-level ownership checks on every photo, render, shortlist and enquiry — never inferred from an unguessable ID
 - Rate limiting on login, signup, password reset, OTP and generation
@@ -461,7 +461,7 @@ One `users` table holds both roles.
 
 ```
 users             id, role, email, email_verified_at, password_hash, name,
-                  phone, phone_verified_at, twofa_secret, status,
+                  phone, phone_verified_at, status,
                   invited_by, last_login_at, created_at
                   -- role: 'admin' | 'consumer'
                   -- status: 'active' | 'suspended' | 'deactivated'

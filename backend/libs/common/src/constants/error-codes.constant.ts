@@ -18,10 +18,6 @@ export enum ErrorCode {
   ACCOUNT_DEACTIVATED = 'ACCOUNT_DEACTIVATED',
   EMAIL_NOT_VERIFIED = 'EMAIL_NOT_VERIFIED',
   PHONE_NOT_VERIFIED = 'PHONE_NOT_VERIFIED',
-  TWOFA_REQUIRED = 'TWOFA_REQUIRED',
-  TWOFA_INVALID = 'TWOFA_INVALID',
-  TWOFA_ALREADY_ENABLED = 'TWOFA_ALREADY_ENABLED',
-  TWOFA_REQUIRED_FOR_ROLE = 'TWOFA_REQUIRED_FOR_ROLE',
   PASSWORD_POLICY_VIOLATION = 'PASSWORD_POLICY_VIOLATION',
   TOKEN_INVALID = 'TOKEN_INVALID',
   TOKEN_EXPIRED = 'TOKEN_EXPIRED',
@@ -208,27 +204,6 @@ export const ERROR_CODE_SPECS: Readonly<Record<ErrorCode, ErrorCodeSpec>> = {
     status: HttpStatus.FORBIDDEN,
     message: 'Confirm your phone number to send this enquiry.',
     consumerFacing: true,
-  },
-  [ErrorCode.TWOFA_REQUIRED]: {
-    status: HttpStatus.UNAUTHORIZED,
-    message: 'Enter the code from your authenticator app.',
-    consumerFacing: true,
-  },
-  [ErrorCode.TWOFA_INVALID]: {
-    status: HttpStatus.UNAUTHORIZED,
-    message: "That code didn't work. Try the next one.",
-    consumerFacing: true,
-  },
-  [ErrorCode.TWOFA_ALREADY_ENABLED]: {
-    status: HttpStatus.CONFLICT,
-    message: 'Two-factor authentication is already on for this account.',
-    consumerFacing: true,
-  },
-  [ErrorCode.TWOFA_REQUIRED_FOR_ROLE]: {
-    // S-8: admins cannot disable it.
-    status: HttpStatus.CONFLICT,
-    message: 'Admin accounts must keep two-factor authentication on.',
-    consumerFacing: false,
   },
   [ErrorCode.PASSWORD_POLICY_VIOLATION]: {
     status: HttpStatus.BAD_REQUEST,

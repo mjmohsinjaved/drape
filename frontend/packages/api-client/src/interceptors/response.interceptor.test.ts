@@ -270,16 +270,6 @@ describe('session-ended handling', () => {
     },
   );
 
-  it('does not treat the 2FA challenge as a dead session', () => {
-    const error = new ApiError({
-      statusCode: 401,
-      errorCode: 'TWOFA_REQUIRED',
-      message: 'Enter the code from your authenticator app.',
-    });
-
-    expect(isSessionEndedError(error)).toBe(false);
-  });
-
   it('does not treat a 403 as a dead session', () => {
     const error = new ApiError({
       statusCode: 403,
@@ -306,7 +296,6 @@ describe('session-ended handling', () => {
     ['/ur/login', true],
     ['/reset-password', true],
     ['/invite/abc123', true],
-    ['/en/two-factor', true],
     ['/dashboard', false],
     ['/catalog/garments', false],
     // Not an auth route, despite containing the substring "login".

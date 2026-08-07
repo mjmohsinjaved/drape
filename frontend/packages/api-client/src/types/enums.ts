@@ -125,7 +125,6 @@ export const AUTH_OUTCOMES = [
   'SUCCESS',
   'INVALID_CREDENTIALS',
   'LOCKED',
-  'TWOFA_FAILED',
   'RATE_LIMITED',
   'SUSPENDED',
 ] as const;

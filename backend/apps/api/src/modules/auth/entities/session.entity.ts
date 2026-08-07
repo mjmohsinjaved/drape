@@ -47,13 +47,6 @@ export class Session extends BaseEntity {
   @Column({ type: 'timestamptz' })
   absoluteExpiresAt: Date;
 
-  /** Set at login when 2FA is on; only `/auth/2fa/challenge` is reachable. */
-  @Column({ type: 'boolean', default: false })
-  twofaPending: boolean;
-
-  @Column({ type: 'timestamptz', nullable: true })
-  twofaVerifiedAt: Date | null;
-
   @Column({ type: 'timestamptz', nullable: true })
   revokedAt: Date | null;
 

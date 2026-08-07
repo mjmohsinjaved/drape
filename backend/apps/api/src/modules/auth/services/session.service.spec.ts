@@ -49,12 +49,11 @@ describe('SessionService', () => {
     await harness.close();
   });
 
-  function issue(user = CONSUMER, twofaPending = false): Promise<IssuedSession> {
+  function issue(user = CONSUMER): Promise<IssuedSession> {
     return service.issue({
       user,
       ip: '203.0.113.7',
       userAgent: 'jest/drape-test',
-      twofaPending,
       now: FIXED_NOW,
     });
   }

@@ -7,8 +7,8 @@ import type { ICurrentUser } from './current-user.interface';
  * `libs/*` must not import from `@api/*` (§1.1 import rules), so the guard depends
  * on this interface and the auth module binds an implementation to
  * `SESSION_RESOLVER` in `global-providers.ts`. **No session lookup happens here** —
- * the cookie hash, `revokedAt` / `expiresAt` / `absoluteExpiresAt` / `twofaPending`
- * checks, the sliding expiry and the `lastSeenAt` write all live in the auth module
+ * the cookie hash, the `revokedAt` / `expiresAt` / `absoluteExpiresAt` checks, the
+ * sliding expiry and the `lastSeenAt` write all live in the auth module
  * (§2.7 guard 3).
  */
 export const SESSION_RESOLVER = Symbol('SESSION_RESOLVER');
@@ -33,8 +33,8 @@ export interface SessionResolutionContext {
  *
  * Implementations return `null` when the token does not identify a usable session
  * on a public route, and throw an `AppException` carrying the precise code
- * (`SESSION_EXPIRED`, `SESSION_INVALID`, `TWOFA_REQUIRED`, `ACCOUNT_SUSPENDED`,
- * `ACCOUNT_DEACTIVATED`) on a protected one.
+ * (`SESSION_EXPIRED`, `SESSION_INVALID`, `ACCOUNT_SUSPENDED`, `ACCOUNT_DEACTIVATED`)
+ * on a protected one.
  */
 export interface SessionResolver {
   resolve(sessionToken: string, context: SessionResolutionContext): Promise<ICurrentUser | null>;

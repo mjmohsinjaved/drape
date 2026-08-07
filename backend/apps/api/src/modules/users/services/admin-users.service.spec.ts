@@ -170,10 +170,7 @@ describe('AdminUsersService — A-2', () => {
       const serialised = JSON.stringify(page.items);
 
       expect(serialised).not.toContain('passwordHash');
-      expect(serialised).not.toContain('twofaSecret');
-      expect(serialised).not.toContain('twofaRecoveryCodes');
       expect(serialised).not.toContain('argon2');
-      expect(Object.keys(page.items[0])).toContain('twofaEnabled');
     });
   });
 

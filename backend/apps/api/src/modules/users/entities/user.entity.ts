@@ -49,17 +49,6 @@ export class User extends BaseEntity {
   @Column({ type: 'timestamptz', nullable: true })
   phoneVerifiedAt: Date | null;
 
-  /** AES-256-GCM ciphertext under `TWOFA_ENCRYPTION_KEY`, never plaintext. */
-  @Column({ type: 'varchar', length: 255, nullable: true })
-  twofaSecret: string | null;
-
-  @Column({ type: 'timestamptz', nullable: true })
-  twofaEnabledAt: Date | null;
-
-  /** bcrypt hashes. */
-  @Column({ type: 'text', array: true, nullable: true })
-  twofaRecoveryCodes: string[] | null;
-
   @Column({
     type: 'enum',
     enum: UserStatus,

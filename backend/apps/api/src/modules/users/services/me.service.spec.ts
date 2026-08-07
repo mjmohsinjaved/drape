@@ -161,11 +161,8 @@ describe('MeService — cross-account isolation (E-7, §9.2)', () => {
       const serialised = JSON.stringify(response);
 
       expect(Object.keys(response)).not.toContain('passwordHash');
-      expect(Object.keys(response)).not.toContain('twofaSecret');
-      expect(Object.keys(response)).not.toContain('twofaRecoveryCodes');
       expect(serialised).not.toContain('argon2');
       // The boolean the UI needs, not the secret behind it.
-      expect(response.twofaEnabled).toBe(false);
     });
 
     it('reports a session whose account is gone as USER_NOT_FOUND, not as a 401', async () => {

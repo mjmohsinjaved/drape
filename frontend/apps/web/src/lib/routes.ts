@@ -44,7 +44,7 @@ export const routes = {
   garment: (locale: Locale, slug: string): string => `${root(locale)}/garments/${slug}`,
   sharedView: (locale: Locale, token: string): string => `${root(locale)}/s/${token}`,
 
-  // --- Auth (S-1, S-4, S-5, S-6, S-8) ---------------------------------------------------
+  // --- Auth (S-1, S-4, S-5, S-6) --------------------------------------------------------
   login: (locale: Locale): string => `${root(locale)}/login`,
   signup: (locale: Locale): string => `${root(locale)}/signup`,
   forgotPassword: (locale: Locale): string => `${root(locale)}/forgot-password`,
@@ -54,7 +54,6 @@ export const routes = {
   verifyEmail: (locale: Locale): string => `${root(locale)}/verify-email`,
   verifyEmailToken: (locale: Locale, token: string): string =>
     `${root(locale)}/verify-email/${token}`,
-  twoFactor: (locale: Locale): string => `${root(locale)}/two-factor`,
   invite: (locale: Locale, token: string): string => `${root(locale)}/invite/${token}`,
 
   /**
@@ -143,7 +142,6 @@ export const NOINDEX_SEGMENTS = [
   'forgot-password',
   'reset-password',
   'verify-email',
-  'two-factor',
   'invite',
   's',
   'no-access',

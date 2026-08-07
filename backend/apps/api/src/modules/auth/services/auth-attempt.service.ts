@@ -5,11 +5,17 @@ import { MoreThanOrEqual, Repository } from 'typeorm';
 
 import { AuthException, ErrorCode, sha256EmailHex } from '@library/common';
 
-import { AUTH_ROUTES, LOCKOUT_WINDOW_MINUTES, type AuthRoute } from '../auth.constants';
+import { LOCKOUT_WINDOW_MINUTES, type AuthRoute } from '../auth.constants';
 import { AuthAttempt } from '../entities/auth-attempt.entity';
 import { AuthOutcome } from '../enums/auth-outcome.enum';
 
-/** Outcomes that count towards the S-6 lockout. A rate-limit rejection is not a guess. */
+/**
+ * Outcomes that count towards the S-6 lockout. A rate-limit rejection is not a guess.
+ *
+ * `TWOFA_FAILED` is still listed although nothing writes it any more: the ledger is
+ * append-only, so rows recorded before two-factor sign-in was removed are still inside
+ * the fifteen-minute window on the day of the deploy, and they were failures then.
+ */
 const FAILURE_OUTCOMES: ReadonlySet<AuthOutcome> = new Set([
   AuthOutcome.INVALID_CREDENTIALS,
   AuthOutcome.TWOFA_FAILED,
@@ -142,25 +148,6 @@ export class AuthAttemptService {
     const ipState = evaluate(byIp, now, threshold, maxMinutes);
 
     return emailState.retryAfterSeconds >= ipState.retryAfterSeconds ? emailState : ipState;
-  }
-
-  /**
-   * Consecutive failed second-factor attempts for one account inside the S-6 window.
-   *
-   * Scoped to `route = TWOFA` so a wrong password an hour ago does not spend the
-   * challenge budget, and stopped at the first successful challenge so a legitimate
-   * sign-in clears the run. Keyed by `emailHash` only: the IP is exactly what an
-   * attacker rotates, so counting it here would make the limit trivially evadable.
-   */
-  async countTwoFactorFailures(email: string, now: Date): Promise<number> {
-    const windowStart = new Date(now.getTime() - LOCKOUT_WINDOW_MINUTES * MINUTE_MS);
-
-    const rows = await this.attempts.find({
-      where: { emailHash: sha256EmailHex(email), createdAt: MoreThanOrEqual(windowStart) },
-      order: { createdAt: 'DESC' },
-    });
-
-    return countConsecutiveFailures(rows.filter((row) => row.route === AUTH_ROUTES.TWOFA));
   }
 
   /**

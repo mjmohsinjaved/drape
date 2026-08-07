@@ -10,7 +10,6 @@ import { Button, Callout, DescriptionItem, DescriptionList } from '@repo/ui';
 
 import { TextField, PasswordField } from '@/features/auth/components/fields';
 import { FormErrorFeedback } from '@/features/auth/components/FormFeedback';
-import { TwoFactorEnrolment } from '@/features/auth/components/TwoFactorEnrolment';
 import { useAcceptInvite } from '@/features/auth/hooks/use-auth-mutations';
 import { useErrorCopy } from '@/features/auth/lib/error-copy';
 import { meetsPasswordPolicy } from '@/features/auth/lib/password-policy';
@@ -32,8 +31,8 @@ import type { InviteTokenPreview } from '@repo/api-client';
  *  an admin having sent the invitation (S-4, S-5).
  * ═══════════════════════════════════════════════════════════════════════════════════════
  *
- * Acceptance signs the new admin in and S-8 then makes two-factor enrolment mandatory, so the
- * enrolment panel takes over this screen rather than sending them somewhere else to find it.
+ * Acceptance signs the new admin in outright — a password is the only credential — so the
+ * success state is a confirmation and a way into the console, not a further step.
  *
  * ### The six D-5 states
  * - **default** — the preview, then name and password.
@@ -82,14 +81,9 @@ export function InviteAcceptanceForm({ locale, token, preview }: InviteAcceptanc
         <Callout tone="success" title={t('createdTitle')}>
           {t('createdBody')}
         </Callout>
-        <TwoFactorEnrolment
-          required
-          completionAction={
-            <Button asChild variant="primary">
-              <Link href={routes.dashboard(locale)}>{tc('goToConsole')}</Link>
-            </Button>
-          }
-        />
+        <Button asChild variant="primary">
+          <Link href={routes.dashboard(locale)}>{tc('goToConsole')}</Link>
+        </Button>
       </div>
     );
   }

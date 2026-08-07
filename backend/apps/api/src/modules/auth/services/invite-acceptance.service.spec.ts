@@ -108,9 +108,6 @@ describe('InviteAcceptanceService — S-5', () => {
           name: input.name,
           phone: null,
           phoneVerifiedAt: null,
-          twofaSecret: null,
-          twofaEnabledAt: null,
-          twofaRecoveryCodes: null,
           status: 'ACTIVE' as AuthUser['status'],
           lastLoginAt: null,
           lastActiveAt: null,
@@ -278,12 +275,6 @@ describe('InviteAcceptanceService — S-5', () => {
       expect(result.issued?.session.userId).toBe(created[0].id);
       expect(result.issued?.session.role).toBe(Role.ADMIN);
       expect(result.issued?.csrfToken).toEqual(expect.any(String));
-    });
-
-    it('is not twofaPending — there is no secret to challenge against yet', async () => {
-      const result = await service.accept(RAW_TOKEN, body(), facts);
-
-      expect(result.issued?.session.twofaPending).toBe(false);
     });
 
     it('stores only the hash of the cookie value (§4.5)', async () => {

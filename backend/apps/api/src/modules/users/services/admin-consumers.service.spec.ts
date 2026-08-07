@@ -238,8 +238,6 @@ describe('AdminConsumersService — A-16 … A-20', () => {
 
       expect(serialised).not.toContain('passwordHash');
       expect(serialised).not.toContain('argon2');
-      expect(serialised).not.toContain('twofaSecret');
-      expect(serialised).not.toContain('twofaRecoveryCodes');
     });
 
     it('reports the A-16 counts and the A-17 enquiry history', async () => {

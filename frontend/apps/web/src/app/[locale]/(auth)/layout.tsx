@@ -26,8 +26,7 @@ export default async function AuthLayout({ children, params }: LayoutProps) {
   const { locale } = await params;
   setRequestLocale(locale);
 
-  // The forms are client islands, so they need `auth` — and `account`, which they share the
-  // field copy with (two-factor enrolment is reached from both).
+  // The forms are client islands, so they need the `auth` namespace.
   const messages = await loadClientMessages(locale, 'auth');
 
   return (

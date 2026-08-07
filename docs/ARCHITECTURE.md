@@ -511,10 +511,6 @@ All other consumer-facing messages here have already been through the §9.4 shor
 | `ACCOUNT_DEACTIVATED` | 403 | `This account is no longer active.` | A-2. |
 | `EMAIL_NOT_VERIFIED` | 403 | `Confirm your email to start trying pieces on. We've sent you a link.` | C-3 / A-28 guard-chain step. |
 | `PHONE_NOT_VERIFIED` | 403 | `Confirm your phone number to send this enquiry.` | C-3, enquiry submission only. |
-| `TWOFA_REQUIRED` | 401 | `Enter the code from your authenticator app.` | S-8. Session is in `twofaPending` state. |
-| `TWOFA_INVALID` | 401 | `That code didn't work. Try the next one.` | |
-| `TWOFA_ALREADY_ENABLED` | 409 | `Two-factor authentication is already on for this account.` | |
-| `TWOFA_REQUIRED_FOR_ROLE` | 409 | `Admin accounts must keep two-factor authentication on.` | S-8: admins cannot disable it. |
 | `PASSWORD_POLICY_VIOLATION` | 400 | `Choose a password with at least 10 characters, including a number and a symbol.` | |
 | `TOKEN_INVALID` | 400 | `That link isn't valid. Request a new one.` | Reset, verification and invite tokens. |
 | `TOKEN_EXPIRED` | 410 | `That link has expired. Request a new one.` | Reset link TTL 30 minutes (S-6). |
@@ -741,7 +737,7 @@ Subclasses exist to make intent readable at the throw site and to let tests asse
 the code family; they never change the status, which always comes from `ERROR_CODE_SPECS`.
 
 ```typescript
-export class AuthException       extends AppException {}        // AUTH_*, SESSION_*, TWOFA_*, CSRF_*
+export class AuthException       extends AppException {}        // AUTH_*, SESSION_*, CSRF_*
 export class ForbiddenException  extends AppException {}        // INSUFFICIENT_ROLE, *_DISABLED, IP_BLOCKED
 export class NotFoundException   extends AppException {}        // *_NOT_FOUND
 export class ConflictException   extends AppException {}        // *_EXISTS, INVALID_*_TRANSITION, IDEMPOTENCY_IN_FLIGHT
@@ -828,10 +824,10 @@ Request
   │                      `auth_attempts` row.  → RATE_LIMIT_EXCEEDED (+ Retry-After)
   │
   ├─ 3. SessionAuthGuard Skipped when @Public(). Reads cookie `drape.sid`, looks the session up by
-  │                      sha256 hash, checks revokedAt / expiresAt / absoluteExpiresAt /
-  │                      twofaPending, slides `expiresAt` (12h admin, 30d consumer — S-7), updates
+  │                      sha256 hash, checks revokedAt / expiresAt / absoluteExpiresAt,
+  │                      slides `expiresAt` (12h admin, 30d consumer — S-7), updates
   │                      `lastSeenAt` and `users.lastActiveAt`, attaches ICurrentUser.
-  │                      → AUTH_REQUIRED / SESSION_EXPIRED / SESSION_INVALID / TWOFA_REQUIRED /
+  │                      → AUTH_REQUIRED / SESSION_EXPIRED / SESSION_INVALID /
   │                        ACCOUNT_SUSPENDED / ACCOUNT_DEACTIVATED
   │
   ├─ 4. RolesGuard       Reads @Roles(). PUBLIC always passes. Otherwise the session role must be
@@ -1199,7 +1195,7 @@ Every PostgreSQL enum in the schema, in one place.
 | `notification_channel_enum` | `NotificationChannel` | `EMAIL`, `SMS`, `IN_APP` |
 | `notification_status_enum` | `NotificationStatus` | `PENDING`, `SENDING`, `SENT`, `FAILED`, `CANCELLED` |
 | `verification_purpose_enum` | `VerificationPurpose` | `EMAIL_VERIFICATION`, `PASSWORD_RESET`, `PHONE_OTP`, `INVITE` |
-| `auth_outcome_enum` | `AuthOutcome` | `SUCCESS`, `INVALID_CREDENTIALS`, `LOCKED`, `TWOFA_FAILED`, `RATE_LIMITED`, `SUSPENDED` |
+| `auth_outcome_enum` | `AuthOutcome` | `SUCCESS`, `INVALID_CREDENTIALS`, `LOCKED`, `TWOFA_FAILED`, `RATE_LIMITED`, `SUSPENDED`. `TWOFA_FAILED` is **historical only** — S-8 removed the second factor, and nothing writes it any more. The label stays because `auth_attempts` is append-only and dropping it would mean rewriting rows to an outcome that never happened. |
 | `deletion_subject_enum` | `DeletionSubject` | `USER`, `PERSON_PHOTO`, `TRYON_RESULT`, `SHARE_LINK`, `TRYON_JOB`, `EXPORT_ARCHIVE` |
 | `deletion_initiator_enum` | `DeletionInitiator` | `CONSUMER`, `ADMIN`, `PURGE_JOB` |
 | `settings_value_type_enum` | `SettingsValueType` | `STRING`, `NUMBER`, `BOOLEAN`, `JSON` |
@@ -1234,9 +1230,6 @@ model; none changes product behaviour.
 | `name` | `string` | `varchar(120)` | no |
 | `phone` | `string \| null` | `varchar(24)` — E.164 | yes |
 | `phoneVerifiedAt` | `Date \| null` | `timestamptz` | yes |
-| `twofaSecret` | `string \| null` | `varchar(255)` — AES-256-GCM ciphertext under `TWOFA_ENCRYPTION_KEY`, never plaintext | yes |
-| `twofaEnabledAt` | `Date \| null` | `timestamptz` | yes |
-| `twofaRecoveryCodes` | `string[] \| null` | `text[]` — bcrypt hashes | yes |
 | `status` | `UserStatus` | `enum`, default `ACTIVE` | no |
 | `suspendedReason` | `string \| null` | `text` (A-19 required on suspend) | yes |
 | `suspendedAt` | `Date \| null` | `timestamptz` | yes |
@@ -1295,8 +1288,6 @@ export interface NotificationPreferences {
 | `lastSeenAt` | `Date` | `timestamptz` | no |
 | `expiresAt` | `Date` | `timestamptz` — sliding idle expiry: +12 h admin, +30 d consumer (S-7) | no |
 | `absoluteExpiresAt` | `Date` | `timestamptz` — hard ceiling: +7 d admin, +90 d consumer | no |
-| `twofaPending` | `boolean` | `boolean`, default `false` — set at login when 2FA is on; only `/auth/2fa/challenge` is reachable | no |
-| `twofaVerifiedAt` | `Date \| null` | `timestamptz` | yes |
 | `revokedAt` | `Date \| null` | `timestamptz` | yes |
 | `revokedReason` | `string \| null` | `varchar(64)` — `LOGOUT`, `LOGOUT_ALL`, `PASSWORD_CHANGED`, `DEACTIVATED`, `SUSPENDED`, `ADMIN_REVOKED` | yes |
 
@@ -1332,7 +1323,7 @@ Indexes: `UQ_verification_tokens_tokenHash UNIQUE ("tokenHash") WHERE "deletedAt
 | `ip` | `string` | `inet` | no |
 | `userAgent` | `string \| null` | `varchar(512)` | yes |
 | `outcome` | `AuthOutcome` | `enum` | no |
-| `route` | `string` | `varchar(64)` — `LOGIN`, `SIGNUP`, `PASSWORD_RESET`, `OTP`, `TWOFA` | no |
+| `route` | `string` | `varchar(64)` — `LOGIN`, `SIGNUP`, `PASSWORD_RESET`, `OTP`. Rows written before S-8 dropped the second factor may also carry `TWOFA`; nothing writes it now | no |
 
 Relations: `userId → users.id`, `SET NULL`. Indexes: `IDX_auth_attempts_emailHash_createdAt` ·
 `IDX_auth_attempts_ip_createdAt` · `IDX_auth_attempts_outcome_createdAt`. No unique index.
@@ -2015,8 +2006,7 @@ Every mutating verb (`POST`/`PATCH`/`PUT`/`DELETE`) requires the CSRF header unl
 | --- | --- | :-: | --- |
 | GET | `/auth/csrf` | PUBLIC | Issue the `drape.csrf` cookie and return the matching token. |
 | POST | `/auth/signup` ⊘ | PUBLIC | Create a **Consumer** account. A `role` in the payload is stripped and audit-logged (S-4). |
-| POST | `/auth/login` ⊘ | PUBLIC | Authenticate. Sets `drape.sid`. Returns `{ user, twofaRequired }`. Generic failure copy (S-6). |
-| POST | `/auth/2fa/challenge` | PUBLIC | Complete a `twofaPending` session with a TOTP code. |
+| POST | `/auth/login` ⊘ | PUBLIC | Authenticate with an email and password. Sets `drape.sid`. Returns `{ user }` — a password is the only credential, so there is no intermediate state (S-8). Generic failure copy (S-6). |
 | POST | `/auth/logout` | ANY | Revoke the current session and clear cookies. |
 | GET | `/auth/me` | ANY | The single role-resolution call used by the web middleware (B-10). |
 | GET | `/auth/sessions` | ANY | List the caller's active sessions. |
@@ -2029,10 +2019,6 @@ Every mutating verb (`POST`/`PATCH`/`PUT`/`DELETE`) requires the CSRF header unl
 | POST | `/auth/email/verify/confirm` | PUBLIC | Consume an email-verification token. |
 | POST | `/auth/phone/otp/request` | CONSUMER | Send a phone OTP (C-3). |
 | POST | `/auth/phone/otp/verify` | CONSUMER | Verify the OTP and stamp `phoneVerifiedAt`. |
-| POST | `/auth/2fa/setup` | ANY | Return a TOTP secret and provisioning URI. |
-| POST | `/auth/2fa/enable` | ANY | Confirm a code, enable 2FA, return recovery codes once. |
-| POST | `/auth/2fa/disable` | ANY | Disable 2FA. Rejected for admins (S-8). |
-| POST | `/auth/2fa/recovery` | PUBLIC | Complete a `twofaPending` session with a recovery code. |
 
 ### 5.2 `users` — admins, consumers, self
 
@@ -2074,7 +2060,7 @@ Every mutating verb (`POST`/`PATCH`/`PUT`/`DELETE`) requires the CSRF header unl
 | POST | `/invites/:inviteId/resend` | ADMIN | Re-issue the token and reset the expiry. |
 | DELETE | `/invites/:inviteId` | ADMIN | Revoke a pending invite. |
 | GET | `/invites/token/:token` | PUBLIC | Validate a token and return `{ email, role, expiresAt }` for the acceptance form. |
-| POST | `/invites/token/:token/accept` | PUBLIC | Create the admin account from the invite. 2FA setup is forced immediately after (S-8). |
+| POST | `/invites/token/:token/accept` | PUBLIC | Create the admin account from the invite and sign it in. The password is the only credential it needs (S-8). |
 
 ### 5.4 `settings`
 
@@ -2307,7 +2293,7 @@ Global default 100 requests / 60 s, tracked by `userId` or IP. Overrides:
 
 | Route(s) | Limit |
 | --- | --- |
-| `POST /auth/login`, `POST /auth/2fa/challenge`, `POST /auth/2fa/recovery` | 5 / 60 s |
+| `POST /auth/login` | 5 / 60 s |
 | `POST /auth/signup` | 5 / 60 s + bot check (§8.4) |
 | `POST /auth/password/forgot`, `POST /auth/password/reset` | 3 / 60 s |
 | `POST /auth/phone/otp/request`, `POST /auth/email/verify/request` | 3 / 60 s |
@@ -2750,7 +2736,6 @@ apps/web/src/app/
     │   ├── forgot-password/page.tsx            CC form
     │   ├── reset-password/[token]/page.tsx     RSC validates the token server-side + CC form
     │   ├── verify-email/[token]/page.tsx       RSC consumes the token server-side
-    │   ├── two-factor/page.tsx                 CC   TOTP challenge (S-8)
     │   └── invite/[token]/page.tsx             RSC validates + CC acceptance form (S-5)
     │
     ├── dashboard/page.tsx                      RSC  **the S-2 switch**: reads the session server-side,
@@ -2771,7 +2756,7 @@ apps/web/src/app/
     │   ├── enquiries/new/page.tsx              RSC prefilled + CC form (C-35)
     │   └── account/
     │       ├── page.tsx                        RSC  profile (C-7)
-    │       ├── security/page.tsx               RSC + CC  password, 2FA, sessions
+    │       ├── security/page.tsx               RSC + CC  password, sessions
     │       ├── notifications/page.tsx          RSC + CC  preferences (C-7)
     │       └── data/page.tsx                   RSC  everything stored about her, export, delete (C-37…C-40)
     │
@@ -2887,8 +2872,6 @@ request.
 | `ARGON2_MEMORY_KIB` | api | — | `19456` | Argon2id memory cost (S-6). |
 | `ARGON2_TIME_COST` | api | — | `2` | Argon2id iterations. |
 | `ARGON2_PARALLELISM` | api | — | `1` | Argon2id lanes. |
-| `TWOFA_ENCRYPTION_KEY` | api | ✔ | 64 hex chars | AES-256-GCM key protecting `users.twofaSecret` (S-8). |
-| `TWOFA_ISSUER` | api | — | `Drape` | Label in the authenticator app. |
 | `STORAGE_DRIVER` | api | — | `local` | `local` in V1; `s3` later without call-site changes. |
 | `STORAGE_ROOT` | api | ✔ | `D:/drape-storage` | Absolute path **outside the repository**. Startup fails if it resolves inside it. |
 | `STORAGE_URL_SECRET` | api | ✔ | 64 hex chars | HMAC key for signed download and upload tokens (§3.4). |

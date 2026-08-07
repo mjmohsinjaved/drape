@@ -20,10 +20,9 @@ export const metadata: Metadata = {
 /**
  * ═══ The account segment — role-ANY ═══
  *
- * `/me`, the password change and two-factor enrolment are role-ANY in §5.2, and S-8 makes a
- * second factor **mandatory for admins**. So these screens cannot live inside `(consumer)`,
- * whose layout redirects an admin to `/dashboard`: that put the one role obliged to enrol on the
- * only surface with nowhere to do it.
+ * `/me` and the password change are role-ANY in §5.2, so these screens cannot live inside
+ * `(consumer)`, whose layout redirects an admin to `/dashboard`: an admin has an account to
+ * manage too, and that arrangement left them with nowhere to manage it.
  *
  * Moving the segment out of the group keeps every URL exactly as it was — a route group never
  * appears in the path, so `/account`, `/account/security`, `/account/notifications` and

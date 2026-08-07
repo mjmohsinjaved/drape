@@ -17,7 +17,6 @@ describe('isSensitiveKey', () => {
     'sessionToken',
     'refresh_token',
     'apiKey',
-    'twofaSecret',
     'authorization',
     'cookie',
     'email',

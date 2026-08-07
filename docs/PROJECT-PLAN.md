@@ -79,11 +79,11 @@ DB columns hold the key (`renders/<userId>/<uuid>.png`), never an absolute path 
 - **T1.2** Auth module — signup (consumer-only, role in payload ignored+logged), login, logout, `/auth/me`, lockout + backoff, generic responses
 - **T1.3** Password reset — single-use token, 30 min TTL
 - **T1.4** Email verification + phone OTP
-- **T1.5** 2FA (TOTP) — mandatory admin, optional consumer
+- **T1.5** ~~2FA (TOTP)~~ — dropped. S-8 now specifies email and password as the only credentials, for both roles.
 - **T1.6** Invites — admin-only, single-use emailed token
 - **T1.7** Guards — `SessionGuard`, `RolesGuard`, `CsrfGuard`, `ThrottlerGuard`; CI check that every route declares a role
 - **T1.8** Users/admin management — invite, change role, deactivate (revokes sessions)
-- **T1.9** Web: `/login`, `/signup`, `/forgot-password`, `/reset-password`, `/verify-email`, 2FA challenge
+- **T1.9** Web: `/login`, `/signup`, `/forgot-password`, `/reset-password`, `/verify-email`
 - **T1.10** Web: role-aware `/dashboard` (server-resolved shell), no-access screen (S-9), account settings
 - **T1.11** Authorisation test harness + tests for every admin route (E-7)
 

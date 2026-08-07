@@ -73,7 +73,7 @@ export interface GenerationFailureAlertInput {
 
 /** E-14 — "authentication anomalies". */
 export interface AuthenticationAnomalyAlertInput {
-  /** `LOGIN`, `SIGNUP`, `PASSWORD_RESET`, `OTP`, `TWOFA` — `auth_attempts.route` (§4.7). */
+  /** `LOGIN`, `SIGNUP`, `PASSWORD_RESET`, `OTP` — `auth_attempts.route` (§4.7). */
   readonly route: string;
   readonly failures: number;
   readonly distinctIps: number;

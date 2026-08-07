@@ -190,8 +190,6 @@ describe('ConsumerQueryService — S-10', () => {
 
       const sql = test.users.sql();
       expect(sql).not.toContain('passwordHash');
-      expect(sql).not.toContain('twofaSecret');
-      expect(sql).not.toContain('twofaRecoveryCodes');
     });
 
     it('scopes every sub-query to the requested consumer', async () => {

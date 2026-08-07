@@ -52,8 +52,8 @@ const EXPIRY: Readonly<Record<NotificationLocale, (when: string) => string>> = {
 };
 
 const NEXT_STEP: LocalisedString = {
-  EN: 'Accepting the invite asks you to set a password and turn on two-factor sign-in.',
-  UR: 'دعوت قبول کرنے پر آپ سے پاس ورڈ سیٹ کرنے اور دو مرحلوں والا سائن ان آن کرنے کو کہا جائے گا۔',
+  EN: 'Accepting the invite asks you to set a password.',
+  UR: 'دعوت قبول کرنے پر آپ سے پاس ورڈ سیٹ کرنے کو کہا جائے گا۔',
 };
 
 export const adminInviteTemplate: TemplateDefinition<AdminInviteProps> = {

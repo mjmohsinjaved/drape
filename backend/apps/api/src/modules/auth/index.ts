@@ -54,8 +54,3 @@ export {
   type RevokeAllOptions,
   type RevokeOptions,
 } from './services/session.service';
-export {
-  TotpService,
-  type RecoveryCodeSet,
-  type TwoFactorEnrolment,
-} from './services/totp.service';

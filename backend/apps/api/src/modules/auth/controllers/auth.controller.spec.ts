@@ -16,7 +16,6 @@ import { AuthService } from '../services/auth.service';
 import { CsrfService } from '../services/csrf.service';
 import { PasswordService } from '../services/password.service';
 import { SessionService } from '../services/session.service';
-import { TotpService } from '../services/totp.service';
 import { VerificationTokenService } from '../services/verification-token.service';
 import {
   createCookieRecorder,
@@ -70,7 +69,6 @@ describe('AuthController', () => {
         PasswordService,
         SessionService,
         CsrfService,
-        TotpService,
         VerificationTokenService,
         AuthAttemptService,
       ],
@@ -115,7 +113,7 @@ describe('AuthController', () => {
       ).resolves.toBeDefined();
     });
 
-    it('returns no password hash, 2FA secret or recovery codes', async () => {
+    it('returns no password hash', async () => {
       jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
 
       const body = await controller.signup(signupPayload({ role: 'admin' }), REQUEST, response);
@@ -124,7 +122,6 @@ describe('AuthController', () => {
       expect(serialised).not.toContain('argon2');
       expect(serialised).not.toContain('correct-horse-9!');
       expect(body).not.toHaveProperty('passwordHash');
-      expect(body).not.toHaveProperty('twofaSecret');
     });
 
     it('sets the session and CSRF cookies on the response', async () => {

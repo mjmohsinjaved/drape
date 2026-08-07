@@ -31,13 +31,19 @@ export const USER_DIRECTORY = Symbol('USER_DIRECTORY');
  */
 export const INVITED_ACCOUNT_DIRECTORY = Symbol('INVITED_ACCOUNT_DIRECTORY');
 
-/** `auth_attempts.route` — the closed set from §4.7. */
+/**
+ * `auth_attempts.route` — the closed set of values this application *writes*.
+ *
+ * `TWOFA` was one of them until two-factor sign-in was removed. Rows written before
+ * then still carry it and are still read by the S-6 backoff and the E-14 anomaly
+ * sweep; the ledger is append-only, so nothing rewrites them. It is absent here
+ * because nothing may write it again.
+ */
 export const AUTH_ROUTES = {
   LOGIN: 'LOGIN',
   SIGNUP: 'SIGNUP',
   PASSWORD_RESET: 'PASSWORD_RESET',
   OTP: 'OTP',
-  TWOFA: 'TWOFA',
 } as const;
 
 export type AuthRoute = (typeof AUTH_ROUTES)[keyof typeof AUTH_ROUTES];
@@ -50,14 +56,8 @@ export const REVOKE_REASONS = {
   DEACTIVATED: 'DEACTIVATED',
   SUSPENDED: 'SUSPENDED',
   ADMIN_REVOKED: 'ADMIN_REVOKED',
-  /** Privilege change: login and 2FA completion mint a new id and retire the old one. */
+  /** Privilege change: login and password change mint a new id and retire the old one. */
   ROTATED: 'ROTATED',
-  /**
-   * The pending session burned through {@link TWOFA_MAX_CHALLENGE_ATTEMPTS} wrong
-   * codes. Revoking it costs the attacker the password step again, which is the whole
-   * point of a second factor.
-   */
-  TWOFA_FAILED: 'TWOFA_FAILED',
 } as const;
 
 export type RevokeReason = (typeof REVOKE_REASONS)[keyof typeof REVOKE_REASONS];
@@ -80,22 +80,6 @@ export const OTP_MAX_ATTEMPTS = 5;
 
 /** Digits in a phone OTP (C-3). */
 export const OTP_DIGITS = 6;
-
-/** Recovery codes handed out once when 2FA is enabled (S-8). */
-export const RECOVERY_CODE_COUNT = 10;
-
-/**
- * Wrong TOTP or recovery codes allowed against one pending session before it is
- * revoked (S-6, S-8).
- *
- * `@Throttle(5/60s)` is not a second-factor control: `UserThrottlerGuard` runs before
- * `SessionAuthGuard` on a `@Public()` route, so its tracker is the **IP**, and an
- * attacker holding a stolen password sprays from a proxy pool at no cost. TOTP
- * tolerance is ±1 step, so three of a million codes are live at any instant — a
- * guessing budget that has to be bounded per *account*, not per address. Past this
- * count the pending session dies and the password step has to be repeated.
- */
-export const TWOFA_MAX_CHALLENGE_ATTEMPTS = 5;
 
 /** PASSWORD_POLICY_VIOLATION copy: "at least 10 characters, including a number and a symbol". */
 export const PASSWORD_MIN_LENGTH = 10;

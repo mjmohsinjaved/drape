@@ -146,9 +146,8 @@ export function listEnv(name: string, env: EnvSource = process.env): string[] {
 /**
  * Asserts a variable holds a hex secret of at least `minBytes` of entropy.
  *
- * §7 specifies 64 hex characters (32 bytes) for `SESSION_SECRET`, `CSRF_SECRET`,
- * `TWOFA_ENCRYPTION_KEY` and `STORAGE_URL_SECRET`. **The value is never echoed in
- * the error message.**
+ * §7 specifies 64 hex characters (32 bytes) for `SESSION_SECRET`, `CSRF_SECRET` and
+ * `STORAGE_URL_SECRET`. **The value is never echoed in the error message.**
  */
 export function requireHexSecret(
   name: string,

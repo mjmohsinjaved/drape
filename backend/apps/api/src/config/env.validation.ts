@@ -288,16 +288,6 @@ export class EnvironmentVariables {
   @Min(1)
   ARGON2_PARALLELISM: number;
 
-  /** Required — AES-256-GCM key protecting `users.twofaSecret` (S-8). */
-  @Matches(HEX_64, { message: `TWOFA_ENCRYPTION_KEY ${HEX_64_MESSAGE}` })
-  TWOFA_ENCRYPTION_KEY: string;
-
-  /** Optional — label in the authenticator app. */
-  @Transform(({ value }) => (isBlank(value) ? 'Drape' : String(value)))
-  @IsString()
-  @IsNotEmpty()
-  TWOFA_ISSUER: string;
-
   /* --- storage (§3) ------------------------------------------------------ */
 
   /** Optional — `local` in V1. */

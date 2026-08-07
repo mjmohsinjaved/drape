@@ -74,7 +74,7 @@ export function looksLikeEmail(value: string): boolean {
   return trimmed.length >= 3 && trimmed.length <= 320 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed);
 }
 
-/** The six-digit TOTP / OTP shape the API accepts. */
+/** The six-digit phone-OTP shape the API accepts (C-3). */
 export const OTP_LENGTH = 6;
 
 export function isOtpComplete(value: string): boolean {

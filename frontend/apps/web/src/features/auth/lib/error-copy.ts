@@ -40,7 +40,6 @@ const KNOWN_FIELDS: ReadonlySet<string> = new Set<string>([
   'name',
   'phone',
   'code',
-  'recoveryCode',
   'token',
   'locale',
 ]);

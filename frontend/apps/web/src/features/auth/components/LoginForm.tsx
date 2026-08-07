@@ -86,16 +86,7 @@ export function LoginForm({ locale }: LoginFormProps) {
     login.mutate(
       { email: email.trim(), password },
       {
-        onSuccess: (result) => {
-          if (result.twofaRequired) {
-            // The session exists but is `twofaPending`: nothing else is reachable until the
-            // second factor lands (S-8). The return target travels with it.
-            const target = returnTo
-              ? `${routes.twoFactor(locale)}?${RETURN_TO_PARAM}=${encodeURIComponent(returnTo)}`
-              : routes.twoFactor(locale);
-            router.replace(target);
-            return;
-          }
+        onSuccess: () => {
           router.replace(returnTo ?? routes.dashboard(locale));
           // The session cookie is new, so every Server Component above resolves it again.
           router.refresh();

@@ -57,13 +57,6 @@ export class InvitedAccountDirectoryService implements InvitedAccountDirectory {
         status: UserStatus.ACTIVE,
         phone: null,
         phoneVerifiedAt: null,
-        // 2FA is mandatory for admins (S-8) but cannot be enrolled before the account
-        // exists. The console forces the enrolment screen; `POST /auth/2fa/disable`
-        // refuses admins outright, so the un-enrolled state is reachable but not
-        // sustainable.
-        twofaSecret: null,
-        twofaEnabledAt: null,
-        twofaRecoveryCodes: null,
         suspendedReason: null,
         suspendedAt: null,
         lastLoginAt: null,

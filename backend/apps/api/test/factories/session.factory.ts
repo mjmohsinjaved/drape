@@ -40,8 +40,6 @@ export function buildSession(overrides: Partial<Session> = {}): Session {
       expiresAt: daysFromFixedNow(30),
       absoluteExpiresAt: daysFromFixedNow(90),
 
-      twofaPending: false,
-      twofaVerifiedAt: null,
       revokedAt: null,
       revokedReason: null,
     },
@@ -73,12 +71,4 @@ export function buildRevokedSession(
   overrides: Partial<Session> = {},
 ): Session {
   return buildSession({ revokedAt: FIXED_NOW, revokedReason, ...overrides });
-}
-
-/**
- * Mid-2FA-challenge: authenticated by password but not yet by TOTP. Only
- * `/auth/2fa/challenge` is reachable while `twofaPending` is true (S-8).
- */
-export function buildTwoFactorPendingSession(overrides: Partial<Session> = {}): Session {
-  return buildAdminSession({ twofaPending: true, twofaVerifiedAt: null, ...overrides });
 }

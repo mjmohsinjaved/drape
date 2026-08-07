@@ -26,11 +26,6 @@ import type {
   SessionSummary,
   SignupRequest,
   SignupResponse,
-  TwoFaCodeRequest,
-  TwoFaDisableRequest,
-  TwoFaEnableResponse,
-  TwoFaRecoveryRequest,
-  TwoFaSetupResponse,
   VerifyPhoneOtpRequest,
 } from '../types/auth';
 import type {
@@ -45,12 +40,6 @@ export const authPaths = {
   signup: '/auth/signup',
   login: '/auth/login',
   logout: '/auth/logout',
-
-  twoFactorChallenge: '/auth/2fa/challenge',
-  twoFactorRecovery: '/auth/2fa/recovery',
-  twoFactorSetup: '/auth/2fa/setup',
-  twoFactorEnable: '/auth/2fa/enable',
-  twoFactorDisable: '/auth/2fa/disable',
 
   passwordForgot: '/auth/password/forgot',
   passwordReset: '/auth/password/reset',
@@ -104,49 +93,6 @@ export async function login(body: LoginRequest, options?: EndpointOptions): Prom
 /** `POST /auth/logout` (ANY). Revokes this session and clears both cookies. */
 export async function logout(options?: EndpointOptions): Promise<LogoutResponse> {
   return post<LogoutResponse>(authPaths.logout, undefined, options);
-}
-
-/* ------------------------------------------------------------------ two-factor (S-8) */
-
-/** `POST /auth/2fa/challenge` (PUBLIC) — completes a `twofaPending` session with a TOTP code. */
-export async function challengeTwoFactor(
-  body: TwoFaCodeRequest,
-  options?: EndpointOptions,
-): Promise<LoginResponse> {
-  return post<LoginResponse, TwoFaCodeRequest>(authPaths.twoFactorChallenge, body, options);
-}
-
-/** `POST /auth/2fa/recovery` (PUBLIC) — the single-use way out of a lost device. */
-export async function recoverTwoFactor(
-  body: TwoFaRecoveryRequest,
-  options?: EndpointOptions,
-): Promise<LoginResponse> {
-  return post<LoginResponse, TwoFaRecoveryRequest>(authPaths.twoFactorRecovery, body, options);
-}
-
-/** `POST /auth/2fa/setup` (ANY) — the secret and the `otpauth://` URI, before confirmation. */
-export async function setupTwoFactor(options?: EndpointOptions): Promise<TwoFaSetupResponse> {
-  return post<TwoFaSetupResponse>(authPaths.twoFactorSetup, undefined, options);
-}
-
-/** `POST /auth/2fa/enable` (ANY) — confirms a code and returns the recovery codes exactly once. */
-export async function enableTwoFactor(
-  body: TwoFaCodeRequest,
-  options?: EndpointOptions,
-): Promise<TwoFaEnableResponse> {
-  return post<TwoFaEnableResponse, TwoFaCodeRequest>(authPaths.twoFactorEnable, body, options);
-}
-
-/** `POST /auth/2fa/disable` (ANY) — refused for admins with `TWOFA_REQUIRED_FOR_ROLE` (S-8). */
-export async function disableTwoFactor(
-  body: TwoFaDisableRequest,
-  options?: EndpointOptions,
-): Promise<AuthAcknowledgement> {
-  return post<AuthAcknowledgement, TwoFaDisableRequest>(
-    authPaths.twoFactorDisable,
-    body,
-    options,
-  );
 }
 
 /* ------------------------------------------------------------------ passwords */

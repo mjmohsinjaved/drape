@@ -4,8 +4,8 @@ import { Role } from '@library/common';
  * The §7 variables this module reads, resolved once at boot.
  *
  * Secrets are read with `requireSecret`, which has **no fallback** (E-2, CLAUDE.md):
- * a missing `SESSION_SECRET`, `CSRF_SECRET` or `TWOFA_ENCRYPTION_KEY` fails the boot
- * rather than silently degrading every session in the deployment.
+ * a missing `SESSION_SECRET` or `CSRF_SECRET` fails the boot rather than silently
+ * degrading every session in the deployment.
  */
 export interface AuthConfig {
   /** Session cookie name — not a secret, so a documented default is correct (§7). */
@@ -33,11 +33,6 @@ export interface AuthConfig {
     readonly timeCost: number;
     readonly parallelism: number;
   };
-
-  /** AES-256-GCM key protecting `users.twofaSecret` (S-8). 32 bytes. */
-  readonly twofaEncryptionKey: Buffer;
-  /** Label shown in the authenticator app. */
-  readonly twofaIssuer: string;
 
   /** Phone OTP lifetime (C-3). */
   readonly otpTtlSeconds: number;
@@ -183,9 +178,6 @@ export function resolveAuthConfig(source: AuthConfigSource): AuthConfig {
       timeCost: readInt(source, 'ARGON2_TIME_COST', 2),
       parallelism: readInt(source, 'ARGON2_PARALLELISM', 1),
     },
-
-    twofaEncryptionKey: Buffer.from(requireSecret(source, 'TWOFA_ENCRYPTION_KEY'), 'hex'),
-    twofaIssuer: readString(source, 'TWOFA_ISSUER', 'Drape'),
 
     otpTtlSeconds: readInt(source, 'OTP_TTL_SECONDS', 600),
     passwordResetTtlMinutes: readInt(source, 'PASSWORD_RESET_TTL_MINUTES', 30),

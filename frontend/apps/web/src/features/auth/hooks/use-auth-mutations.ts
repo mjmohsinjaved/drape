@@ -1,23 +1,23 @@
 'use client';
 
-import { authApi, ensureCsrf, queryKeys, useApiMutation, type ApiError ,type 
-  AcceptInviteRequest,type 
-  AuthAcknowledgement,type 
-  ChangePasswordRequest,type 
-  ConfirmEmailVerificationRequest,type 
-  ForgotPasswordRequest,type 
-  LoginRequest,type 
-  LoginResponse,type 
-  RequestPhoneOtpRequest,type 
-  ResetPasswordRequest,type 
-  SessionUser,type 
-  SignupRequest,type 
-  TwoFaCodeRequest,type 
-  TwoFaDisableRequest,type 
-  TwoFaEnableResponse,type 
-  TwoFaRecoveryRequest,type 
-  TwoFaSetupResponse,type 
-  VerifyPhoneOtpRequest,
+import {
+  authApi,
+  ensureCsrf,
+  queryKeys,
+  useApiMutation,
+  type AcceptInviteRequest,
+  type ApiError,
+  type AuthAcknowledgement,
+  type ChangePasswordRequest,
+  type ConfirmEmailVerificationRequest,
+  type ForgotPasswordRequest,
+  type LoginRequest,
+  type LoginResponse,
+  type RequestPhoneOtpRequest,
+  type ResetPasswordRequest,
+  type SessionUser,
+  type SignupRequest,
+  type VerifyPhoneOtpRequest,
 } from '@repo/api-client';
 
 import type { UseMutationResult } from '@tanstack/react-query';
@@ -45,7 +45,7 @@ async function primeCsrf(): Promise<void> {
 
 type Mutation<TData, TVariables> = UseMutationResult<TData, ApiError, TVariables>;
 
-/** `POST /auth/login` — S-1, S-6. Answers `{ user, twofaRequired }`. */
+/** `POST /auth/login` — S-1, S-6. Answers `{ user }`. */
 export function useLogin(): Mutation<LoginResponse, LoginRequest> {
   return useApiMutation<LoginResponse, LoginRequest>({
     request: (body) => authApi.login(body),
@@ -59,24 +59,6 @@ export function useLogin(): Mutation<LoginResponse, LoginRequest> {
 export function useSignup(): Mutation<SessionUser, SignupRequest> {
   return useApiMutation<SessionUser, SignupRequest>({
     request: (body) => authApi.signup(body),
-    onMutate: primeCsrf,
-    invalidateKeys: [queryKeys.auth.all],
-  });
-}
-
-/** `POST /auth/2fa/challenge` — completes a `twofaPending` session with a TOTP code (S-8). */
-export function useTwoFactorChallenge(): Mutation<LoginResponse, TwoFaCodeRequest> {
-  return useApiMutation<LoginResponse, TwoFaCodeRequest>({
-    request: (body) => authApi.challengeTwoFactor(body),
-    onMutate: primeCsrf,
-    invalidateKeys: [queryKeys.auth.all],
-  });
-}
-
-/** `POST /auth/2fa/recovery` — the same completion with a single-use code (S-8). */
-export function useTwoFactorRecovery(): Mutation<LoginResponse, TwoFaRecoveryRequest> {
-  return useApiMutation<LoginResponse, TwoFaRecoveryRequest>({
-    request: (body) => authApi.recoverTwoFactor(body),
     onMutate: primeCsrf,
     invalidateKeys: [queryKeys.auth.all],
   });
@@ -154,33 +136,6 @@ export function useVerifyPhoneOtp(): Mutation<AuthAcknowledgement, VerifyPhoneOt
     invalidateKeys: [queryKeys.auth.me(), queryKeys.me.account()],
   });
 }
-
-/** `POST /auth/2fa/setup` — returns the secret and the provisioning URI, before confirmation. */
-export function useTwoFactorSetup(): Mutation<TwoFaSetupResponse, void> {
-  return useApiMutation<TwoFaSetupResponse, void>({
-    request: () => authApi.setupTwoFactor(),
-    onMutate: primeCsrf,
-  });
-}
-
-/** `POST /auth/2fa/enable` — confirms a code and returns the recovery codes exactly once. */
-export function useTwoFactorEnable(): Mutation<TwoFaEnableResponse, TwoFaCodeRequest> {
-  return useApiMutation<TwoFaEnableResponse, TwoFaCodeRequest>({
-    request: (body) => authApi.enableTwoFactor(body),
-    onMutate: primeCsrf,
-    invalidateKeys: [queryKeys.auth.me(), queryKeys.me.account()],
-  });
-}
-
-/** `POST /auth/2fa/disable` — refused for admins with `TWOFA_REQUIRED_FOR_ROLE` (S-8). */
-export function useTwoFactorDisable(): Mutation<AuthAcknowledgement, TwoFaDisableRequest> {
-  return useApiMutation<AuthAcknowledgement, TwoFaDisableRequest>({
-    request: (body) => authApi.disableTwoFactor(body),
-    onMutate: primeCsrf,
-    invalidateKeys: [queryKeys.auth.me(), queryKeys.me.account()],
-  });
-}
-
 /**
  * `POST /invites/token/:token/accept` — creates the admin account behind an invitation (S-5).
  *

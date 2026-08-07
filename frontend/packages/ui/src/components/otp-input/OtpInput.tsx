@@ -71,7 +71,7 @@ export function OtpInput({
           disabled={disabled}
           /* eslint-disable-next-line jsx-a11y/no-autofocus --
              The rule's objection is autofocus that steals focus from other content. This field
-             is opt-in (`autoFocus` defaults to false) and is only turned on by the two-factor
+             is opt-in (`autoFocus` defaults to false) and is only turned on by the phone-OTP
              and verify-email screens, where the code box is the entire purpose of the page and
              the user has just been told to type a code. Not focusing it there costs a
              screen-reader and switch user an extra traverse for nothing. */

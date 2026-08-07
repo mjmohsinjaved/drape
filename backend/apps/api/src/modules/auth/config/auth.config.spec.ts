@@ -11,7 +11,6 @@ function validEnv(overrides: Record<string, string | undefined> = {}): NodeJS.Pr
     SESSION_COOKIE_DOMAIN: '.example.com',
     SESSION_SECRET: 'a'.repeat(64),
     CSRF_SECRET: 'b'.repeat(64),
-    TWOFA_ENCRYPTION_KEY: 'c'.repeat(64),
     APP_WEB_URL: 'https://example.com/',
     ...overrides,
   };
@@ -25,16 +24,13 @@ function validEnv(overrides: Record<string, string | undefined> = {}): NodeJS.Pr
  * session key and looks perfectly healthy while doing it.
  */
 describe('resolveAuthConfig — secrets have no defaults (E-2)', () => {
-  it.each(['SESSION_SECRET', 'CSRF_SECRET', 'TWOFA_ENCRYPTION_KEY'])(
-    'refuses to resolve without %s',
-    (name) => {
-      expect(() => resolveAuthConfig(envConfigSource(validEnv({ [name]: undefined })))).toThrow(
-        new RegExp(`${name} is required`),
-      );
-    },
-  );
+  it.each(['SESSION_SECRET', 'CSRF_SECRET'])('refuses to resolve without %s', (name) => {
+    expect(() => resolveAuthConfig(envConfigSource(validEnv({ [name]: undefined })))).toThrow(
+      new RegExp(`${name} is required`),
+    );
+  });
 
-  it.each(['SESSION_SECRET', 'CSRF_SECRET', 'TWOFA_ENCRYPTION_KEY'])(
+  it.each(['SESSION_SECRET', 'CSRF_SECRET'])(
     'refuses a %s that is not 64 hex characters',
     (name) => {
       expect(() => resolveAuthConfig(envConfigSource(validEnv({ [name]: 'too-short' })))).toThrow(
@@ -53,12 +49,6 @@ describe('resolveAuthConfig — secrets have no defaults (E-2)', () => {
     expect(() =>
       resolveAuthConfig(envConfigSource(validEnv({ SESSION_COOKIE_DOMAIN: undefined }))),
     ).toThrow(/SESSION_COOKIE_DOMAIN is required/);
-  });
-
-  it('gives the 2FA key as 32 raw bytes, ready for AES-256-GCM', () => {
-    const config = resolveAuthConfig(envConfigSource(validEnv()));
-
-    expect(config.twofaEncryptionKey).toHaveLength(32);
   });
 });
 
@@ -106,7 +96,6 @@ describe('resolveAuthConfig — everything else', () => {
     expect(config.otpTtlSeconds).toBe(600);
     expect(config.lockoutThreshold).toBe(5);
     expect(config.lockoutMaxMinutes).toBe(60);
-    expect(config.twofaIssuer).toBe('Drape');
   });
 
   it('strips a trailing slash from APP_WEB_URL, so links never double up', () => {
@@ -135,7 +124,6 @@ describe('resolveAuthConfig — everything else', () => {
           SESSION_COOKIE_DOMAIN: '.example.com',
           SESSION_SECRET: 'a'.repeat(64),
           CSRF_SECRET: 'b'.repeat(64),
-          TWOFA_ENCRYPTION_KEY: 'c'.repeat(64),
           APP_WEB_URL: 'https://example.com',
           SESSION_ADMIN_IDLE_HOURS: 6,
           SESSION_COOKIE_SECURE: true,
@@ -151,9 +139,10 @@ describe('resolveAuthConfig — everything else', () => {
   it('ignores a value that is not configuration rather than stringifying it', () => {
     const config = resolveAuthConfig({
       get: <T>(key: string): T | undefined =>
-        (key === 'TWOFA_ISSUER' ? { nonsense: true } : validEnv()[key]) as T | undefined,
+        (key === 'SESSION_COOKIE_NAME' ? { nonsense: true } : validEnv()[key]) as T | undefined,
     });
 
-    expect(config.twofaIssuer).toBe('Drape');
+    // Not `"[object Object]"` — an object is not configuration, so the default stands.
+    expect(config.sessionCookieName).toBe('drape.sid');
   });
 });

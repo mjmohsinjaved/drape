@@ -127,12 +127,11 @@ export function ApiStandardResponses(
     decorators.push(
       SwaggerApiResponse({
         status: HttpStatus.UNAUTHORIZED,
-        description: 'No session, an expired session, or two-factor still pending.',
+        description: 'No session, or an expired session.',
         schema: errorSchema(HttpStatus.UNAUTHORIZED, [
           ErrorCode.AUTH_REQUIRED,
           ErrorCode.SESSION_EXPIRED,
           ErrorCode.SESSION_INVALID,
-          ErrorCode.TWOFA_REQUIRED,
         ]),
       }),
       SwaggerApiResponse({

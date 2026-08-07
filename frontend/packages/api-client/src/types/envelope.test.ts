@@ -30,7 +30,6 @@ describe('permission denied vs authentication required', () => {
       'INSUFFICIENT_ROLE',
       'ACCOUNT_SUSPENDED',
       'ACCOUNT_DEACTIVATED',
-      'TWOFA_REQUIRED_FOR_ROLE',
       'DELETION_IN_PROGRESS',
     ]) {
       expect(isPermissionDenied(code), code).toBe(true);

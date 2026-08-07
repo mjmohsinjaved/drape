@@ -9,7 +9,7 @@ export const OPENAPI_EXPORT_PATH = 'openapi.json';
 /** The API tag inventory. One `@ApiTags` per controller, drawn from this list. */
 export const SWAGGER_TAGS = [
   { name: 'Health', description: 'Liveness and readiness.' },
-  { name: 'Auth', description: 'Sessions, two-factor, verification, password reset.' },
+  { name: 'Auth', description: 'Sessions, verification, password reset.' },
   { name: 'Users', description: 'Account profile and preferences.' },
   { name: 'Invites', description: 'Admin invitations (S-5).' },
   { name: 'Settings', description: 'Platform settings (A-28 … A-30).' },

@@ -34,7 +34,7 @@ interface SessionRequest extends CookieBearingRequest {
  * behaves as §2.6 describes.
  *
  * **This guard performs no session lookup.** Reading `sessions` by sha256 hash,
- * checking `revokedAt` / `expiresAt` / `absoluteExpiresAt` / `twofaPending`, sliding
+ * checking `revokedAt` / `expiresAt` / `absoluteExpiresAt`, sliding
  * `expiresAt` (12 h admin, 30 d consumer — S-7), updating `lastSeenAt` and
  * `users.lastActiveAt`, and building `ICurrentUser` all belong to the auth module,
  * which binds an implementation to `SESSION_RESOLVER`. `libs/*` must not import from
@@ -43,8 +43,8 @@ interface SessionRequest extends CookieBearingRequest {
  *
  * → `AUTH_REQUIRED` when no cookie is presented on a protected route;
  * `SESSION_INVALID` when the resolver declines the token. The resolver itself raises
- * `SESSION_EXPIRED`, `TWOFA_REQUIRED`, `ACCOUNT_SUSPENDED` and `ACCOUNT_DEACTIVATED`,
- * because only it can tell those apart.
+ * `SESSION_EXPIRED`, `ACCOUNT_SUSPENDED` and `ACCOUNT_DEACTIVATED`, because only it
+ * can tell those apart.
  */
 @Injectable()
 export class SessionAuthGuard implements CanActivate {

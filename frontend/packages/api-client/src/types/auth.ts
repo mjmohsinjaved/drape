@@ -20,10 +20,6 @@ import type { Locale, Role, UserStatus } from './enums';
  *
  * **This is presentation state.** It selects which interface renders and is never an
  * authorisation decision (S-3, B-10, CLAUDE.md): the API re-reads the role on every request.
- *
- * The DTO carries a boolean `twofaEnabled`. There is no `twofaEnabledAt`, no `twofaPending` and
- * no `createdAt` — a pending session is signalled by `LoginResponse.twofaRequired`, and by
- * `TWOFA_REQUIRED` on every other route, not by a flag on the user.
  */
 export interface SessionUser {
   id: Uuid;
@@ -36,8 +32,6 @@ export interface SessionUser {
   /** E.164, masked to the last four digits — even for the owner. */
   phone: string | null;
   locale: Locale;
-  /** Whether a second factor is enrolled (S-8). */
-  twofaEnabled: boolean;
 }
 
 /**
@@ -97,14 +91,13 @@ export interface LoginRequest {
 }
 
 /**
- * `POST /auth/login`, `POST /auth/2fa/challenge`, `POST /auth/2fa/recovery`.
+ * `POST /auth/login`.
  *
- * `user` is `null` while `twofaRequired` is true: the session exists but is `twofaPending`, and
- * nothing about the account is disclosed until the second factor lands (S-8).
+ * A password is the only credential, so a successful login resolves the caller outright —
+ * there is no intermediate state and `user` is never null on a 2xx.
  */
 export interface LoginResponse {
-  user: SessionUser | null;
-  twofaRequired: boolean;
+  user: SessionUser;
 }
 
 /* ------------------------------------------------------------------ acknowledgement */
@@ -144,47 +137,6 @@ export interface SessionSummary {
   createdAt: IsoDateTime;
   lastSeenAt: IsoDateTime;
   expiresAt: IsoDateTime;
-}
-
-/* ------------------------------------------------------------------ two-factor (S-8) */
-
-/** `POST /auth/2fa/challenge` and `POST /auth/2fa/enable` — a six-digit TOTP code. */
-export interface TwoFaCodeRequest {
-  code: string;
-}
-
-/** `POST /auth/2fa/recovery` (PUBLIC). Completes a `twofaPending` session with a recovery code. */
-export interface TwoFaRecoveryRequest {
-  recoveryCode: string;
-}
-
-/**
- * `POST /auth/2fa/setup` (ANY).
- *
- * The API returns the `otpauth://` **URI**, not a rendered QR image, and no `issuer` field. The
- * enrolment screen renders the URI as a QR code itself, or offers it as a one-tap handoff to the
- * authenticator app alongside the secret for manual entry.
- */
-export interface TwoFaSetupResponse {
-  /** Base32 TOTP secret, shown once for manual entry. */
-  secret: string;
-  provisioningUri: string;
-}
-
-/** `POST /auth/2fa/enable` (ANY). Recovery codes are returned exactly once and never again. */
-export interface TwoFaEnableResponse {
-  recoveryCodes: string[];
-}
-
-/**
- * `POST /auth/2fa/disable` (ANY). Rejected for admins with `TWOFA_REQUIRED_FOR_ROLE` (S-8).
- *
- * The DTO names the password field `currentPassword` and requires a **live** code — turning a
- * second factor off is exactly the action a hijacked session would attempt.
- */
-export interface TwoFaDisableRequest {
-  currentPassword: string;
-  code: string;
 }
 
 /* ------------------------------------------------------------------ passwords */

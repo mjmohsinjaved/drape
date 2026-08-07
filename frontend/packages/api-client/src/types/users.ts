@@ -43,9 +43,9 @@ export interface NotificationPreferences {
 /**
  * `MeResponseDto` — `GET /me` and `PATCH /me` (ANY).
  *
- * The DTO sends three **booleans** — `emailVerified`, `phoneVerified`, `twofaEnabled` — not the
- * nullable timestamps `GET /auth/me` uses for the first two. The two routes answer different
- * shapes on purpose: `/auth/me` is the role-resolution probe, this is the account screen.
+ * The DTO sends two **booleans** — `emailVerified` and `phoneVerified` — not the nullable
+ * timestamps `GET /auth/me` uses for them. The two routes answer different shapes on
+ * purpose: `/auth/me` is the role-resolution probe, this is the account screen.
  */
 export interface MyAccount {
   id: Uuid;
@@ -57,8 +57,6 @@ export interface MyAccount {
   locale: Locale;
   emailVerified: boolean;
   phoneVerified: boolean;
-  /** Whether two-factor sign-in is on (S-8). */
-  twofaEnabled: boolean;
   createdAt: IsoDateTime;
   lastLoginAt: IsoDateTime | null;
   /** Set once she has asked for deletion; the purge completes within `DELETION_SLA_HOURS` (C-38). */
@@ -315,8 +313,6 @@ export interface AdminUser {
   role: Role;
   status: UserStatus;
   locale: Locale;
-  /** S-8 requires it for admins. */
-  twofaEnabled: boolean;
   emailVerified: boolean;
   lastLoginAt: IsoDateTime | null;
   lastActiveAt: IsoDateTime | null;

@@ -36,9 +36,8 @@ import type { ChangeUserRoleDto } from '../dto/change-user-role.dto';
 /**
  * `users` columns an admin-directory query reads.
  *
- * An allow-list, not a convenience: `passwordHash`, `twofaSecret` and
- * `twofaRecoveryCodes` are never selected, so no mapper, log line or debugger
- * session in this code path can reach them.
+ * An allow-list, not a convenience: `passwordHash` is never selected, so no mapper,
+ * log line or debugger session in this code path can reach it.
  */
 export const ADMIN_USER_COLUMNS = [
   'id',
@@ -48,7 +47,6 @@ export const ADMIN_USER_COLUMNS = [
   'status',
   'locale',
   'emailVerifiedAt',
-  'twofaEnabledAt',
   'lastLoginAt',
   'lastActiveAt',
   'suspendedAt',

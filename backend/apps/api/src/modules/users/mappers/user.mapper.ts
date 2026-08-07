@@ -7,8 +7,8 @@ import type { User } from '../entities/user.entity';
  * `users` entity → response DTO. **The only place that shape is decided** (§2.9).
  *
  * Both mappers below build a fresh DTO field by field rather than spreading the
- * entity. That is the point: a spread would carry `passwordHash`, `twofaSecret` and
- * `twofaRecoveryCodes` onto the wire the moment somebody adds a column, and a
+ * entity. That is the point: a spread would carry `passwordHash` onto the wire the
+ * moment somebody adds a column, and a
  * deny-list would have to be updated to stop it. An allow-list fails safe — a new
  * column is invisible until someone deliberately adds it here.
  */
@@ -22,8 +22,6 @@ export function toAdminUserResponse(user: User): AdminUserResponseDto {
   dto.role = user.role;
   dto.status = user.status;
   dto.locale = user.locale;
-  // The boolean the console renders — never the secret it is derived from (S-8).
-  dto.twofaEnabled = user.twofaEnabledAt !== null;
   dto.emailVerified = user.emailVerifiedAt !== null;
   dto.lastLoginAt = user.lastLoginAt;
   dto.lastActiveAt = user.lastActiveAt;
@@ -45,7 +43,6 @@ export function toMeResponse(user: User): MeResponseDto {
   dto.locale = user.locale;
   dto.emailVerified = user.emailVerifiedAt !== null;
   dto.phoneVerified = user.phoneVerifiedAt !== null;
-  dto.twofaEnabled = user.twofaEnabledAt !== null;
   dto.createdAt = user.createdAt;
   dto.lastLoginAt = user.lastLoginAt;
   dto.deletionRequestedAt = user.deletionRequestedAt;

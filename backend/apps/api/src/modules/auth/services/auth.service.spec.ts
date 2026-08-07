@@ -10,12 +10,7 @@ import {
   type InMemoryRepository,
 } from '../../../../test/fixtures';
 import { FIXED_NOW, freezeClock, minutesFromFixedNow } from '../../../../test/setup/time';
-import {
-  AUTH_CONFIG,
-  REVOKE_REASONS,
-  TWOFA_MAX_CHALLENGE_ATTEMPTS,
-  USER_DIRECTORY,
-} from '../auth.constants';
+import { AUTH_CONFIG, REVOKE_REASONS, USER_DIRECTORY } from '../auth.constants';
 import { AUTH_EVENTS } from '../auth.events';
 import { AuthAttempt } from '../entities/auth-attempt.entity';
 import { Session } from '../entities/session.entity';
@@ -35,7 +30,6 @@ import { AuthService, type RequestFacts } from './auth.service';
 import { CsrfService } from './csrf.service';
 import { PasswordService } from './password.service';
 import { SessionService } from './session.service';
-import { TotpService } from './totp.service';
 import { VerificationTokenService } from './verification-token.service';
 
 import type { SignupDto } from '../dto/signup.dto';
@@ -67,7 +61,6 @@ async function createSuite(): Promise<Suite> {
       PasswordService,
       SessionService,
       CsrfService,
-      TotpService,
       VerificationTokenService,
       AuthAttemptService,
     ],
@@ -198,7 +191,6 @@ describe('AuthService', () => {
       const result = await suite.service.signup(signupPayload(), FACTS);
 
       expect(result.issued?.session.role).toBe(Role.CONSUMER);
-      expect(result.issued?.session.twofaPending).toBe(false);
       expect(suite.notifications.sendTemplatedEmail).toHaveBeenCalledWith(
         expect.objectContaining({ template: TemplateId.VERIFY_EMAIL }),
       );
@@ -294,8 +286,7 @@ describe('AuthService', () => {
 
       const result = await suite.service.login(user.email, PASSWORD, FACTS);
 
-      expect(result.body.twofaRequired).toBe(false);
-      expect(result.body.user?.id).toBe(user.id);
+      expect(result.body.user.id).toBe(user.id);
       expect(result.issued?.session.userId).toBe(user.id);
       expect(user.failedLoginCount).toBe(0);
       expect(user.lastLoginAt).toEqual(FIXED_NOW);
@@ -337,8 +328,8 @@ describe('AuthService', () => {
      * `login` checked only the *status*, and status is a column an admin can move: suspend
      * takes a `DEACTIVATED` deletion-pending account to `SUSPENDED`, and unsuspend then
      * sets it `ACTIVE`. `AdminConsumersService` now refuses both halves of that, and this is
-     * the second lock — `deletionRequestedAt` is the durable fact, and `changePassword` and
-     * `setupTwoFactor` were already checking it while the front door was not.
+     * the second lock — `deletionRequestedAt` is the durable fact, and `changePassword` was
+     * already checking it while the front door was not.
      */
     it('refuses an account whose deletion has been requested, whatever its status', async () => {
       const user = await seedUser({
@@ -349,16 +340,6 @@ describe('AuthService', () => {
       await expect(suite.service.login(user.email, PASSWORD, FACTS)).rejects.toMatchObject({
         errorCode: ErrorCode.DELETION_IN_PROGRESS,
       });
-    });
-
-    it('holds an account with 2FA in twofaPending and returns nothing about it (S-8)', async () => {
-      const user = await seedUser({ twofaEnabledAt: FIXED_NOW, twofaSecret: 'v1.a.b.c' });
-
-      const result = await suite.service.login(user.email, PASSWORD, FACTS);
-
-      expect(result.body.twofaRequired).toBe(true);
-      expect(result.body.user).toBeNull();
-      expect(result.issued?.session.twofaPending).toBe(true);
     });
 
     it('locks out after the threshold, with the same copy whoever is asking', async () => {
@@ -568,262 +549,6 @@ describe('AuthService', () => {
           FACTS,
         ),
       ).rejects.toMatchObject({ errorCode: ErrorCode.DELETION_IN_PROGRESS });
-    });
-  });
-
-  describe('two-factor completion (S-8)', () => {
-    it('rotates the pending session and clears twofaPending', async () => {
-      const totp = suite.harness.get<TotpService>(TotpService);
-      const enrolment = totp.enrol('admin@example.invalid');
-      const user = buildAuthUser({
-        role: Role.ADMIN,
-        email: 'admin@example.invalid',
-        passwordHash: await suite.passwords.hash(PASSWORD),
-        twofaSecret: enrolment.encryptedSecret,
-        twofaEnabledAt: FIXED_NOW,
-      });
-      suite.directory.rows.push(user);
-
-      const login = await suite.service.login(user.email, PASSWORD, FACTS);
-      const pendingId = login.issued?.session.id as string;
-
-      const { authenticator } = await import('otplib');
-      const code = authenticator.clone({}).generate(enrolment.secret);
-
-      const completed = await suite.service.completeTwoFactorChallenge(
-        login.issued?.token,
-        code,
-        FACTS,
-      );
-
-      expect(completed.body.twofaRequired).toBe(false);
-      expect(completed.body.user?.id).toBe(user.id);
-      expect(completed.issued?.session.id).not.toBe(pendingId);
-      expect(completed.issued?.session.twofaPending).toBe(false);
-      expect(completed.issued?.session.twofaVerifiedAt).toEqual(FIXED_NOW);
-      expect(suite.sessions.$rows.find((row) => row.id === pendingId)?.revokedReason).toBe(
-        REVOKE_REASONS.ROTATED,
-      );
-    });
-
-    it('rejects a wrong code with TWOFA_INVALID and records the attempt', async () => {
-      const totp = suite.harness.get<TotpService>(TotpService);
-      const enrolment = totp.enrol('admin@example.invalid');
-      const user = buildAuthUser({
-        role: Role.ADMIN,
-        email: 'admin@example.invalid',
-        passwordHash: await suite.passwords.hash(PASSWORD),
-        twofaSecret: enrolment.encryptedSecret,
-        twofaEnabledAt: FIXED_NOW,
-      });
-      suite.directory.rows.push(user);
-      const login = await suite.service.login(user.email, PASSWORD, FACTS);
-
-      await expect(
-        suite.service.completeTwoFactorChallenge(login.issued?.token, '000000', FACTS),
-      ).rejects.toMatchObject({ errorCode: ErrorCode.TWOFA_INVALID });
-      expect(suite.attempts.$rows.some((row) => row.outcome === AuthOutcome.TWOFA_FAILED)).toBe(
-        true,
-      );
-    });
-
-    /* ---------------------------------------------------------------------------------------
-     * S-6 — the second factor is a credential, so it gets a credential's backoff
-     * ------------------------------------------------------------------------------------ */
-
-    /**
-     * `completeTwoFactorChallenge` recorded `TWOFA_FAILED` and never read it back, and
-     * `assertNotLockedOut` was called on exactly one path: password login. The only limiter
-     * left on the challenge was `@Throttle(5/60s)` — and because `UserThrottlerGuard` runs
-     * *before* `SessionAuthGuard` on a `@Public()` route, its tracker is the **IP**. TOTP
-     * tolerance is ±1 step, so three of a million codes are live at any instant; an attacker
-     * holding a stolen password sprayed from a proxy pool with no backoff, no account lock and
-     * nothing written anywhere a human would look, and the second factor fell inside a day.
-     *
-     * Two independent bounds now apply, and each of these tests fails without one of them.
-     */
-    describe('the challenge is rate-limited per account, not per address', () => {
-      /** An enrolled admin, signed in as far as the pending session. */
-      async function pendingAdmin(): Promise<{ user: AuthUser; token: string; sessionId: string }> {
-        const totp = suite.harness.get<TotpService>(TotpService);
-        const enrolment = totp.enrol('admin@example.invalid');
-        const user = buildAuthUser({
-          role: Role.ADMIN,
-          email: 'admin@example.invalid',
-          passwordHash: await suite.passwords.hash(PASSWORD),
-          twofaSecret: enrolment.encryptedSecret,
-          twofaEnabledAt: FIXED_NOW,
-        });
-        suite.directory.rows.push(user);
-
-        const login = await suite.service.login(user.email, PASSWORD, FACTS);
-
-        return {
-          user,
-          token: login.issued?.token as string,
-          sessionId: login.issued?.session.id as string,
-        };
-      }
-
-      /**
-       * One wrong code, a second later.
-       *
-       * The clock moves because the lockout reads `auth_attempts.createdAt` newest-first;
-       * a run of attempts sharing one timestamp has no "newest", which is a property of a
-       * frozen clock and not of the code under test.
-       */
-      async function guessWrong(token: string | undefined, ip = FACTS.ip): Promise<string> {
-        jest.setSystemTime(new Date(Date.now() + 1_000));
-        return capture(
-          suite.service.completeTwoFactorChallenge(token, '000000', {
-            ip,
-            userAgent: FACTS.userAgent,
-          }),
-        );
-      }
-
-      it(`revokes the pending session after ${TWOFA_MAX_CHALLENGE_ATTEMPTS} wrong codes`, async () => {
-        const { token, sessionId } = await pendingAdmin();
-
-        for (let attempt = 0; attempt < TWOFA_MAX_CHALLENGE_ATTEMPTS; attempt += 1) {
-          expect(JSON.parse(await guessWrong(token))).toMatchObject({
-            errorCode: ErrorCode.TWOFA_INVALID,
-          });
-        }
-
-        const row = suite.sessions.$rows.find((candidate) => candidate.id === sessionId);
-        expect(row?.revokedAt).not.toBeNull();
-        expect(row?.revokedReason).toBe(REVOKE_REASONS.TWOFA_FAILED);
-      });
-
-      it('tells the attacker nothing — the cap is announced only to the operator', async () => {
-        const { user, token, sessionId } = await pendingAdmin();
-
-        for (let attempt = 0; attempt < TWOFA_MAX_CHALLENGE_ATTEMPTS; attempt += 1) {
-          await guessWrong(token);
-        }
-
-        // Same code and same copy on the attempt that locked as on the first one.
-        expect(suite.emit).toHaveBeenCalledWith(
-          AUTH_EVENTS.TWOFA_CHALLENGE_LOCKED,
-          expect.objectContaining({
-            userId: user.id,
-            sessionId,
-            failureCount: TWOFA_MAX_CHALLENGE_ATTEMPTS,
-          }),
-        );
-      });
-
-      it('forces the password step again — the dead session cannot be challenged further', async () => {
-        const { token } = await pendingAdmin();
-
-        for (let attempt = 0; attempt < TWOFA_MAX_CHALLENGE_ATTEMPTS; attempt += 1) {
-          await guessWrong(token);
-        }
-
-        expect(JSON.parse(await guessWrong(token))).toMatchObject({
-          errorCode: ErrorCode.SESSION_INVALID,
-        });
-      });
-
-      it('locks the account, so a fresh session from a new IP is refused too', async () => {
-        const { user, token } = await pendingAdmin();
-
-        for (let attempt = 0; attempt < TWOFA_MAX_CHALLENGE_ATTEMPTS; attempt += 1) {
-          await guessWrong(token);
-        }
-
-        // A proxy rotation buys a new address and a new pending session. Neither helps:
-        // the S-6 counter is keyed by the account, which is the thing being attacked.
-        const sessions = suite.harness.get<SessionService>(SessionService);
-        const fresh = await sessions.issue({
-          user,
-          ip: '198.51.100.9',
-          userAgent: null,
-          twofaPending: true,
-          now: new Date(),
-        });
-
-        expect(JSON.parse(await guessWrong(fresh.token, '198.51.100.9'))).toMatchObject({
-          errorCode: ErrorCode.ACCOUNT_LOCKED,
-        });
-      });
-
-      it('leaves an honest first attempt alone', async () => {
-        const { token } = await pendingAdmin();
-
-        expect(JSON.parse(await guessWrong(token))).toMatchObject({
-          errorCode: ErrorCode.TWOFA_INVALID,
-        });
-        expect(suite.emit).not.toHaveBeenCalledWith(
-          AUTH_EVENTS.TWOFA_CHALLENGE_LOCKED,
-          expect.anything(),
-        );
-      });
-
-      it('applies the same cap to recovery codes, which are guessable too', async () => {
-        const { token, sessionId } = await pendingAdmin();
-
-        for (let attempt = 0; attempt < TWOFA_MAX_CHALLENGE_ATTEMPTS; attempt += 1) {
-          jest.setSystemTime(new Date(Date.now() + 1_000));
-          await capture(suite.service.completeRecovery(token, 'AAAA-BBBB-CCCC', FACTS));
-        }
-
-        const row = suite.sessions.$rows.find((candidate) => candidate.id === sessionId);
-        expect(row?.revokedReason).toBe(REVOKE_REASONS.TWOFA_FAILED);
-      });
-    });
-
-    it('refuses a challenge with no session cookie', async () => {
-      await expect(
-        suite.service.completeTwoFactorChallenge(undefined, '000000', FACTS),
-      ).rejects.toMatchObject({ errorCode: ErrorCode.AUTH_REQUIRED });
-    });
-
-    it('refuses to re-run a challenge on a completed session', async () => {
-      const user = buildAuthUser({
-        email: 'ayesha@example.invalid',
-        passwordHash: await suite.passwords.hash(PASSWORD),
-      });
-      suite.directory.rows.push(user);
-      const login = await suite.service.login(user.email, PASSWORD, FACTS);
-
-      await expect(
-        suite.service.completeTwoFactorChallenge(login.issued?.token, '000000', FACTS),
-      ).rejects.toMatchObject({ errorCode: ErrorCode.SESSION_INVALID });
-    });
-  });
-
-  describe('disableTwoFactor (S-8)', () => {
-    it('refuses an admin outright, before any credential is checked', async () => {
-      const user = buildAuthUser({
-        role: Role.ADMIN,
-        email: 'admin@example.invalid',
-        passwordHash: 'never-verified',
-        twofaEnabledAt: FIXED_NOW,
-      });
-      suite.directory.rows.push(user);
-      const verify = jest.spyOn(suite.passwords, 'verify');
-
-      await expect(
-        suite.service.disableTwoFactor(
-          {
-            id: user.id,
-            role: Role.ADMIN,
-            email: user.email,
-            name: user.name,
-            status: user.status,
-            emailVerifiedAt: user.emailVerifiedAt,
-            phoneVerifiedAt: user.phoneVerifiedAt,
-            sessionId: 'session',
-            locale: user.locale,
-          },
-          { currentPassword: PASSWORD, code: '123456' },
-          FACTS,
-        ),
-      ).rejects.toMatchObject({ errorCode: ErrorCode.TWOFA_REQUIRED_FOR_ROLE });
-
-      expect(verify).not.toHaveBeenCalled();
     });
   });
 });

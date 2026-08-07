@@ -32,8 +32,7 @@ import type { UpdateMeDto } from '../dto/update-me.dto';
 
 /**
  * The `users` columns a self route reads. Same allow-list discipline as the admin
- * queries: an account reading its own row still gets no password hash, no 2FA
- * secret and no recovery code (§9.2).
+ * queries: an account reading its own row still gets no password hash (§9.2).
  */
 const SELF_USER_COLUMNS = [
   'id',
@@ -45,7 +44,6 @@ const SELF_USER_COLUMNS = [
   'locale',
   'emailVerifiedAt',
   'phoneVerifiedAt',
-  'twofaEnabledAt',
   'createdAt',
   'lastLoginAt',
   'deletionRequestedAt',

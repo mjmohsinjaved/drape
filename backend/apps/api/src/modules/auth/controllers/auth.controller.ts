@@ -12,7 +12,6 @@ import {
   Res,
 } from '@nestjs/common';
 import {
-  ApiBody,
   ApiCookieAuth,
   ApiCreatedResponse,
   ApiOkResponse,
@@ -25,7 +24,6 @@ import {
   CSRF_HEADER_NAME,
   CurrentUser,
   Public,
-  readCookie,
   ResponseMessage,
   Role,
   Roles,
@@ -39,14 +37,11 @@ import {
   CsrfTokenDto,
   LoginResponseDto,
   SessionSummaryDto,
-  TwoFactorEnabledDto,
-  TwoFactorSetupDto,
 } from '../dto/auth-response.dto';
 import { LoginDto } from '../dto/login.dto';
 import { ChangePasswordDto, ForgotPasswordDto, ResetPasswordDto } from '../dto/password.dto';
 import { SessionIdParamDto } from '../dto/session-id-param.dto';
 import { SignupDto } from '../dto/signup.dto';
-import { DisableTwoFactorDto, TwoFactorCodeDto, TwoFactorRecoveryDto } from '../dto/two-factor.dto';
 import { ConfirmEmailDto, RequestPhoneOtpDto, VerifyPhoneOtpDto } from '../dto/verification.dto';
 import { AuthService, type AuthResult } from '../services/auth.service';
 import { CsrfService } from '../services/csrf.service';
@@ -177,60 +172,6 @@ export class AuthController {
   ): Promise<LoginResponseDto> {
     return this.withCookies(
       await this.authService.login(dto.email, dto.password, facts(request)),
-      response,
-    );
-  }
-
-  /**
-   * `POST /auth/2fa/challenge` — completes a `twofaPending` session (S-8).
-   *
-   * `@Public()` because a pending session is *not* an authenticated caller: guard 3
-   * rejects it with `TWOFA_REQUIRED` everywhere else, so this handler reads the
-   * cookie itself.
-   */
-  @Post('2fa/challenge')
-  @Public()
-  @Roles(Role.PUBLIC)
-  @Throttle(THROTTLE_CREDENTIALS)
-  @HttpCode(HttpStatus.OK)
-  @ResponseMessage('Signed in')
-  @ApiOperation({ summary: 'Complete a two-factor challenge with a TOTP code' })
-  @ApiOkResponse({ type: LoginResponseDto })
-  async challengeTwoFactor(
-    @Body() dto: TwoFactorCodeDto,
-    @Req() request: AuthRequest,
-    @Res({ passthrough: true }) response: CookieWritingResponse,
-  ): Promise<LoginResponseDto> {
-    return this.withCookies(
-      await this.authService.completeTwoFactorChallenge(
-        this.readSessionCookie(request),
-        dto.code,
-        facts(request),
-      ),
-      response,
-    );
-  }
-
-  /** `POST /auth/2fa/recovery` — completes a challenge with a single-use code (S-8). */
-  @Post('2fa/recovery')
-  @Public()
-  @Roles(Role.PUBLIC)
-  @Throttle(THROTTLE_CREDENTIALS)
-  @HttpCode(HttpStatus.OK)
-  @ResponseMessage('Signed in')
-  @ApiOperation({ summary: 'Complete a two-factor challenge with a recovery code' })
-  @ApiOkResponse({ type: LoginResponseDto })
-  async challengeRecovery(
-    @Body() dto: TwoFactorRecoveryDto,
-    @Req() request: AuthRequest,
-    @Res({ passthrough: true }) response: CookieWritingResponse,
-  ): Promise<LoginResponseDto> {
-    return this.withCookies(
-      await this.authService.completeRecovery(
-        this.readSessionCookie(request),
-        dto.recoveryCode,
-        facts(request),
-      ),
       response,
     );
   }
@@ -436,55 +377,6 @@ export class AuthController {
   }
 
   /* ---------------------------------------------------------------------- */
-  /* Two-factor enrolment (S-8)                                              */
-  /* ---------------------------------------------------------------------- */
-
-  /** `POST /auth/2fa/setup` — returns a TOTP secret and provisioning URI. */
-  @Post('2fa/setup')
-  @Roles(Role.ADMIN, Role.CONSUMER)
-  @ApiCookieAuth()
-  @HttpCode(HttpStatus.OK)
-  @ResponseMessage('Two-factor setup started')
-  @ApiOperation({ summary: 'Begin two-factor enrolment' })
-  @ApiOkResponse({ type: TwoFactorSetupDto })
-  async setupTwoFactor(@CurrentUser() caller: ICurrentUser): Promise<TwoFactorSetupDto> {
-    return this.authService.setupTwoFactor(caller);
-  }
-
-  /** `POST /auth/2fa/enable` — confirms a code and returns the recovery codes once. */
-  @Post('2fa/enable')
-  @Roles(Role.ADMIN, Role.CONSUMER)
-  @ApiCookieAuth()
-  @HttpCode(HttpStatus.OK)
-  @ResponseMessage('Two-factor authentication is on')
-  @ApiOperation({ summary: 'Confirm a code and enable two-factor authentication' })
-  @ApiOkResponse({ type: TwoFactorEnabledDto })
-  @ApiBody({ type: TwoFactorCodeDto })
-  async enableTwoFactor(
-    @Body() dto: TwoFactorCodeDto,
-    @CurrentUser() caller: ICurrentUser,
-    @Req() request: AuthRequest,
-  ): Promise<TwoFactorEnabledDto> {
-    return this.authService.enableTwoFactor(caller, dto.code, facts(request));
-  }
-
-  /** `POST /auth/2fa/disable` — rejected for admins (S-8). */
-  @Post('2fa/disable')
-  @Roles(Role.ADMIN, Role.CONSUMER)
-  @ApiCookieAuth()
-  @HttpCode(HttpStatus.OK)
-  @ResponseMessage('Two-factor authentication is off')
-  @ApiOperation({ summary: 'Disable two-factor authentication (Consumers only)' })
-  @ApiOkResponse({ type: AuthAcknowledgementDto })
-  async disableTwoFactor(
-    @Body() dto: DisableTwoFactorDto,
-    @CurrentUser() caller: ICurrentUser,
-    @Req() request: AuthRequest,
-  ): Promise<AuthAcknowledgementDto> {
-    return this.authService.disableTwoFactor(caller, dto, facts(request));
-  }
-
-  /* ---------------------------------------------------------------------- */
   /* Internals                                                               */
   /* ---------------------------------------------------------------------- */
 
@@ -502,9 +394,5 @@ export class AuthController {
       this.sessionService.clearAuthCookies(response);
     }
     return result.body;
-  }
-
-  private readSessionCookie(request: AuthRequest): string | undefined {
-    return readCookie(request, this.config.sessionCookieName);
   }
 }

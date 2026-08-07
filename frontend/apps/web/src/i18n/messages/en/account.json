@@ -92,13 +92,11 @@
 
   "security": {
     "title": "Sign-in and security",
-    "description": "Your password, two-factor authentication, and where you're signed in.",
+    "description": "Your password and where you're signed in.",
     "next1": "Password change, which signs out every other device.",
     "next2": "The active session list, each one revocable on its own.",
     "passwordTitle": "Password",
     "passwordDescription": "Change it here. This device stays signed in; every other one is signed out.",
-    "twofaTitle": "Two-factor authentication",
-    "twofaDescription": "A six-digit code from an app, on top of your password.",
     "sessionsTitle": "Where you're signed in",
     "sessionsDescription": "Every device with a live session. Sign out any you don't recognise.",
     "sessionsErrorTitle": "Your sessions didn't load",
@@ -116,39 +114,6 @@
     "savedTitle": "Password changed",
     "savedBody": "Your other devices have been signed out.",
     "changeAgain": "Change it again"
-  },
-
-  "twoFactor": {
-    "requiredBody": "Admin accounts keep two-factor authentication on. Set it up to finish.",
-    "optionalBody": "Add a second step to sign-in: a six-digit code from an app on your phone.",
-    "startAction": "Set up two-factor authentication",
-    "onceTitle": "This is shown once",
-    "onceBody": "Add it to your authenticator app now. We can't show the secret again after this step.",
-    "step1Title": "1. Open your authenticator app",
-    "step1Body": "This hands the account straight to an app that already understands it.",
-    "openInApp": "Open in your authenticator app",
-    "step2Title": "2. Or add it by hand",
-    "step2Body": "Type this key into your app instead, if you'd rather.",
-    "step3Title": "3. Enter the code your app shows",
-    "codeLabel": "Six-digit code",
-    "codeHint": "The code changes every 30 seconds.",
-    "confirmAction": "Turn on two-factor authentication",
-    "enabledTitle": "Two-factor authentication is on",
-    "enabledBody": "You'll enter a code from your app each time you sign in.",
-    "recoveryTitle": "Your recovery codes",
-    "recoveryBody": "Save these somewhere safe. Each one signs you in once if you lose your phone, and we can't show them again.",
-    "doneAction": "Done",
-    "onTitle": "Two-factor authentication is on",
-    "onBody": "You enter a code from your authenticator app each time you sign in.",
-    "adminLocked": "Admin accounts keep this on, so there's nothing to turn off here.",
-    "disableIntro": "Confirm it's you: your password, and a live code from your app.",
-    "disablePasswordLabel": "Current password",
-    "disableCodeLabel": "Six-digit code",
-    "disableCodeHint": "From your authenticator app.",
-    "disableAction": "Turn off two-factor authentication",
-    "disabledTitle": "Two-factor authentication is off",
-    "disabledBody": "You now sign in with your password alone. Turn it back on whenever you like.",
-    "turnOnAgain": "Turn it back on"
   },
 
   "sessions": {
@@ -196,7 +161,7 @@
     "label": "Account settings",
     "security": {
       "title": "Sign-in and security",
-      "description": "Password, two-factor authentication and your signed-in devices."
+      "description": "Password and your signed-in devices."
     },
     "notifications": {
       "title": "Notifications",
@@ -240,9 +205,6 @@
     "admin": {
       "title": "Good to see you, {name}",
       "description": "Enquiries, the catalog and the people using the fitting room.",
-      "twofaTitle": "Set up two-factor authentication",
-      "twofaBody": "Your account handles other people's photos and enquiries, so a second step at sign-in is required before you carry on.",
-      "twofaAction": "Set it up",
       "links": {
         "enquiries": {
           "title": "Enquiries",

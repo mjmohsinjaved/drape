@@ -27,7 +27,6 @@ const CONSUMER: SessionUser = {
   locale: 'EN',
   emailVerifiedAt: '2026-08-01T00:00:00.000Z',
   phoneVerifiedAt: '2026-08-01T00:00:00.000Z',
-  twofaEnabled: false,
 };
 
 const ADMIN: SessionUser = {
@@ -36,7 +35,6 @@ const ADMIN: SessionUser = {
   role: 'ADMIN',
   email: 'admin@example.com',
   name: 'Studio Admin',
-  twofaEnabled: true,
 };
 
 function state(): AuthState {

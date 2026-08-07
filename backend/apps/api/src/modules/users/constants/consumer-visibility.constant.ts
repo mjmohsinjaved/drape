@@ -26,9 +26,8 @@
 /**
  * `users` columns readable by an admin consumer query (A-16, A-17).
  *
- * Deliberately absent: `passwordHash`, `twofaSecret`, `twofaRecoveryCodes`,
- * `failedLoginCount`, `lockedUntil`. A credential, a shared secret or a lockout
- * counter has no place in an admin console response.
+ * Deliberately absent: `passwordHash`, `failedLoginCount`, `lockedUntil`. A
+ * credential or a lockout counter has no place in an admin console response.
  */
 export const CONSUMER_USER_COLUMNS = [
   'id',

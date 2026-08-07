@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { ArrowRight, Inbox, Shirt, Users } from 'lucide-react';
 import { getTranslations } from 'next-intl/server';
 
-import { Button, Callout, Card, CardContent, DirectionalIcon } from '@repo/ui';
+import { Card, CardContent, DirectionalIcon } from '@repo/ui';
 
 import { routes } from '@/lib/routes';
 
@@ -47,29 +47,6 @@ export async function AdminHome({ locale, user }: AdminHomeProps) {
         </h1>
         <p className="max-w-prose text-base text-ink-muted">{t('description')}</p>
       </header>
-
-      {/*
-        S-8 makes a second factor mandatory for admins. Enrolment itself lives on
-        `/account/security`, which an admin can now reach — the account segment is role-ANY and
-        renders inside the console shell. This is the prompt that takes them there, not a second
-        copy of the panel: one enrolment screen, in one place, in both shells.
-
-        It is presentation of a rule the API enforces. An admin session without a second factor
-        is refused by the API regardless of what this branch decides to draw (S-3).
-      */}
-      {user.twofaEnabled ? null : (
-        <Callout
-          tone="warning"
-          title={t('twofaTitle')}
-          action={
-            <Button asChild variant="primary" size="sm">
-              <Link href={routes.accountSecurity(locale)}>{t('twofaAction')}</Link>
-            </Button>
-          }
-        >
-          {t('twofaBody')}
-        </Callout>
-      )}
 
       <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {links.map(({ key, href, Icon }) => (

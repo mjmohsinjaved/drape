@@ -43,7 +43,6 @@ const SENSITIVE_KEY_FRAGMENTS: readonly string[] = [
   'cookie',
   'setcookie',
   'credential',
-  'twofasecret',
   'csrfsecret',
   'sessionsecret',
   // Tokens of every flavour (§3.4 file tokens, invites, OTPs, resets)

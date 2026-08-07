@@ -1,10 +1,10 @@
 import { randomUUID } from 'node:crypto';
 
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 
 import { DataSource, type EntityManager } from 'typeorm';
 
-import { isAdmin, Locale } from '@library/common';
+import { Locale } from '@library/common';
 import { runInTransaction } from '@library/database';
 
 import type { InviteAcceptedEvent } from '@api/modules/invites/constants/invite-events.constant';
@@ -57,8 +57,6 @@ import type { AuthUser } from '../interfaces/user-directory.interface';
  */
 @Injectable()
 export class InviteAcceptanceService {
-  private readonly logger = new Logger(InviteAcceptanceService.name);
-
   constructor(
     private readonly invites: InvitesService,
     @Inject(INVITED_ACCOUNT_DIRECTORY) private readonly accounts: InvitedAccountDirectory,
@@ -120,26 +118,10 @@ export class InviteAcceptanceService {
     // that rollback and recorded an acceptance that never happened.
     this.invites.announceAccepted(acceptedEvent);
 
-    if (isAdmin(user.role)) {
-      // S-8: mandatory for admins, and impossible to enrol before the account exists.
-      // The session below is what lets them reach `/auth/2fa/setup` — and *only* that,
-      // plus `/auth/2fa/enable`, `/auth/me` and `/auth/logout`:
-      // `SessionResolverService` refuses an admin with `twofaEnabledAt === null`
-      // everywhere else with `TWOFA_REQUIRED`. The warning below is a record, not the
-      // control.
-      this.logger.warn(
-        `admin ${user.id} accepted an invitation and has no second factor yet (S-8)`,
-      );
-    }
-
-    // Not `twofaPending`: there is no secret to challenge against, and a pending
-    // session is refused everywhere except the two challenge routes — which would
-    // leave a brand-new admin unable to reach the enrolment the invitation exists for.
     const issued = await this.sessionService.issue({
       user,
       ip: facts.ip,
       userAgent: facts.userAgent,
-      twofaPending: false,
       now,
     });
 

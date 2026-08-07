@@ -18,14 +18,6 @@ export const AUTH_EVENTS = {
   PASSWORD_CHANGED: 'auth.password_changed',
   EMAIL_VERIFIED: 'auth.email_verified',
   PHONE_VERIFIED: 'auth.phone_verified',
-  TWOFA_ENABLED: 'auth.twofa_enabled',
-  TWOFA_DISABLED: 'auth.twofa_disabled',
-  /**
-   * S-6/S-8: a pending session burned through its second-factor guessing budget and
-   * was revoked. Worth an audit row and an operator alert — repeated occurrences on
-   * one account mean the password is already known to somebody else.
-   */
-  TWOFA_CHALLENGE_LOCKED: 'auth.twofa_challenge_locked',
   SESSIONS_REVOKED: 'auth.sessions_revoked',
 } as const;
 
@@ -56,7 +48,6 @@ export interface SignedUpEvent extends AuthEventBase {
 
 export interface LoggedInEvent extends AuthEventBase {
   readonly sessionId: string;
-  readonly twofaRequired: boolean;
 }
 
 export interface SessionsRevokedEvent extends AuthEventBase {
@@ -64,11 +55,5 @@ export interface SessionsRevokedEvent extends AuthEventBase {
   readonly revokedCount: number;
 }
 
-/** The revoked pending session and how many consecutive wrong codes it took. */
-export interface TwoFactorChallengeLockedEvent extends AuthEventBase {
-  readonly failureCount: number;
-  readonly sessionId: string;
-}
-
-/** Events with no payload beyond the base — password change, verification, 2FA. */
+/** Events with no payload beyond the base — password change and verification. */
 export type AuthAccountEvent = AuthEventBase;

@@ -5,10 +5,8 @@ import { Locale, Role, UserStatus } from '@library/common';
 /**
  * One admin account (A-2, §5.2).
  *
- * **What this class does not have a field for, at all:** `passwordHash`,
- * `twofaSecret`, `twofaRecoveryCodes`, any session token. 2FA is reported as the
- * boolean the console actually renders, derived from `twofaEnabledAt`; the secret
- * that boolean is derived from never leaves the database (S-8, §9.2).
+ * **What this class does not have a field for, at all:** `passwordHash`, or any
+ * session token. A credential that never serialises cannot leak (§9.2).
  */
 export class AdminUserResponseDto {
   @ApiProperty({ format: 'uuid' })
@@ -28,9 +26,6 @@ export class AdminUserResponseDto {
 
   @ApiProperty({ enum: Locale })
   locale: Locale;
-
-  @ApiProperty({ description: 'Whether two-factor sign-in is on. S-8 requires it for admins.' })
-  twofaEnabled: boolean;
 
   @ApiProperty()
   emailVerified: boolean;

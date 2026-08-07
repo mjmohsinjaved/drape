@@ -209,7 +209,6 @@ export const AUTH_ROUTE_SEGMENTS: readonly string[] = [
   '/forgot-password',
   '/reset-password',
   '/verify-email',
-  '/two-factor',
   '/invite',
 ];
 
@@ -225,17 +224,13 @@ export function isAuthRoute(pathname: string): boolean {
 }
 
 export function isSessionEndedError(error: ApiError): boolean {
-  return (
-    error.isOneOf(...SESSION_ENDED_ERROR_CODES) ||
-    (error.statusCode === 401 && error.errorCode !== 'TWOFA_REQUIRED')
-  );
+  return error.isOneOf(...SESSION_ENDED_ERROR_CODES) || error.statusCode === 401;
 }
 
 /**
  * Clears auth state and redirects to `/login?from=<path>` — **once**, guarded by a module flag, so
  * a burst of parallel queries failing together cannot produce a redirect loop (§6.4). Already
- * being on an auth route suppresses the redirect entirely; `TWOFA_REQUIRED` is excluded because
- * the 2FA challenge is a legitimate 401 mid-login, not a dead session.
+ * being on an auth route suppresses the redirect entirely.
  */
 export function handleSessionEnded(error: ApiError): void {
   authFailureHandler?.(error);

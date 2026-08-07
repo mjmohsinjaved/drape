@@ -22,11 +22,6 @@ export interface AuthUser {
   name: string;
   phone: string | null;
   phoneVerifiedAt: Date | null;
-  /** AES-256-GCM ciphertext under `TWOFA_ENCRYPTION_KEY`, never plaintext. */
-  twofaSecret: string | null;
-  twofaEnabledAt: Date | null;
-  /** Hashed recovery codes. The plaintext is shown once and never stored. */
-  twofaRecoveryCodes: string[] | null;
   status: UserStatus;
   lastLoginAt: Date | null;
   lastActiveAt: Date | null;
@@ -61,9 +56,6 @@ export type AuthUserPatch = Partial<
     | 'emailVerifiedAt'
     | 'phone'
     | 'phoneVerifiedAt'
-    | 'twofaSecret'
-    | 'twofaEnabledAt'
-    | 'twofaRecoveryCodes'
     | 'lastLoginAt'
     | 'lastActiveAt'
     | 'failedLoginCount'

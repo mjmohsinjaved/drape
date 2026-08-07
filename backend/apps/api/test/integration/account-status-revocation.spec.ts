@@ -158,7 +158,6 @@ describe('A-2 / A-19 — a status change revokes live sessions immediately', () 
       user: { id: user.id, role: user.role },
       ip: '203.0.113.7',
       userAgent: 'jest/drape-test',
-      twofaPending: false,
       now: new Date(),
     });
     return issued.token;

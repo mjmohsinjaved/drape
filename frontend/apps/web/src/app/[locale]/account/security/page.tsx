@@ -6,7 +6,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@repo
 import { ScreenError } from '@/components/states';
 import { ChangePasswordForm } from '@/features/account/components/ChangePasswordForm';
 import { SessionsPanel } from '@/features/account/components/SessionsPanel';
-import { TwoFactorSettings } from '@/features/account/components/TwoFactorSettings';
 import { isRetryableCode } from '@/features/tryon/lib/error-copy';
 import { buildMetadata } from '@/lib/metadata';
 import { routes } from '@/lib/routes';
@@ -30,7 +29,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 /**
- * `/account/security` — password, two-factor authentication and live sessions (C-7, S-8).
+ * `/account/security` — password and live sessions (C-7).
  *
  * Both reads are server-side and cookie-forwarded (B-9); the three panels below are client
  * islands only because each of them writes.
@@ -83,18 +82,6 @@ export default async function AccountSecurityPage({ params }: Props) {
         </CardHeader>
         <CardContent>
           <ChangePasswordForm />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle as="h2" className="text-lg">
-            {t('twofaTitle')}
-          </CardTitle>
-          <CardDescription>{t('twofaDescription')}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <TwoFactorSettings account={accountResult.data} />
         </CardContent>
       </Card>
 

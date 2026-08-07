@@ -56,15 +56,13 @@ export const TEST_ENV: Readonly<Record<string, string>> = {
   CSRF_COOKIE_NAME: 'drape.csrf',
   CSRF_SECRET: dummySecret('feedface'),
 
-  // ── Password hashing and 2FA ───────────────────────────────────────────────
+  // ── Password hashing ─────────────────────────────────────────────────────
   // Argon2 is deliberately expensive. These are the cheapest parameters the library
   // accepts, because a test suite that spends eight seconds hashing is a test suite
   // nobody runs. Production uses the §7 values.
   ARGON2_MEMORY_KIB: '1024',
   ARGON2_TIME_COST: '1',
   ARGON2_PARALLELISM: '1',
-  TWOFA_ENCRYPTION_KEY: dummySecret('abadcafe'),
-  TWOFA_ISSUER: 'Drape Test',
 
   // ── Storage ────────────────────────────────────────────────────────────────
   // A temp directory, well outside the repository. Nothing in the unit suite writes

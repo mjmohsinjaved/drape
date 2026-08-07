@@ -21,9 +21,6 @@ import {
 describe('toAuthUserDto', () => {
   const user = buildAuthUser({
     passwordHash: '$argon2id$v=19$m=1024,t=1,p=1$c2FsdA$aGFzaA',
-    twofaSecret: 'v1.aaa.bbb.ccc',
-    twofaRecoveryCodes: ['$argon2id$recovery'],
-    twofaEnabledAt: FIXED_NOW,
     phone: '+923001234567',
   });
 
@@ -37,7 +34,6 @@ describe('toAuthUserDto', () => {
       name: user.name,
       status: UserStatus.ACTIVE,
       locale: Locale.EN,
-      twofaEnabled: true,
     });
   });
 
@@ -45,10 +41,7 @@ describe('toAuthUserDto', () => {
     const serialised = JSON.stringify(toAuthUserDto(user));
 
     expect(serialised).not.toContain('argon2');
-    expect(serialised).not.toContain('v1.aaa.bbb.ccc');
     expect(toAuthUserDto(user)).not.toHaveProperty('passwordHash');
-    expect(toAuthUserDto(user)).not.toHaveProperty('twofaSecret');
-    expect(toAuthUserDto(user)).not.toHaveProperty('twofaRecoveryCodes');
   });
 
   it('masks the phone number even for its owner (E-12)', () => {
@@ -59,10 +52,6 @@ describe('toAuthUserDto', () => {
     // Enough tail to recognise the number, not enough to be the number.
     expect(dto.phone?.endsWith('67')).toBe(true);
     expect(dto.phone).not.toContain('92300');
-  });
-
-  it('reports 2FA as off when nothing is enrolled', () => {
-    expect(toAuthUserDto(buildAuthUser({ twofaEnabledAt: null })).twofaEnabled).toBe(false);
   });
 
   it('renders timestamps as ISO-8601 and nulls as null', () => {
