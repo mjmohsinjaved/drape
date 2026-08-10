@@ -406,7 +406,7 @@ success. If you are adding a screen, it needs all six.
 | **Garment detail** | `/en/garments/<slug>` | Public. Gallery, price, fabric, sizes, and one prominent **Try it on**. |
 | **Sign up / sign in** | `/en/signup`, `/en/login` | Consumers self-register. Email verification is required before a try-on if `quota.requireEmailVerification` is on. |
 | **Consent** | `/en/consent` | First try-on only, and again whenever the policy version changes. Records the version, timestamp, IP and locale. |
-| **Add a photo** | `/en/photos/new` | Guidance illustrations, then client-side checks — resolution, full-body framing, blur, single subject, lighting, plain background — before a byte is uploaded, so the reason is specific and actionable. The API re-derives every check from the stored bytes and is the enforcement point. |
+| **Add a photo** | `/en/photos/new` | Guidance illustrations, then client-side checks — resolution, full-body framing, blur, single subject, lighting — before a byte is uploaded, so the reason is specific and actionable. Any background is acceptable. The API re-derives every check from the stored bytes and is the enforcement point. |
 | **Your photos** | `/en/photos` | Up to a configured maximum. Exactly one is *active*, and that is the one a try-on uses. |
 | **Try on** | button → `/en/tryon/<jobId>` | Staged progress over SSE: uploading → generating → finishing. |
 | **Result** | `/en/renders/<resultId>` | The render, with the shortlisting caption. Shortlist it, share it, or start an enquiry. |
@@ -437,7 +437,7 @@ layer and covered by a test, not by convention.
 | **Try-on source** | same screen | Mark exactly one image as the try-on source. This is the image sent upstream — not the hero shot. |
 | **Test render** | `/en/admin/catalog/<id>/test-render` | Runs a generation against a **reference model**, never a consumer photograph. Charged to the platform budget under its own reason so admin work is separable from customer demand. |
 | **Approve** | same screen | An admin looks at the result and approves or rejects it. |
-| **Publish** | `/en/admin/catalog/<id>` | Blocked until there is a try-on source, an approved test render, and a quality score above the configured minimum — or an explicit, audited override. |
+| **Publish** | `/en/admin/catalog/<id>` | Reports whatever is still missing — try-on source, approved test render, quality score — but does not refuse. The conditions are advice recorded in the audit trail, not a veto. Two consequences worth knowing: published with an approved test render but **no try-on source**, a piece appears in the catalogue and fails when a customer tries it on; published with **no approved test render**, it stays invisible to customers, because browse and the try-on guard both still require one. |
 | **Catalogue health** | `/en/admin/catalog/health` | Pieces flagged after a consumer generation failed against them. |
 | **Consumers** | `/en/admin/consumers` | Accounts, quota and status. Never their photographs. |
 | **Moderation** | `/en/admin/moderation` | Photographs an upstream rejection queued for review. |
