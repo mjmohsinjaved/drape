@@ -48,18 +48,22 @@ interface Advisory {
 }
 
 /**
- * A-11 and A-13 — the publish gate, stated before it is hit.
+ * A-13 — the publishing recommendations, stated before the button is pressed.
  *
- * > "A garment cannot be published without an approved test render."
+ * **Nothing here blocks publishing, and nothing downstream does either.** The three conditions
+ * below — a try-on source (`TRYON_SOURCE_REQUIRED`), an approved test render
+ * (`TEST_RENDER_REQUIRED`) and a passing quality score (`QUALITY_OVERRIDE_REQUIRED`) — are listed
+ * in full, each linked to the screen that addresses it, and then the publish button is offered
+ * anyway. The API agrees: it publishes regardless and writes whatever was outstanding into the
+ * audit row.
  *
- * **Nothing here blocks publishing.** The three conditions below — a try-on source
- * (`TRYON_SOURCE_REQUIRED`), an approved test render (`TEST_RENDER_REQUIRED`) and a passing
- * quality score (`QUALITY_OVERRIDE_REQUIRED`) — are listed in full, each linked to the screen
- * that addresses it, and then the publish button is offered anyway. The API agrees: it publishes
- * regardless and writes whatever was outstanding into the audit row.
+ * Publishing is now the whole decision. A published piece is browsable and tryable immediately,
+ * whatever its test render says; the consumer catalogue and the try-on guard both stopped
+ * consulting `testRenderState`.
  *
- * The one worth reading twice is the missing try-on source. A piece published without one is
- * browsable and cannot be tried on; the failure surfaces later, at generation time.
+ * The one worth reading twice is the missing try-on source, because it is the condition with a
+ * consequence the studio will not see: the piece is browsable and every try-on against it fails
+ * at generation time.
  *
  * Deleting is permanent from the catalog's point of view, so it asks for the title to be typed
  * (D-17). The API checks the typed title too: a confirmation the API does not verify is a

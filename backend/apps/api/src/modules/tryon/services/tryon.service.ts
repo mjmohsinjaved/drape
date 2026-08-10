@@ -136,9 +136,13 @@ export class TryOnService {
    * The try-on source image of a garment — the file that goes upstream and half of the
    * §3.7 cache key.
    *
-   * A published garment always has one (the A-9 publish gate refuses otherwise), so
-   * reaching the throw means the source was deleted after publication. `409
-   * TRYON_SOURCE_REQUIRED` is the honest answer: nothing is wrong with the request.
+   * A published garment no longer necessarily has one. The A-9 gate used to refuse the
+   * publish; it now only advises, so a piece can reach the catalogue with nothing to
+   * send upstream and this throw is a route a consumer can actually take rather than a
+   * post-publication deletion. `409 TRYON_SOURCE_REQUIRED` remains the honest answer —
+   * nothing is wrong with her request — and the position of this call matters more than
+   * it used to: it runs after the guard chain and **before** `runner.run`, so no job row
+   * is written and nothing is spent.
    */
   private async tryOnSourceOf(garment: Garment): Promise<ImageRef> {
     const source = await this.garmentImages.findOne({

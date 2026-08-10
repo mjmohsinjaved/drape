@@ -201,7 +201,7 @@ describe('try-on guard chain predicates (E-5)', () => {
     });
   });
 
-  describe('9 and 10 — garment published with an approved test render (A-11, E-10)', () => {
+  describe('9 — garment published', () => {
     it('admits a published garment carrying an approved render', () => {
       expect(checkGarmentReady(buildTryableGarment())).toBeNull();
     });
@@ -222,6 +222,11 @@ describe('try-on guard chain predicates (E-5)', () => {
       ).toEqual({ code: ErrorCode.GARMENT_NOT_PUBLISHED });
     });
 
+    // The inverse of what this block used to assert, and deliberately kept rather than
+    // deleted: the test-render columns are still on the row and still written by the
+    // A-11 flow, so the interesting statement is that they no longer decide anything
+    // here. Deleting these cases would leave the change untested and let the gate come
+    // back by accident.
     it.each([
       ['never rendered', { testRenderState: TestRenderState.NONE, testRenderApprovedAt: null }],
       [
@@ -233,12 +238,24 @@ describe('try-on guard chain predicates (E-5)', () => {
         'marked approved with no approval timestamp',
         { testRenderState: TestRenderState.APPROVED, testRenderApprovedAt: null },
       ],
-    ])('refuses a published garment whose test render is %s (E-10)', (_label, overrides) => {
-      // The last case is the one worth having: both columns are required, so a
-      // half-applied migration or a hand-edited row cannot pass the gate.
-      expect(checkGarmentReady(buildTryableGarment(overrides))).toEqual({
-        code: ErrorCode.TEST_RENDER_REQUIRED,
-      });
+    ])('admits a published garment whose test render is %s', (_label, overrides) => {
+      expect(checkGarmentReady(buildTryableGarment(overrides))).toBeNull();
+    });
+
+    it('never returns TEST_RENDER_REQUIRED, whatever the test-render columns say', () => {
+      const everyCombination = [
+        TestRenderState.NONE,
+        TestRenderState.PENDING,
+        TestRenderState.REJECTED,
+        TestRenderState.APPROVED,
+      ].flatMap((testRenderState) =>
+        [null, new Date()].map((testRenderApprovedAt) =>
+          checkGarmentReady(buildTryableGarment({ testRenderState, testRenderApprovedAt })),
+        ),
+      );
+
+      expect(everyCombination).not.toContainEqual({ code: ErrorCode.TEST_RENDER_REQUIRED });
+      expect(everyCombination.every((rejection) => rejection === null)).toBe(true);
     });
   });
 
