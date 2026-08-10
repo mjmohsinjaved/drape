@@ -2,7 +2,6 @@
 
 import {
   ANALYSIS_EDGE,
-  backgroundUniformity,
   buildSubjectMask,
   centreLuma,
   countSubjects,
@@ -17,6 +16,18 @@ import {
  *
  * > "Client-side validation before upload: resolution, full-body framing heuristic, blur
  * > detection, single subject. **Rejections are specific and actionable.**"
+ *
+ * ### The background is not checked
+ *
+ * There was a `PLAIN_BACKGROUND` check here. It is gone: any background is acceptable — a
+ * colour, a room, a hillside. It was refusing ordinary photographs for a property that is a
+ * preference rather than a requirement, and it is the *only* check a person cannot fix without
+ * finding a different wall.
+ *
+ * Removing it has a knock-on worth knowing about. `buildSubjectMask` separates foreground from
+ * background by luma distance, so its accuracy always depended on the background being plain.
+ * `SINGLE_SUBJECT` and `FULL_BODY_VISIBLE` both read that mask, and against a busy background
+ * both are now approximate. They are tuned to fail open — see `countSubjects`.
  *
  * Which is the whole point of doing this here at all. The API re-derives every one of these from
  * the stored bytes and is the enforcement point (§5.9) — this exists so she finds out *before*
@@ -37,7 +48,6 @@ export const PHOTO_CHECKS = [
   'SINGLE_SUBJECT',
   'NOT_BLURRY',
   'ADEQUATE_LIGHTING',
-  'PLAIN_BACKGROUND',
 ] as const;
 
 export type PhotoCheck = (typeof PHOTO_CHECKS)[number];
@@ -95,9 +105,6 @@ const MAX_MEAN_LUMA = 218;
 
 /** Backlight: the border much brighter than the middle means the light is behind her. */
 const MAX_BACKLIGHT_RATIO = 1.75;
-
-/** Below this the wall behind her is busy enough to confuse the upstream model. */
-const MIN_BACKGROUND_UNIFORMITY = 0.55;
 
 function pass(check: PhotoCheck): PhotoCheckResult {
   return { check, passed: true, messageKey: 'fail' };
@@ -218,7 +225,8 @@ export async function validatePhoto(file: File): Promise<PhotoValidationResult> 
     results.push(pass('FULL_BODY_VISIBLE'));
   }
 
-  // --- one person ------------------------------------------------------------------------
+  // --- one person --------------------------------------------------------------------------
+  // Counts only person-shaped regions, so scenery behind her is not mistaken for company.
   const subjects = countSubjects(subject);
   results.push(subjects > 1 ? fail('SINGLE_SUBJECT') : pass('SINGLE_SUBJECT'));
 
@@ -238,12 +246,6 @@ export async function validatePhoto(file: File): Promise<PhotoValidationResult> 
   } else {
     results.push(pass('ADEQUATE_LIGHTING'));
   }
-
-  // --- background ------------------------------------------------------------------------
-  const uniformity = backgroundUniformity(grey);
-  results.push(
-    uniformity >= MIN_BACKGROUND_UNIFORMITY ? pass('PLAIN_BACKGROUND') : fail('PLAIN_BACKGROUND'),
-  );
 
   return {
     passed: results.every((result) => result.passed),

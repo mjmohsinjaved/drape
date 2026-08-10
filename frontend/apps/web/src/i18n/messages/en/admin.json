@@ -406,11 +406,12 @@
         "updatedAt": "Last edited"
       },
       "never": "Not yet",
-      "blockedTitle": "{count, plural, one {One thing before this can go live} other {# things before this can go live}}",
+      "blockedTitle": "{count, plural, one {One thing worth sorting first} other {# things worth sorting first}}",
+      "blockedBody": "You can publish anyway. These are recommendations, and whichever you skip is recorded against your name in the audit log.",
       "blockers": {
         "source": {
           "title": "No try-on source photograph",
-          "body": "Add a photograph and mark it as the try-on source. It is the image the model works from.",
+          "body": "Add a photograph and mark it as the try-on source. Without one this piece will appear in the catalog but fail when a customer tries it on.",
           "link": "Go to the photographs"
         },
         "testRender": {

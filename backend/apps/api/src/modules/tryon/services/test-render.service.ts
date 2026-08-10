@@ -99,7 +99,7 @@ export class TestRenderService {
 
     await this.recordTestRender(request.garment, outcome, admin.id, admin.role);
 
-    return this.describe(request.garment.id);
+    return this.describe(request.garment.id, admin.id);
   }
 
   /**
@@ -190,7 +190,7 @@ export class TestRenderService {
 
     this.emitAudit(AUDIT_ACTIONS.GARMENT_TEST_RENDER_APPROVED, garment, admin);
 
-    return this.describe(garment.id);
+    return this.describe(garment.id, admin.id);
   }
 
   /** `POST /admin/garments/:garmentId/test-render/reject` — the piece stays unpublishable. */
@@ -214,11 +214,21 @@ export class TestRenderService {
       reason: dto.reason,
     });
 
-    return this.describe(garment.id);
+    return this.describe(garment.id, admin.id);
   }
 
-  /** The A-11 approval screen: the render beside the source, and the state (§5.11). */
-  async describe(garmentId: string): Promise<TestRenderResponseDto> {
+  /**
+   * The A-11 approval screen: the render beside the source, and the state (§5.11).
+   *
+   * `viewerId` is the admin asking, and it scopes the render URL. A test render is a render
+   * of a *reference model*, so nothing here is anybody's photo — but `renders/**` is a
+   * subject-required key class in `SignedUrlService`, and that guard covers the class rather
+   * than trusting each call site (which is the whole point of it). Issuing without a subject
+   * threw `FILE_TOKEN_SUBJECT_MISMATCH` on every call, so `POST /admin/tryon/test-render`
+   * 403'd after charging for the render, `approve()` could never be reached, and no garment
+   * could be published at all.
+   */
+  async describe(garmentId: string, viewerId: string): Promise<TestRenderResponseDto> {
     const garment = await this.loadGarment(garmentId);
 
     const [source, result, job] = await Promise.all([
@@ -238,8 +248,10 @@ export class TestRenderService {
       resultId: result?.id ?? null,
       testRenderState: garment.testRenderState,
       sourceUrl: source === null ? null : this.storage.signedUrl(source.storageKey),
-      // The render of a reference model, not of a person — no subject scoping needed.
-      renderUrl: result === null ? null : this.storage.signedUrl(result.storageKey),
+      // A reference-model render, never a person — but `renders/**` still requires a
+      // subject, so it is scoped to the admin looking at it (as A-34 does for the
+      // blurred moderation thumbnail).
+      renderUrl: result === null ? null : this.storage.signedUrl(result.storageKey, viewerId),
       publishable: hasApprovedTestRender(garment),
       errorCode: job?.errorCode ?? null,
     };

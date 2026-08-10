@@ -71,9 +71,14 @@ function buildTryOnSource(garmentId: string): GarmentImage {
 /**
  * `GarmentsService` — PRD A-8, A-10 … A-14.
  *
- * The load-bearing cases: **publish is refused without an approved test render**
- * (A-11 / E-10) and **without an override when quality is below threshold** (A-10),
- * and neither refusal can be reached around by the bulk route.
+ * The load-bearing cases used to be the two refusals: no approved test render (A-11 /
+ * E-10), and a quality score below threshold with no override (A-10). **Neither refuses
+ * any more** — publishing is unconditional and both are advice.
+ *
+ * So what is load-bearing now is that the advice survives the trip: every publish is
+ * still evaluated, and every unmet condition reaches the audit row, on the bulk route
+ * as well as the single one. That record is the only thing left that makes a published
+ * piece with no try-on source traceable to whoever published it.
  */
 describe('GarmentsService', () => {
   const admin: ICurrentUser = sessionFor(Role.ADMIN);
@@ -149,6 +154,19 @@ describe('GarmentsService', () => {
       .map(([, event]) => (event as AuditRecordEvent).input.action);
   }
 
+  /**
+   * The `metadata` of each audit row, in order.
+   *
+   * Publishing no longer refuses anything, so the audit row is where the unmet
+   * conditions are recorded — which makes this the assertion that the advice was not
+   * silently dropped on the way.
+   */
+  function auditMetadata(events: jest.Mocked<EventEmitter2>): Record<string, unknown>[] {
+    return events.emit.mock.calls
+      .filter(([name]) => name === AUDIT_RECORD_EVENT)
+      .map(([, event]) => (event as AuditRecordEvent).input.metadata ?? {});
+  }
+
   const validCreate = (overrides: Partial<CreateGarmentDto> = {}): CreateGarmentDto => ({
     sku: 'ZBL-00042',
     title: 'Zarrin Bridal Lehenga',
@@ -161,28 +179,36 @@ describe('GarmentsService', () => {
 
   /* --------------------------------------------------------------------------------------- */
 
-  describe('A-11 / E-10 — publish is refused without an approved test render', () => {
+  /**
+   * These were the A-11 / E-10 refusals. Publishing is now unconditional and the
+   * conditions are advice, so what is asserted is the opposite: the piece goes live,
+   * and the unmet condition is written into the audit row so the decision is
+   * attributable afterwards.
+   */
+  describe('A-11 — an unmet test render is reported, not refused', () => {
     it.each([
       ['no test render', TestRenderState.NONE],
       ['a pending test render', TestRenderState.PENDING],
       ['a rejected test render', TestRenderState.REJECTED],
-    ])('refuses %s with TEST_RENDER_REQUIRED', async (_case, testRenderState) => {
+    ])('publishes with %s and records TEST_RENDER_REQUIRED', async (_case, testRenderState) => {
       const garment = buildGarment({ testRenderState, testRenderApprovedAt: null });
       const harness = await arrange([garment], [buildTryOnSource(garment.id)]);
 
-      await expect(harness.service.publish(garment.id, admin)).rejects.toMatchObject({
-        errorCode: ErrorCode.TEST_RENDER_REQUIRED,
-      });
+      const published = await harness.service.publish(garment.id, admin);
 
-      expect(harness.garments.$rows[0]?.publishState).toBe(PublishState.DRAFT);
-      expect(harness.transaction.committed).toBe(0);
-      expect(harness.categories.applyPublishedGarmentDelta).not.toHaveBeenCalled();
-      expect(auditActions(harness.events)).toEqual([]);
+      expect(published.publishState).toBe(PublishState.PUBLISHED);
+      expect(harness.garments.$rows[0]?.publishState).toBe(PublishState.PUBLISHED);
+      expect(harness.transaction.committed).toBe(1);
+      expect(harness.categories.applyPublishedGarmentDelta).toHaveBeenCalled();
+      expect(auditActions(harness.events)).toEqual([AUDIT_ACTIONS.GARMENT_PUBLISHED]);
+      expect(auditMetadata(harness.events)[0]?.unmetConditions).toContain(
+        ErrorCode.TEST_RENDER_REQUIRED,
+      );
 
       await harness.close();
     });
 
-    it('refuses an APPROVED state with no approval timestamp', async () => {
+    it('treats an APPROVED state with no approval timestamp as unapproved', async () => {
       const garment = buildGarment({
         testRenderState: TestRenderState.APPROVED,
         testRenderApprovedAt: null,
@@ -190,28 +216,38 @@ describe('GarmentsService', () => {
       });
       const harness = await arrange([garment], [buildTryOnSource(garment.id)]);
 
-      await expect(harness.service.publish(garment.id, admin)).rejects.toMatchObject({
-        errorCode: ErrorCode.TEST_RENDER_REQUIRED,
-      });
+      await harness.service.publish(garment.id, admin);
+
+      expect(auditMetadata(harness.events)[0]?.unmetConditions).toContain(
+        ErrorCode.TEST_RENDER_REQUIRED,
+      );
 
       await harness.close();
     });
 
-    it('refuses when the try-on source image is gone', async () => {
+    /**
+     * The one with real consequences: this garment is now browsable and will fail when a
+     * consumer tries it on, because there is no image to send upstream. The audit row is
+     * the only record of who accepted that.
+     */
+    it('publishes with no try-on source at all, and records TRYON_SOURCE_REQUIRED', async () => {
       const garment = buildPublishedGarment({
         publishState: PublishState.DRAFT,
         publishedAt: null,
       });
       const harness = await arrange([garment], []);
 
-      await expect(harness.service.publish(garment.id, admin)).rejects.toMatchObject({
-        errorCode: ErrorCode.TRYON_SOURCE_REQUIRED,
-      });
+      const published = await harness.service.publish(garment.id, admin);
+
+      expect(published.publishState).toBe(PublishState.PUBLISHED);
+      expect(auditMetadata(harness.events)[0]?.unmetConditions).toEqual([
+        ErrorCode.TRYON_SOURCE_REQUIRED,
+      ]);
 
       await harness.close();
     });
 
-    it('publishes once the gate is clear, and moves the A-7 counter in the same transaction', async () => {
+    it('publishes with nothing outstanding, and moves the A-7 counter in the same transaction', async () => {
       const garment = buildPublishedGarment({
         publishState: PublishState.DRAFT,
         publishedAt: null,
@@ -235,8 +271,8 @@ describe('GarmentsService', () => {
     });
   });
 
-  describe('A-10 — publish is refused below threshold without an override', () => {
-    it('refuses a low score with QUALITY_OVERRIDE_REQUIRED', async () => {
+  describe('A-10 — a low quality score is reported, not refused', () => {
+    it('publishes a low score and records QUALITY_OVERRIDE_REQUIRED', async () => {
       const garment = buildPublishedGarment({
         publishState: PublishState.DRAFT,
         publishedAt: null,
@@ -244,11 +280,13 @@ describe('GarmentsService', () => {
       });
       const harness = await arrange([garment], [buildTryOnSource(garment.id)]);
 
-      await expect(harness.service.publish(garment.id, admin)).rejects.toMatchObject({
-        errorCode: ErrorCode.QUALITY_OVERRIDE_REQUIRED,
-      });
+      const published = await harness.service.publish(garment.id, admin);
 
-      expect(harness.garments.$rows[0]?.publishState).toBe(PublishState.DRAFT);
+      expect(published.publishState).toBe(PublishState.PUBLISHED);
+      expect(harness.garments.$rows[0]?.publishState).toBe(PublishState.PUBLISHED);
+      expect(auditMetadata(harness.events)[0]?.unmetConditions).toEqual([
+        ErrorCode.QUALITY_OVERRIDE_REQUIRED,
+      ]);
 
       await harness.close();
     });
@@ -288,7 +326,7 @@ describe('GarmentsService', () => {
       await harness.close();
     });
 
-    it('does not let an override clear the A-11 gate as well', async () => {
+    it('does not let an override silence the A-11 advisory as well', async () => {
       const garment = buildGarment({
         testRenderState: TestRenderState.NONE,
         testRenderApprovedAt: null,
@@ -301,10 +339,10 @@ describe('GarmentsService', () => {
         { reason: 'A perfectly good reason, at length.' },
         admin,
       );
+      await harness.service.publish(garment.id, admin);
 
-      await expect(harness.service.publish(garment.id, admin)).rejects.toMatchObject({
-        errorCode: ErrorCode.TEST_RENDER_REQUIRED,
-      });
+      const publishRow = auditMetadata(harness.events)[1];
+      expect(publishRow?.unmetConditions).toEqual([ErrorCode.TEST_RENDER_REQUIRED]);
 
       await harness.close();
     });
@@ -374,16 +412,19 @@ describe('GarmentsService', () => {
       await harness.close();
     });
 
-    it('re-validates an archived garment on its way back to published', async () => {
+    it('re-evaluates an archived garment on its way back to published', async () => {
       const garment = buildArchivedGarment({
         testRenderState: TestRenderState.REJECTED,
         testRenderApprovedAt: null,
       });
       const harness = await arrange([garment], [buildTryOnSource(garment.id)]);
 
-      await expect(harness.service.publish(garment.id, admin)).rejects.toMatchObject({
-        errorCode: ErrorCode.TEST_RENDER_REQUIRED,
-      });
+      const published = await harness.service.publish(garment.id, admin);
+
+      expect(published.publishState).toBe(PublishState.PUBLISHED);
+      expect(auditMetadata(harness.events)[0]?.unmetConditions).toEqual([
+        ErrorCode.TEST_RENDER_REQUIRED,
+      ]);
 
       await harness.close();
     });
@@ -540,8 +581,13 @@ describe('GarmentsService', () => {
     });
   });
 
-  describe('A-12 / D-16 — bulk actions cannot route around a gate', () => {
-    it('applies the A-11 gate item by item and reports per-item results', async () => {
+  describe('A-12 / D-16 — bulk actions go through the same path as a single publish', () => {
+    /**
+     * Bulk publish is still a loop over `publish()` rather than a bulk `UPDATE`. That
+     * mattered when `publish()` was a gate; it still matters now, because it is what
+     * makes the per-garment warning and audit row happen at all.
+     */
+    it('publishes every garment and records each one’s unmet conditions', async () => {
       const ready = buildPublishedGarment({ publishState: PublishState.DRAFT, publishedAt: null });
       const unproven = buildGarment({
         testRenderState: TestRenderState.NONE,
@@ -558,21 +604,30 @@ describe('GarmentsService', () => {
       );
 
       expect(result.requested).toBe(2);
-      expect(result.succeeded).toBe(1);
-      expect(result.failed).toBe(1);
+      expect(result.succeeded).toBe(2);
+      expect(result.failed).toBe(0);
       expect(result.results).toEqual([
         { garmentId: ready.id, succeeded: true, errorCode: null, message: null },
-        {
-          garmentId: unproven.id,
-          succeeded: false,
-          errorCode: ErrorCode.TEST_RENDER_REQUIRED,
-          message: expect.any(String),
-        },
+        { garmentId: unproven.id, succeeded: true, errorCode: null, message: null },
       ]);
 
       expect(harness.garments.$rows.find((row) => row.id === unproven.id)?.publishState).toBe(
-        PublishState.DRAFT,
+        PublishState.PUBLISHED,
       );
+
+      // One publish row per garment, and only the unproven one carries an advisory.
+      const publishRows = auditMetadata(harness.events).filter(
+        (metadata) => metadata.unmetConditions !== undefined,
+      );
+      // The unproven garment is unscored as well as unrendered, and both are reported —
+      // the point of returning a list rather than the first failure.
+      expect(publishRows).toHaveLength(2);
+      expect(publishRows[0]?.unmetConditions).toEqual([]);
+      expect(publishRows[1]?.unmetConditions).toEqual([
+        ErrorCode.TEST_RENDER_REQUIRED,
+        ErrorCode.QUALITY_OVERRIDE_REQUIRED,
+      ]);
+
       expect(auditActions(harness.events)).toContain(AUDIT_ACTIONS.GARMENT_BULK_ACTION_APPLIED);
 
       await harness.close();

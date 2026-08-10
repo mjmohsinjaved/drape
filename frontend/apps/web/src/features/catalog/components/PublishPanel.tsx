@@ -38,8 +38,8 @@ export interface PublishPanelProps {
   hasTryOnSource: boolean;
 }
 
-/** One unmet publish condition, with the screen that fixes it. */
-interface Blocker {
+/** One unmet publishing recommendation, with the screen that addresses it. */
+interface Advisory {
   id: string;
   title: string;
   body: string;
@@ -52,11 +52,14 @@ interface Blocker {
  *
  * > "A garment cannot be published without an approved test render."
  *
- * `GarmentResponseDto.publishable` is the API's own answer to "would the gates pass right now",
- * and this panel reads it rather than re-deriving it. But a disabled button is not an
- * explanation, so when the answer is no the panel lists **exactly** which conditions are unmet —
- * a try-on source (`TRYON_SOURCE_REQUIRED`), an approved test render (`TEST_RENDER_REQUIRED`), a
- * quality waiver (`QUALITY_OVERRIDE_REQUIRED`) — and links each one to the screen that fixes it.
+ * **Nothing here blocks publishing.** The three conditions below — a try-on source
+ * (`TRYON_SOURCE_REQUIRED`), an approved test render (`TEST_RENDER_REQUIRED`) and a passing
+ * quality score (`QUALITY_OVERRIDE_REQUIRED`) — are listed in full, each linked to the screen
+ * that addresses it, and then the publish button is offered anyway. The API agrees: it publishes
+ * regardless and writes whatever was outstanding into the audit row.
+ *
+ * The one worth reading twice is the missing try-on source. A piece published without one is
+ * browsable and cannot be tried on; the failure surfaces later, at generation time.
  *
  * Deleting is permanent from the catalog's point of view, so it asks for the title to be typed
  * (D-17). The API checks the typed title too: a confirmation the API does not verify is a
@@ -71,10 +74,10 @@ export function PublishPanel({ locale, garment, hasTryOnSource }: PublishPanelPr
   const removeGarment = useDeleteGarment();
   const [deleteOpen, setDeleteOpen] = useState(false);
 
-  const blockers: Blocker[] = [];
+  const advisories: Advisory[] = [];
 
   if (!hasTryOnSource) {
-    blockers.push({
+    advisories.push({
       id: 'source',
       title: t('blockers.source.title'),
       body: t('blockers.source.body'),
@@ -84,7 +87,7 @@ export function PublishPanel({ locale, garment, hasTryOnSource }: PublishPanelPr
   }
 
   if (garment.testRenderState !== 'APPROVED') {
-    blockers.push({
+    advisories.push({
       id: 'testRender',
       title: t('blockers.testRender.title'),
       body:
@@ -102,7 +105,7 @@ export function PublishPanel({ locale, garment, hasTryOnSource }: PublishPanelPr
     garment.qualityScore !== null && garment.qualityScore < DEFAULT_QUALITY_MIN_SCORE;
 
   if (failingQuality && !garment.qualityOverridden) {
-    blockers.push({
+    advisories.push({
       id: 'quality',
       title: t('blockers.quality.title'),
       body: t('blockers.quality.body', { score: garment.qualityScore ?? 0 }),
@@ -148,22 +151,23 @@ export function PublishPanel({ locale, garment, hasTryOnSource }: PublishPanelPr
         </DescriptionItem>
       </DescriptionList>
 
-      {garment.publishState !== 'PUBLISHED' && blockers.length > 0 ? (
+      {garment.publishState !== 'PUBLISHED' && advisories.length > 0 ? (
         <Callout
           tone="warning"
-          title={t('blockedTitle', { count: blockers.length })}
+          title={t('blockedTitle', { count: advisories.length })}
           icon={<AlertTriangle aria-hidden="true" className="size-4" />}
         >
+          <p className="mb-3 text-sm text-ink-muted">{t('blockedBody')}</p>
           <ul className="flex flex-col gap-3">
-            {blockers.map((blocker) => (
-              <li key={blocker.id} className="flex flex-col gap-1">
-                <span className="text-sm font-medium text-ink">{blocker.title}</span>
-                <span className="text-sm text-ink-muted">{blocker.body}</span>
+            {advisories.map((advisory) => (
+              <li key={advisory.id} className="flex flex-col gap-1">
+                <span className="text-sm font-medium text-ink">{advisory.title}</span>
+                <span className="text-sm text-ink-muted">{advisory.body}</span>
                 <Link
-                  href={blocker.href}
+                  href={advisory.href}
                   className="inline-flex w-fit items-center gap-1 text-sm font-medium text-brand hover:underline"
                 >
-                  {blocker.linkLabel}
+                  {advisory.linkLabel}
                   <DirectionalIcon>
                     <ArrowRight className="size-3.5" />
                   </DirectionalIcon>
@@ -174,7 +178,7 @@ export function PublishPanel({ locale, garment, hasTryOnSource }: PublishPanelPr
         </Callout>
       ) : null}
 
-      {garment.publishState !== 'PUBLISHED' && blockers.length === 0 ? (
+      {garment.publishState !== 'PUBLISHED' && advisories.length === 0 ? (
         <Callout
           tone="success"
           title={t('readyTitle')}
@@ -208,7 +212,10 @@ export function PublishPanel({ locale, garment, hasTryOnSource }: PublishPanelPr
         ) : (
           <Button
             variant="primary"
-            disabled={!garment.publishable || blockers.length > 0}
+            // Never disabled by the advisories above. They are shown so the decision is
+            // informed, not to take it away — the API publishes regardless and records
+            // whatever was outstanding in the audit trail.
+            disabled={false}
             loading={stateChange.isPending}
             loadingLabel={t('actions.publish')}
             onClick={() => void runAction('publish')}

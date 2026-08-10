@@ -97,19 +97,6 @@ function borderSamples(image: GreyImage): number[] {
   return samples;
 }
 
-/**
- * How uniform the border ring is: the share of border pixels within `tolerance` of the estimated
- * background. A plain wall scores near 1; a room with furniture in it does not.
- */
-export function backgroundUniformity(image: GreyImage, tolerance = 26): number {
-  const samples = borderSamples(image);
-  if (samples.length === 0) return 1;
-
-  const background = estimateBackgroundLuma(image);
-  const close = samples.filter((value) => Math.abs(value - background) <= tolerance).length;
-  return close / samples.length;
-}
-
 export interface SubjectMask {
   /** 1 where the pixel differs from the background, 0 where it matches. */
   mask: Uint8Array;
@@ -126,9 +113,10 @@ export interface SubjectMask {
  * Separates foreground from background by luma distance.
  *
  * This is not segmentation and does not pretend to be — it is a threshold against an estimated
- * background, which is exactly the assumption the guidance already asks her to satisfy ("a plain
- * wall behind you"). When the background is not plain the mask degrades gracefully: coverage
- * rises, the frame check passes, and the background check is the one that speaks up.
+ * background. Any background is now allowed, so the mask is only as good as the contrast between
+ * the subject and whatever is behind her: against a plain wall it traces her outline, against a
+ * forest it lights up half the frame. Everything downstream is written to fail *open* on that,
+ * because a photo refused for a tree is worse than a photo accepted for one.
  */
 export function buildSubjectMask(image: GreyImage, threshold = 30): SubjectMask {
   const { data, width, height } = image;
@@ -165,13 +153,43 @@ export function buildSubjectMask(image: GreyImage, threshold = 30): SubjectMask 
   };
 }
 
+/** Shape gates that separate "a person standing there" from "some scenery". */
+const PERSON_SHAPE = {
+  /** A standing figure fills a real share of the frame. Below this it is clutter. */
+  MIN_AREA_RATIO: 0.06,
+  /** Head to feet, or near enough. Scenery is rarely this tall *and* this narrow. */
+  MIN_HEIGHT_RATIO: 0.4,
+  /** Wider than this and it is a treeline, a sofa or a wall, not somebody standing. */
+  MAX_WIDTH_RATIO: 0.6,
+  /** People are taller than they are wide, even allowing for outstretched arms. */
+  MIN_BOX_ASPECT: 1.2,
+  /** A person fills much of her own bounding box; a branching, sprawling shape does not. */
+  MIN_FILL: 0.25,
+} as const;
+
 /**
- * Counts distinct foreground blobs, ignoring anything smaller than `minAreaRatio` of the frame.
+ * Counts foreground blobs that are **plausibly a standing person**.
+ *
+ * ### Why the shape gates exist
+ *
+ * The old version counted every blob over 4% of the frame and called each one a person. That
+ * was defensible only while a plain background was mandatory, because then the only things
+ * differing from the background *were* people. Once any background is allowed, foliage, rocks,
+ * water and furniture all clear 4% and each one reads as another person — which is exactly the
+ * false "there's more than one person in frame" this replaces.
+ *
+ * So a region has to look like a person to be counted as one: tall, not too wide, taller than
+ * it is wide, and solid rather than sprawling. A second person standing beside her satisfies
+ * all four; a tree behind her satisfies none.
+ *
+ * **This is a heuristic, not detection.** It is tuned to under-report rather than over-report:
+ * two people very close together merge into one region and pass. That trade is deliberate —
+ * refusing a genuine photo is the failure that actually costs someone the upload.
  *
  * Iterative flood fill with an explicit stack — a recursive one blows the call stack on a
  * large connected region, which is precisely the common case here.
  */
-export function countSubjects(mask: SubjectMask, minAreaRatio = 0.04): number {
+export function countSubjects(mask: SubjectMask, minAreaRatio = PERSON_SHAPE.MIN_AREA_RATIO): number {
   const { mask: pixels, width, height } = mask;
   const seen = new Uint8Array(width * height);
   const minArea = Math.max(1, Math.round(width * height * minAreaRatio));
@@ -183,6 +201,11 @@ export function countSubjects(mask: SubjectMask, minAreaRatio = 0.04): number {
     if (pixels[start] !== 1 || seen[start] === 1) continue;
 
     let area = 0;
+    let minX = width;
+    let maxX = -1;
+    let minY = height;
+    let maxY = -1;
+
     stack.length = 0;
     stack.push(start);
     seen[start] = 1;
@@ -194,6 +217,11 @@ export function countSubjects(mask: SubjectMask, minAreaRatio = 0.04): number {
 
       const x = index % width;
       const y = Math.floor(index / width);
+
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
 
       // Four-connectivity. Eight would bridge a shoulder to a shadow across a diagonal and
       // merge two people into one, which is the opposite of what this check is for.
@@ -213,7 +241,17 @@ export function countSubjects(mask: SubjectMask, minAreaRatio = 0.04): number {
       }
     }
 
-    if (area >= minArea) regions += 1;
+    if (area < minArea) continue;
+
+    const boxWidth = maxX - minX + 1;
+    const boxHeight = maxY - minY + 1;
+
+    const tallEnough = boxHeight / height >= PERSON_SHAPE.MIN_HEIGHT_RATIO;
+    const narrowEnough = boxWidth / width <= PERSON_SHAPE.MAX_WIDTH_RATIO;
+    const upright = boxHeight / boxWidth >= PERSON_SHAPE.MIN_BOX_ASPECT;
+    const solid = area / (boxWidth * boxHeight) >= PERSON_SHAPE.MIN_FILL;
+
+    if (tallEnough && narrowEnough && upright && solid) regions += 1;
   }
 
   return regions;
