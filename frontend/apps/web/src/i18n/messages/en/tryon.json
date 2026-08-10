@@ -138,5 +138,20 @@
     "REQUEST_TIMEOUT": "That took too long. Try again.",
     "SERVICE_UNAVAILABLE": "We're briefly unavailable. Try again shortly.",
     "INTERNAL_ERROR": "The try-on didn't finish. Nothing was used from your allowance — try again."
+  },
+  "photoPicker": {
+    "title": "Which photo should we use?",
+    "description": "Your try-on is generated from this photo. Pick a different one any time.",
+    "loading": "Loading your photos",
+    "none": "No photo yet",
+    "noneNote": "A try-on works from one full-length photo of you. It takes about a minute to add.",
+    "addFirst": "Add a photo",
+    "addAnother": "Add another photo",
+    "inUse": "In use",
+    "use": "Use this one",
+    "switching": "Switching",
+    "blocked": "Can't be used",
+    "unnamed": "Photo from {date}",
+    "failed": "That didn't switch. Try again."
   }
 }

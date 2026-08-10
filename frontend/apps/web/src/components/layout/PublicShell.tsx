@@ -5,8 +5,11 @@ import { useTranslations } from 'next-intl';
 import { Button } from '@repo/ui';
 
 import { LocaleSwitcher } from '@/components/layout/LocaleSwitcher';
+import { MobileNav } from '@/components/layout/MobileNav';
+import { browsePrimaryNav } from '@/components/layout/nav-items';
 import { SkipLink, MAIN_CONTENT_ID } from '@/components/layout/SkipLink';
 import { ThemeToggle } from '@/components/layout/ThemeToggle';
+import { TopNav } from '@/components/layout/TopNav';
 import { UserMenu } from '@/components/layout/UserMenu';
 import { APP_NAME } from '@/lib/constants';
 import { routes } from '@/lib/routes';
@@ -25,11 +28,25 @@ export interface PublicShellProps {
 }
 
 /**
- * The signed-out shell — a slim top bar and a sign-in call to action (§6.6).
+ * The browse shell (§6.6) — a slim top bar and a sign-in call to action while signed out.
  *
  * Browsing is genuinely public (C-1): the catalog, categories, search, filters and garment
  * detail all work here without an account. Only the actions that involve her photo ask her to
  * sign in, and the call to action says what she gets rather than what she must do.
+ *
+ * ### Signed in, this shell carries the fitting room's navigation
+ *
+ * C-9 asks for navigation that is "persistent and identical in both places" — Browse,
+ * Shortlist, My try-ons — as a bottom tab bar on a phone and the top bar from 768 px up.
+ * `ConsumerShell` had it and this one did not, and the two shells split the surface exactly
+ * down the middle of the journey: browse and garment detail are public routes, so a signed-in
+ * consumer looking at a piece lost both bars and had no way back to her shortlist or her
+ * previous try-ons without the account menu. The nav is the same list from `nav-items.ts`, so
+ * the two shells cannot drift apart again.
+ *
+ * Signed out it stays slim. There is nothing to show a visitor with no shortlist and no
+ * try-ons, and a row of links that all lead to a sign-in wall is worse than one clear
+ * invitation.
  */
 export function PublicShell({ locale, children, user }: PublicShellProps) {
   const t = useTranslations('common');
@@ -47,14 +64,20 @@ export function PublicShell({ locale, children, user }: PublicShellProps) {
             {APP_NAME}
           </Link>
 
-          <nav aria-label={t('nav.primaryLabel')} className="ms-4 hidden md:block">
-            <Link
-              href={routes.browse(locale)}
-              className="inline-flex min-h-11 items-center rounded-md px-3 text-sm"
-            >
-              {t('nav.browse')}
-            </Link>
-          </nav>
+          {user ? (
+            <div className="mx-auto">
+              <TopNav locale={locale} items={browsePrimaryNav} />
+            </div>
+          ) : (
+            <nav aria-label={t('nav.primaryLabel')} className="ms-4 hidden md:block">
+              <Link
+                href={routes.browse(locale)}
+                className="inline-flex min-h-11 items-center rounded-md px-3 text-sm"
+              >
+                {t('nav.browse')}
+              </Link>
+            </nav>
+          )}
 
           <div className="ms-auto flex items-center gap-1">
             <LocaleSwitcher variant="icon" />
@@ -80,9 +103,15 @@ export function PublicShell({ locale, children, user }: PublicShellProps) {
         </div>
       </header>
 
+      {/*
+        `pb-tabbar` reserves the fixed tab bar's height plus the iOS safe area, so the last card
+        in the grid is not trapped behind it. Only applied when the bar is actually rendered.
+      */}
       <main
         id={MAIN_CONTENT_ID}
-        className="mx-auto w-full max-w-consumer flex-1 px-5 pb-16 pt-6 md:px-8 md:pt-10 xl:px-12"
+        className={`mx-auto w-full max-w-consumer flex-1 px-5 pt-6 md:px-8 md:pb-16 md:pt-10 xl:px-12 ${
+          user ? 'pb-tabbar' : 'pb-16'
+        }`}
       >
         {children}
       </main>
@@ -97,6 +126,8 @@ export function PublicShell({ locale, children, user }: PublicShellProps) {
           <p>{t('footer.copyright', { year: new Date().getFullYear(), name: APP_NAME })}</p>
         </div>
       </footer>
+
+      {user ? <MobileNav locale={locale} /> : null}
     </div>
   );
 }

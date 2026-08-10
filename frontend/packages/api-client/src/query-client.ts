@@ -30,6 +30,13 @@ export const STALE_TIMES = {
   authMe: Number.POSITIVE_INFINITY,
   /** Quota changes on every generation (C-5). */
   quotaMe: 0,
+  /**
+   * A consumer's own photographs change only when she uploads, renames, deletes or switches
+   * one — and every one of those invalidates `queryKeys.photos.all` explicitly. A timer has
+   * nothing to add, and the try-on photo picker reads this list on every garment page, which
+   * is the §9.1 latency budget.
+   */
+  photos: 5 * 60_000,
   /** Brand settings theme the whole app; they change rarely and cost a flash when they do. */
   brandSettings: 10 * 60_000,
 } as const;

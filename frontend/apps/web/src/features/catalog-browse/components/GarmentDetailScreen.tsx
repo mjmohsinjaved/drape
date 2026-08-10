@@ -18,6 +18,7 @@ import { ScreenError } from '@/components/states';
 import { getCatalogGarment } from '@/features/catalog-browse/api/endpoints';
 import { facetLabel, formatMoney, imageAlt } from '@/features/catalog-browse/lib/format';
 import { TryOnButton } from '@/features/tryon/components/TryOnButton';
+import { TryOnPhotoPicker } from '@/features/tryon/components/TryOnPhotoPicker';
 import { TryOnTray } from '@/features/tryon/components/TryOnTray';
 import { isRetryableCode } from '@/features/tryon/lib/error-copy';
 import { routes } from '@/lib/routes';
@@ -126,6 +127,15 @@ export async function GarmentDetailScreen({
               </Badge>
             </div>
           </header>
+
+          {/*
+            Which photograph this will use, immediately above the button that uses it. Signed-in
+            only: there is nothing to show a visitor with no account, and the button below is
+            already a sign-in invitation for her.
+          */}
+          {isAuthenticated ? (
+            <TryOnPhotoPicker locale={locale} returnTo={routes.garment(locale, garment.slug)} />
+          ) : null}
 
           {/* The one primary action on this screen (§6.2). */}
           <TryOnButton
