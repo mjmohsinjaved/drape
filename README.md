@@ -402,7 +402,7 @@ success. If you are adding a screen, it needs all six.
 
 | Step | Route | What happens |
 |---|---|---|
-| **Browse** | `/en/browse` | Public. Filter by category, colour, fabric, embellishment weight, price. Only garments that are published *and* carry an approved test render are visible — anything else is indistinguishable from a garment that never existed. |
+| **Browse** | `/en/browse` | Public. Filter by category, colour, fabric, embellishment weight, price. Published garments only — a draft, an archived piece and one that never existed are all indistinguishable from here, so the catalogue pipeline is not enumerable. |
 | **Garment detail** | `/en/garments/<slug>` | Public. Gallery, price, fabric, sizes, and one prominent **Try it on**. |
 | **Sign up / sign in** | `/en/signup`, `/en/login` | Consumers self-register. Email verification is required before a try-on if `quota.requireEmailVerification` is on. |
 | **Consent** | `/en/consent` | First try-on only, and again whenever the policy version changes. Records the version, timestamp, IP and locale. |
@@ -437,7 +437,7 @@ layer and covered by a test, not by convention.
 | **Try-on source** | same screen | Mark exactly one image as the try-on source. This is the image sent upstream — not the hero shot. |
 | **Test render** | `/en/admin/catalog/<id>/test-render` | Runs a generation against a **reference model**, never a consumer photograph. Charged to the platform budget under its own reason so admin work is separable from customer demand. |
 | **Approve** | same screen | An admin looks at the result and approves or rejects it. |
-| **Publish** | `/en/admin/catalog/<id>` | Reports whatever is still missing — try-on source, approved test render, quality score — but does not refuse. The conditions are advice recorded in the audit trail, not a veto. Two consequences worth knowing: published with an approved test render but **no try-on source**, a piece appears in the catalogue and fails when a customer tries it on; published with **no approved test render**, it stays invisible to customers, because browse and the try-on guard both still require one. |
+| **Publish** | `/en/admin/catalog/<id>` | Publishing is the whole decision. The panel reports whatever is still missing — try-on source, approved test render, quality score — and publishes anyway, recording what was passed over in the audit trail. The piece is browsable and tryable immediately. The one condition with a consequence the studio will not see is a missing **try-on source**: that piece appears in the catalogue and fails every try-on against it, which surfaces on catalogue health rather than here. |
 | **Catalogue health** | `/en/admin/catalog/health` | Pieces flagged after a consumer generation failed against them. |
 | **Consumers** | `/en/admin/consumers` | Accounts, quota and status. Never their photographs. |
 | **Moderation** | `/en/admin/moderation` | Photographs an upstream rejection queued for review. |
@@ -459,9 +459,12 @@ Useful when something goes wrong, because the failure tells you which step you a
 
 2. **The guard chain**, in this fixed order, entirely before anything is spent: session →
    account active → email verified → consent current → monthly quota → per-hour and per-IP
-   rate limits → platform budget → garment published with an approved test render → the
-   photo belongs to this user and is not blocked → idempotency key free. The first failure
-   wins, and **no job row is written for a rejection**.
+   rate limits → platform budget → garment published → the photo belongs to this user and
+   is not blocked → idempotency key free. The first failure wins, and **no job row is
+   written for a rejection**.
+
+   A garment with no try-on source is refused separately, just after the chain and still
+   before any job row exists, so that costs nothing either.
 
    Which failure surfaces decides which screen the customer lands on, which is why the
    order is fixed and tested.
@@ -555,7 +558,8 @@ cd frontend && npm run typecheck && npm run lint && npm test
 | Images 404 through the API | `STORAGE_ROOT` wrong, or `STORAGE_URL_SECRET` changed after the URLs were issued | Check the path; regenerate the page |
 | `TRYON_PROVIDER_MISCONFIGURED` | Upstream answered 401/403 | The key is wrong, or not activated |
 | `UPSTREAM_TIMEOUT` on every attempt | `TRYON_TIMEOUT_MS` is below the real render time (~20 s) | Raise it |
-| Garment not visible in browse | Not published, or no approved test render | Both are required; a hidden garment is deliberately indistinguishable from a missing one |
+| Garment not visible in browse | Not published — it is still a draft, or archived | Publishing is the only condition; a hidden garment is deliberately indistinguishable from a missing one |
+| Garment visible but every try-on against it fails | No image is marked as the try-on source | Mark one on `/en/admin/catalog/<id>`. Publishing does not require it, so nothing catches this until a customer hits it |
 | `Functions cannot be passed directly to Client Components` | A server component passed a callback to a `'use client'` component | Pass data, not behaviour |
 
 Every API error response carries a `requestId`. The same value appears on the error screen
