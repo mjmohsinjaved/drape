@@ -10,7 +10,7 @@ export { AuthShell, type AuthShellProps } from './AuthShell';
 export { Sidebar, type SidebarProps } from './Sidebar';
 export { Topbar, type TopbarProps } from './Topbar';
 export { MobileNav, type MobileNavProps } from './MobileNav';
-export { ConsumerTopNav, type ConsumerTopNavProps } from './ConsumerTopNav';
+export { TopNav, type TopNavProps } from './TopNav';
 export { UserMenu, type UserMenuProps } from './UserMenu';
 export { LocaleSwitcher, type LocaleSwitcherProps } from './LocaleSwitcher';
 export { ThemeToggle } from './ThemeToggle';
@@ -24,6 +24,7 @@ export { AdminSearchTrigger } from './AdminSearchTrigger';
 export {
   accountMenuNav,
   adminNavGroups,
+  browsePrimaryNav,
   consumerPrimaryNav,
   consumerSecondaryNav,
   type NavGroup,

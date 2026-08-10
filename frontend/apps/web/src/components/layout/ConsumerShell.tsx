@@ -4,17 +4,21 @@ import { useTranslations } from 'next-intl';
 
 import { Button } from '@repo/ui';
 
-import { ConsumerTopNav } from '@/components/layout/ConsumerTopNav';
 import { LocaleSwitcher } from '@/components/layout/LocaleSwitcher';
 import { MobileNav } from '@/components/layout/MobileNav';
+import { consumerPrimaryNav, consumerSecondaryNav } from '@/components/layout/nav-items';
 import { SkipLink, MAIN_CONTENT_ID } from '@/components/layout/SkipLink';
 import { ThemeToggle } from '@/components/layout/ThemeToggle';
+import { TopNav } from '@/components/layout/TopNav';
 import { UserMenu } from '@/components/layout/UserMenu';
 import { APP_NAME } from '@/lib/constants';
 import { routes } from '@/lib/routes';
 
 import type { Locale } from '@/i18n/config';
 import type { ReactNode } from 'react';
+
+/** Everything the fitting room offers, in one bar. `PublicShell` shows a subset (C-9). */
+const CONSUMER_NAV = [...consumerPrimaryNav, ...consumerSecondaryNav];
 
 export interface ConsumerShellProps {
   locale: Locale;
@@ -53,7 +57,7 @@ export function ConsumerShell({ locale, user, children }: ConsumerShellProps) {
           </Link>
 
           <div className="mx-auto">
-            <ConsumerTopNav locale={locale} />
+            <TopNav locale={locale} items={CONSUMER_NAV} />
           </div>
 
           <div className="ms-auto flex items-center gap-1">

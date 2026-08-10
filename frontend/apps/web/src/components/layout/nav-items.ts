@@ -69,6 +69,19 @@ export const consumerPrimaryNav: readonly NavItem[] = [
   { key: 'account', labelKey: 'account', href: routes.account, icon: User, matchPrefix: true },
 ] as const;
 
+/**
+ * What the top bar shows on the **public** routes — browse and garment detail — for a visitor
+ * who is signed in.
+ *
+ * Derived from `consumerPrimaryNav` rather than written out, so a destination added to the tab
+ * bar cannot go missing from the half of the journey that lives under `PublicShell`. `account`
+ * is dropped because the avatar menu sits three inches to the right of this list on the same
+ * bar, and two controls for one destination is not navigation.
+ */
+export const browsePrimaryNav: readonly NavItem[] = consumerPrimaryNav.filter(
+  (item) => item.key !== 'account',
+);
+
 /** The rest of the consumer surface, reached from the account menu rather than the tab bar. */
 export const consumerSecondaryNav: readonly NavItem[] = [
   { key: 'photos', labelKey: 'photos', href: routes.photos, icon: Camera, matchPrefix: true },
