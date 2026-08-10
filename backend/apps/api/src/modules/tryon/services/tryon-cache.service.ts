@@ -4,14 +4,28 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
 import { METRICS, MetricsService, buildTryOnCacheKey } from '@library/common';
-import { StorageKeys, StorageService } from '@library/storage';
+import { StorageKeys, StorageService, isImageExt } from '@library/storage';
 
 import { TryOnConfig } from '../config/tryon.config';
 import { TryOnCache } from '../entities/tryon-cache.entity';
 
+import type { RasterImageExt } from '@library/storage';
+
+/**
+ * The extension already on a stored render key, for a copy that must keep it.
+ *
+ * Falls back to `png` for a key with no recognisable extension. That cannot happen for a key
+ * this system wrote — `StorageKeys.render` always appends one — and a copy is the wrong place
+ * to start refusing renders that already exist on disk.
+ */
+function extOf(storageKey: string): RasterImageExt {
+  const candidate = storageKey.slice(storageKey.lastIndexOf('.') + 1).toLowerCase();
+  return isImageExt(candidate) && candidate !== 'svg' ? candidate : 'png';
+}
+
 /** A render copied into one user's namespace, ready to become a `tryon_results` row. */
 export interface CopiedRender {
-  /** `renders/<userId>/<uuid>.png` — hers, not a reference to anyone else's file. */
+  /** `renders/<userId>/<uuid>.<ext>` — hers, not a reference to anyone else's file. */
   readonly storageKey: string;
   readonly width: number;
   readonly height: number;
@@ -121,7 +135,10 @@ export class TryOnCacheService {
    * exists. The copy is what has to be right.
    */
   async copyForUser(entry: TryOnCache, userId: string): Promise<CopiedRender> {
-    const destination = StorageKeys.render(userId);
+    // The copy is byte for byte, so the destination must carry the source's extension. Naming
+    // it `.png` regardless — which is what the old fixed-extension key builder did — would put
+    // a JPEG behind a `.png` key on every cache hit, and TryOnCloud returns JPEG.
+    const destination = StorageKeys.render(userId, extOf(entry.storageKey));
     const copied = await this.storage.copy(entry.storageKey, destination);
 
     await this.cache.update(

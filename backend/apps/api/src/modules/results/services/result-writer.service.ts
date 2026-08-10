@@ -3,16 +3,28 @@ import { InjectRepository } from '@nestjs/typeorm';
 
 import { IsNull, Not, Repository } from 'typeorm';
 
-import { ImageService, StorageKeys, StorageService } from '@library/storage';
+import {
+  ImageService,
+  StorageKeys,
+  StorageService,
+  extForMimeType,
+  sniffMimeType,
+} from '@library/storage';
 
 import { TryOnResult } from '../entities/tryon-result.entity';
 
 /** §3.3 — the history-grid thumbnail width. Generated on write, never on read (§3.6). */
 export const RENDER_THUMBNAIL_WIDTH = 320;
 
+/**
+ * How many leading bytes `sniffMimeType` needs. Matches `SNIFF_BYTES` in `LocalDiskDriver`,
+ * because the two must reach the same verdict about the same buffer.
+ */
+const SNIFF_BYTES = 256;
+
 /** A render that is on disk and ready to be recorded. */
 export interface StoredRender {
-  /** `renders/<userId>/<uuid>.png`, unwatermarked (§4.18, C-23). */
+  /** `renders/<userId>/<uuid>.<ext>`, unwatermarked (§4.18, C-23). */
   readonly storageKey: string;
   readonly thumbnailKey: string | null;
   readonly width: number;
@@ -77,23 +89,38 @@ export class ResultWriterService {
   ) {}
 
   /**
-   * Writes freshly generated PNG bytes into `userId`'s namespace, with a thumbnail.
+   * Writes freshly generated render bytes into `userId`'s namespace, with a thumbnail.
    *
    * The key comes from `StorageKeys.render()` — §3.3 is the only place a key is
    * constructed, and `renders/<userId>/` is what makes account deletion a prefix
    * delete and signed URLs `sub`-scoped.
+   *
+   * ### The format is read from the bytes, never assumed
+   *
+   * Both the key and the declared content type used to say `png` unconditionally, on the
+   * belief that "the upstream returns PNG". TryOnCloud returns **JPEG**. `LocalDiskDriver`
+   * validates the declared type against the magic bytes (§3.2 requirement 9) and refused the
+   * write, so the first real generation failed as `IMAGE_FORMAT_UNSUPPORTED` *after* the
+   * upstream image had already been produced and paid for — the render was thrown away and
+   * the consumer was told her photo was the wrong format.
+   *
+   * Sniffing here uses the same `sniffMimeType` the driver validates with, so a mismatch is
+   * now impossible by construction rather than by agreement. Bytes that are not a raster
+   * image we can name are left to the driver to refuse, which is its job and not ours.
    */
   async storeRender(
     userId: string,
-    png: Buffer,
+    bytes: Buffer,
     dimensions: { width: number; height: number },
   ): Promise<StoredRender> {
-    const key = StorageKeys.render(userId);
-    const stored = await this.storage.put(key, png, { contentType: 'image/png' });
+    const contentType = sniffMimeType(bytes.subarray(0, SNIFF_BYTES)) ?? 'image/png';
+    const ext = extForMimeType(contentType);
+    const key = StorageKeys.render(userId, ext === null || ext === 'svg' ? 'png' : ext);
+    const stored = await this.storage.put(key, bytes, { contentType });
 
     return {
       storageKey: stored.key,
-      thumbnailKey: await this.writeThumbnail(png),
+      thumbnailKey: await this.writeThumbnail(bytes),
       width: dimensions.width,
       height: dimensions.height,
       byteSize: stored.size,

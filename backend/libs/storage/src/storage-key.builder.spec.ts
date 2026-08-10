@@ -42,7 +42,7 @@ describe('StorageKeys (§3.3 key layout)', () => {
   });
 
   it('builds renders/<userId>/<uuid>.png — always png', () => {
-    const key = StorageKeys.render(USER_ID);
+    const key = StorageKeys.render(USER_ID, 'png');
     expect(key).toMatch(new RegExp(`^renders/${USER_ID}/${UUID}\\.png$`));
   });
 
@@ -64,7 +64,7 @@ describe('StorageKeys (§3.3 key layout)', () => {
   });
 
   it('produces a fresh uuid every call — keys are unguessable and never collide', () => {
-    const keys = new Set(Array.from({ length: 50 }, () => StorageKeys.render(USER_ID)));
+    const keys = new Set(Array.from({ length: 50 }, () => StorageKeys.render(USER_ID, 'png')));
     expect(keys.size).toBe(50);
   });
 
@@ -73,7 +73,7 @@ describe('StorageKeys (§3.3 key layout)', () => {
       StorageKeys.garmentImage(GARMENT_ID, 'jpeg'),
       StorageKeys.categoryCover(GARMENT_ID, 'png'),
       StorageKeys.personPhoto(USER_ID, 'webp'),
-      StorageKeys.render(USER_ID),
+      StorageKeys.render(USER_ID, 'png'),
       StorageKeys.thumbnail('category', 640),
       StorageKeys.referenceModel(),
       StorageKeys.brandAsset('svg'),
@@ -92,12 +92,12 @@ describe('StoragePrefixes', () => {
 
   it('produces prefixes that pass validation and keys that do not', () => {
     expect(isValidStoragePrefix(StoragePrefixes.rendersOfUser(USER_ID))).toBe(true);
-    expect(isValidStoragePrefix(StorageKeys.render(USER_ID))).toBe(false);
+    expect(isValidStoragePrefix(StorageKeys.render(USER_ID, 'png'))).toBe(false);
     expect(isValidStorageKey(StoragePrefixes.rendersOfUser(USER_ID))).toBe(false);
   });
 
   it('reports the leading segment, which selects the §3.4 TTL band', () => {
-    expect(keyPrefixSegment(StorageKeys.render(USER_ID))).toBe('renders');
+    expect(keyPrefixSegment(StorageKeys.render(USER_ID, 'png'))).toBe('renders');
     expect(keyPrefixSegment('brand/x.svg')).toBe('brand');
   });
 });
@@ -246,7 +246,7 @@ describe('parseOwnedKey (§3.3, §3.5 step 4)', () => {
 
   it('round-trips every key the builders produce', () => {
     expect(parseOwnedKey(StorageKeys.personPhoto(USER, 'jpg'))?.userId).toBe(USER);
-    expect(parseOwnedKey(StorageKeys.render(USER))?.userId).toBe(USER);
+    expect(parseOwnedKey(StorageKeys.render(USER, 'png'))?.userId).toBe(USER);
     expect(parseOwnedKey(StorageKeys.dataExport(USER))?.namespace).toBe('exports');
     expect(parseOwnedKey(StorageKeys.dataExportFor(USER, OBJECT))?.objectId).toBe(OBJECT);
   });
@@ -278,7 +278,7 @@ describe('exportIdFromKey (C-39)', () => {
   });
 
   it('is null for a key from another namespace', () => {
-    expect(exportIdFromKey(StorageKeys.render(USER))).toBeNull();
+    expect(exportIdFromKey(StorageKeys.render(USER, 'png'))).toBeNull();
   });
 });
 

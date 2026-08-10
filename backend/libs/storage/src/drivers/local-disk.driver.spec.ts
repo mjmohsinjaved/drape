@@ -97,7 +97,7 @@ describe('LocalDiskDriver', () => {
 
   describe('put and get (requirements 4, 5, 7)', () => {
     it('round trips the bytes and returns the sha256 as the etag', async () => {
-      const key = StorageKeys.render(USER_ID);
+      const key = StorageKeys.render(USER_ID, 'png');
       const body = pngBytes('render-bytes');
 
       const stored = await driver.put(key, body, { contentType: 'image/png' });
@@ -129,12 +129,12 @@ describe('LocalDiskDriver', () => {
     });
 
     it('leaves nothing behind in .tmp — the write is staged then renamed', async () => {
-      await driver.put(StorageKeys.render(USER_ID), pngBytes('x'), { contentType: 'image/png' });
+      await driver.put(StorageKeys.render(USER_ID, 'png'), pngBytes('x'), { contentType: 'image/png' });
       expect(await readdir(join(root, '.tmp'))).toEqual([]);
     });
 
     it('refuses to overwrite by default', async () => {
-      const key = StorageKeys.render(USER_ID);
+      const key = StorageKeys.render(USER_ID, 'png');
       await driver.put(key, pngBytes('first'), { contentType: 'image/png' });
 
       expect(
@@ -146,7 +146,7 @@ describe('LocalDiskDriver', () => {
     });
 
     it('overwrites when failIfExists is false', async () => {
-      const key = StorageKeys.render(USER_ID);
+      const key = StorageKeys.render(USER_ID, 'png');
       await driver.put(key, pngBytes('first'), { contentType: 'image/png' });
       await driver.put(key, pngBytes('second'), { contentType: 'image/png', failIfExists: false });
       expect(await collect(await driver.get(key))).toEqual(pngBytes('second'));
@@ -178,7 +178,7 @@ describe('LocalDiskDriver', () => {
 
   describe('head, exists and stat', () => {
     it('reports size, content type and hash for a stored object', async () => {
-      const key = StorageKeys.render(USER_ID);
+      const key = StorageKeys.render(USER_ID, 'png');
       const body = pngBytes('head-me');
       await driver.put(key, body, { contentType: 'image/png' });
 
@@ -191,13 +191,13 @@ describe('LocalDiskDriver', () => {
     });
 
     it('returns null for a missing object and false from exists', async () => {
-      const key = StorageKeys.render(USER_ID);
+      const key = StorageKeys.render(USER_ID, 'png');
       expect(await driver.head(key)).toBeNull();
       expect(await driver.exists(key)).toBe(false);
     });
 
     it('recomputes the hash when the sidecar is lost', async () => {
-      const key = StorageKeys.render(USER_ID);
+      const key = StorageKeys.render(USER_ID, 'png');
       const body = pngBytes('sidecar-gone');
       await driver.put(key, body, { contentType: 'image/png' });
       await rm(join(root, '.meta'), { recursive: true, force: true });
@@ -209,7 +209,7 @@ describe('LocalDiskDriver', () => {
     });
 
     it('raises FILE_NOT_FOUND when reading a missing object', async () => {
-      expect(await errorCodeOfAsync(() => driver.get(StorageKeys.render(USER_ID)))).toBe(
+      expect(await errorCodeOfAsync(() => driver.get(StorageKeys.render(USER_ID, 'png')))).toBe(
         'FILE_NOT_FOUND',
       );
     });
@@ -217,7 +217,7 @@ describe('LocalDiskDriver', () => {
 
   describe('delete (requirement 6)', () => {
     it('removes the object and its sidecar, and is idempotent', async () => {
-      const key = StorageKeys.render(USER_ID);
+      const key = StorageKeys.render(USER_ID, 'png');
       await driver.put(key, pngBytes('bye'), { contentType: 'image/png' });
 
       expect(await driver.delete(key)).toBe(true);
@@ -232,9 +232,9 @@ describe('LocalDiskDriver', () => {
 
   describe('deletePrefix (§3.3, §9.3 deletion log)', () => {
     it('removes every object under the prefix and returns the count', async () => {
-      await driver.put(StorageKeys.render(USER_ID), pngBytes('a'), { contentType: 'image/png' });
-      await driver.put(StorageKeys.render(USER_ID), pngBytes('b'), { contentType: 'image/png' });
-      await driver.put(StorageKeys.render(USER_ID), pngBytes('c'), { contentType: 'image/png' });
+      await driver.put(StorageKeys.render(USER_ID, 'png'), pngBytes('a'), { contentType: 'image/png' });
+      await driver.put(StorageKeys.render(USER_ID, 'png'), pngBytes('b'), { contentType: 'image/png' });
+      await driver.put(StorageKeys.render(USER_ID, 'png'), pngBytes('c'), { contentType: 'image/png' });
       const survivor = StorageKeys.garmentImage(GARMENT_ID, 'png');
       await driver.put(survivor, pngBytes('keep'), { contentType: 'image/png' });
 
@@ -252,8 +252,8 @@ describe('LocalDiskDriver', () => {
 
   describe('copy (§3.7 cache hit)', () => {
     it('copies into another namespace and re-derives the hash', async () => {
-      const source = StorageKeys.render(USER_ID);
-      const destination = StorageKeys.render('99999999-8888-4777-8666-555555555555');
+      const source = StorageKeys.render(USER_ID, 'png');
+      const destination = StorageKeys.render('99999999-8888-4777-8666-555555555555', 'png');
       const body = pngBytes('cached-render');
       await driver.put(source, body, { contentType: 'image/png' });
 
@@ -268,7 +268,7 @@ describe('LocalDiskDriver', () => {
     it('fails when the source is absent', async () => {
       expect(
         await errorCodeOfAsync(() =>
-          driver.copy(StorageKeys.render(USER_ID), StorageKeys.render(USER_ID)),
+          driver.copy(StorageKeys.render(USER_ID, 'png'), StorageKeys.render(USER_ID, 'png')),
         ),
       ).toBe('FILE_NOT_FOUND');
     });
@@ -371,7 +371,7 @@ describe('LocalDiskDriver', () => {
     });
 
     it('rejects a hostile destination on copy', async () => {
-      const source = StorageKeys.render(USER_ID);
+      const source = StorageKeys.render(USER_ID, 'png');
       await driver.put(source, pngBytes('x'), { contentType: 'image/png' });
       expect(await errorCodeOfAsync(() => driver.copy(source, '../escaped.png'))).toBe(
         'STORAGE_PATH_REJECTED',
@@ -504,7 +504,7 @@ describe('LocalDiskDriver', () => {
     });
 
     it('never touches a real object, however old', async () => {
-      const key = StorageKeys.render(USER_ID);
+      const key = StorageKeys.render(USER_ID, 'png');
       await driver.put(key, pngBytes('old render'), { contentType: 'image/png' });
 
       await driver.sweepTemporaryFiles(new Date(Date.now() + SIX_HOURS_MS), 100);
