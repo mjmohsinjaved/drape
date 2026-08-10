@@ -1,5 +1,3 @@
-'use client';
-
 import { useTranslations } from 'next-intl';
 
 import { NavLink } from '@/components/layout/NavLink';
@@ -24,6 +22,19 @@ export interface TopNavProps {
  * Hidden below 768 px, where `MobileNav` takes over — the same destinations, placed where the
  * hand or the cursor expects them. Labels are message keys under `common.nav`, resolved here, so
  * the same item reads correctly in `en` and `ur`.
+ *
+ * ### A Server Component, and it has to be
+ *
+ * `NavItem` carries `href: (locale) => string` and `icon: LucideIcon` — a function and a
+ * component. Taking `items` as a prop only works if this side of the call is *not* a client
+ * boundary: mark it `'use client'` and React has to serialise that array to send it, cannot,
+ * and throws `Functions cannot be passed directly to Client Components` for the whole shell.
+ * The predecessors got away with `'use client'` because each imported its own list rather than
+ * receiving one.
+ *
+ * So the boundary sits one level down, at `NavLink`, which needs `usePathname` to know what is
+ * active and takes nothing but strings and booleans. Rendering a client component from a server
+ * component is free; passing behaviour into one is not.
  */
 export function TopNav({ locale, items }: TopNavProps) {
   const t = useTranslations('common.nav');
