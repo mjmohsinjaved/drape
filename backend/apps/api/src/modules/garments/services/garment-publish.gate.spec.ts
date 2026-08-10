@@ -9,7 +9,7 @@ import { PublishState } from '../enums/publish-state.enum';
 import { TestRenderState } from '../enums/test-render-state.enum';
 
 import {
-  evaluatePublishGate,
+  evaluatePublishAdvisories,
   hasApprovedTestRender,
   hasQualityOverride,
   isAllowedPublishTransition,
@@ -18,19 +18,21 @@ import {
 import type { Garment } from '../entities/garment.entity';
 
 /**
- * **The publish gate — PRD A-11, A-10, E-10.**
+ * **The publish advisories — PRD A-11, A-10.**
  *
- * > E-10: "A test asserts that no garment lacking an approved test render can appear
- * > in the consumer catalog."
+ * These used to be gates and E-10 asserted the strongest of them by test: "no garment
+ * lacking an approved test render can appear in the consumer catalog." That is no
+ * longer true and was changed deliberately — publishing is now unconditional and the
+ * conditions are advice. What is asserted here is that the advice is still *complete
+ * and correct*, because it is now the only thing standing between an admin and a
+ * catalog entry that cannot be tried on.
  *
- * The catalog half of E-10 lives in `modules/catalog`. This is the other half: the
- * gate that stands between a garment and `PUBLISHED`, exercised exhaustively because
- * it is a pure function and there is therefore no excuse not to.
+ * Exercised exhaustively because it is a pure function and there is no excuse not to.
  */
-describe('evaluatePublishGate (A-11, A-10)', () => {
+describe('evaluatePublishAdvisories (A-11, A-10)', () => {
   const MIN_SCORE = 70;
 
-  /** A garment that clears every gate, so each case below changes exactly one thing. */
+  /** A garment that meets every recommendation, so each case changes exactly one thing. */
   function ready(overrides: Partial<Garment> = {}): Garment {
     return buildPublishedGarment({
       publishState: PublishState.DRAFT,
@@ -40,44 +42,34 @@ describe('evaluatePublishGate (A-11, A-10)', () => {
     });
   }
 
-  it('permits a garment that has cleared every precondition', () => {
+  it('reports nothing for a garment that has met every recommendation', () => {
     expect(
-      evaluatePublishGate({ garment: ready(), hasTryOnSource: true, minQualityScore: MIN_SCORE }),
-    ).toBeNull();
+      evaluatePublishAdvisories({
+        garment: ready(),
+        hasTryOnSource: true,
+        minQualityScore: MIN_SCORE,
+      }),
+    ).toEqual([]);
   });
 
-  describe('A-11 — the test-render gate', () => {
+  describe('A-11 — the test render', () => {
     it.each([
       ['no test render at all', TestRenderState.NONE, null],
       ['a pending test render', TestRenderState.PENDING, null],
       ['a rejected test render', TestRenderState.REJECTED, null],
       ['an APPROVED state with no approval timestamp', TestRenderState.APPROVED, null],
-    ])('refuses %s with TEST_RENDER_REQUIRED', (_case, testRenderState, testRenderApprovedAt) => {
+    ])('reports %s as TEST_RENDER_REQUIRED', (_case, testRenderState, testRenderApprovedAt) => {
       const garment = ready({
         testRenderState,
         testRenderApprovedAt: testRenderApprovedAt as Date | null,
       });
 
       expect(
-        evaluatePublishGate({ garment, hasTryOnSource: true, minQualityScore: MIN_SCORE }),
-      ).toBe(ErrorCode.TEST_RENDER_REQUIRED);
+        evaluatePublishAdvisories({ garment, hasTryOnSource: true, minQualityScore: MIN_SCORE }),
+      ).toEqual([ErrorCode.TEST_RENDER_REQUIRED]);
     });
 
-    it('refuses before it even looks at the quality score', () => {
-      // A garment failing both gates reports the test render, which is the more
-      // fundamental failure and the more useful thing to tell an admin.
-      const garment = ready({
-        testRenderState: TestRenderState.NONE,
-        testRenderApprovedAt: null,
-        qualityScore: 10,
-      });
-
-      expect(
-        evaluatePublishGate({ garment, hasTryOnSource: false, minQualityScore: MIN_SCORE }),
-      ).toBe(ErrorCode.TEST_RENDER_REQUIRED);
-    });
-
-    it('cannot be satisfied by a quality override', () => {
+    it('is not silenced by a quality override', () => {
       const garment = ready({
         testRenderState: TestRenderState.REJECTED,
         testRenderApprovedAt: null,
@@ -86,55 +78,55 @@ describe('evaluatePublishGate (A-11, A-10)', () => {
       });
 
       expect(
-        evaluatePublishGate({ garment, hasTryOnSource: true, minQualityScore: MIN_SCORE }),
-      ).toBe(ErrorCode.TEST_RENDER_REQUIRED);
+        evaluatePublishAdvisories({ garment, hasTryOnSource: true, minQualityScore: MIN_SCORE }),
+      ).toEqual([ErrorCode.TEST_RENDER_REQUIRED]);
     });
   });
 
   describe('A-9 — the try-on source image', () => {
-    it('refuses a garment with no try-on source', () => {
+    it('reports a garment with no try-on source', () => {
       expect(
-        evaluatePublishGate({
+        evaluatePublishAdvisories({
           garment: ready(),
           hasTryOnSource: false,
           minQualityScore: MIN_SCORE,
         }),
-      ).toBe(ErrorCode.TRYON_SOURCE_REQUIRED);
+      ).toEqual([ErrorCode.TRYON_SOURCE_REQUIRED]);
     });
   });
 
-  describe('A-10 — the quality gate', () => {
-    it('refuses a score below the threshold with QUALITY_OVERRIDE_REQUIRED', () => {
+  describe('A-10 — the quality score', () => {
+    it('reports a score below the threshold as QUALITY_OVERRIDE_REQUIRED', () => {
       expect(
-        evaluatePublishGate({
+        evaluatePublishAdvisories({
           garment: ready({ qualityScore: 69 }),
           hasTryOnSource: true,
           minQualityScore: MIN_SCORE,
         }),
-      ).toBe(ErrorCode.QUALITY_OVERRIDE_REQUIRED);
+      ).toEqual([ErrorCode.QUALITY_OVERRIDE_REQUIRED]);
     });
 
     it('treats an unscored garment as below the threshold', () => {
       expect(
-        evaluatePublishGate({
+        evaluatePublishAdvisories({
           garment: ready({ qualityScore: null }),
           hasTryOnSource: true,
           minQualityScore: MIN_SCORE,
         }),
-      ).toBe(ErrorCode.QUALITY_OVERRIDE_REQUIRED);
+      ).toEqual([ErrorCode.QUALITY_OVERRIDE_REQUIRED]);
     });
 
-    it('accepts a score exactly on the threshold', () => {
+    it('says nothing about a score exactly on the threshold', () => {
       expect(
-        evaluatePublishGate({
+        evaluatePublishAdvisories({
           garment: ready({ qualityScore: MIN_SCORE }),
           hasTryOnSource: true,
           minQualityScore: MIN_SCORE,
         }),
-      ).toBeNull();
+      ).toEqual([]);
     });
 
-    it('permits a low score once an override has been recorded', () => {
+    it('is silenced by a recorded override', () => {
       const garment = ready({
         qualityScore: 12,
         qualityOverriddenBy: 'a0000000-0000-4000-8000-00000000000a',
@@ -142,8 +134,8 @@ describe('evaluatePublishGate (A-11, A-10)', () => {
       });
 
       expect(
-        evaluatePublishGate({ garment, hasTryOnSource: true, minQualityScore: MIN_SCORE }),
-      ).toBeNull();
+        evaluatePublishAdvisories({ garment, hasTryOnSource: true, minQualityScore: MIN_SCORE }),
+      ).toEqual([]);
     });
 
     it('ignores a half-written override', () => {
@@ -154,9 +146,29 @@ describe('evaluatePublishGate (A-11, A-10)', () => {
       });
 
       expect(
-        evaluatePublishGate({ garment, hasTryOnSource: true, minQualityScore: MIN_SCORE }),
-      ).toBe(ErrorCode.QUALITY_OVERRIDE_REQUIRED);
+        evaluatePublishAdvisories({ garment, hasTryOnSource: true, minQualityScore: MIN_SCORE }),
+      ).toEqual([ErrorCode.QUALITY_OVERRIDE_REQUIRED]);
     });
+  });
+
+  /**
+   * The reason advisories are a list rather than the first failure: an admin fixing one
+   * thing at a time is an admin making three round trips.
+   */
+  it('reports every unmet condition at once, in §4.13 order', () => {
+    const garment = ready({
+      testRenderState: TestRenderState.NONE,
+      testRenderApprovedAt: null,
+      qualityScore: 10,
+    });
+
+    expect(
+      evaluatePublishAdvisories({ garment, hasTryOnSource: false, minQualityScore: MIN_SCORE }),
+    ).toEqual([
+      ErrorCode.TEST_RENDER_REQUIRED,
+      ErrorCode.TRYON_SOURCE_REQUIRED,
+      ErrorCode.QUALITY_OVERRIDE_REQUIRED,
+    ]);
   });
 });
 
@@ -200,9 +212,10 @@ describe('isAllowedPublishTransition (§4.13)', () => {
     expect(isAllowedPublishTransition(PublishState.PUBLISHED, PublishState.PUBLISHED)).toBe(false);
   });
 
-  it('re-validates an archived garment on its way back to published', () => {
+  it('re-evaluates an archived garment on its way back to published', () => {
     // A-13 archiving keeps the row and its history, so an archived garment can still
-    // be missing an approved test render by the time somebody re-publishes it.
+    // be missing an approved test render by the time somebody re-publishes it. The
+    // transition is legal and the advisory is raised — it no longer stops the publish.
     const archived = buildArchivedGarment({
       testRenderState: TestRenderState.REJECTED,
       testRenderApprovedAt: null,
@@ -210,7 +223,7 @@ describe('isAllowedPublishTransition (§4.13)', () => {
 
     expect(isAllowedPublishTransition(archived.publishState, PublishState.PUBLISHED)).toBe(true);
     expect(
-      evaluatePublishGate({ garment: archived, hasTryOnSource: true, minQualityScore: 70 }),
-    ).toBe(ErrorCode.TEST_RENDER_REQUIRED);
+      evaluatePublishAdvisories({ garment: archived, hasTryOnSource: true, minQualityScore: 70 }),
+    ).toEqual([ErrorCode.TEST_RENDER_REQUIRED]);
   });
 });

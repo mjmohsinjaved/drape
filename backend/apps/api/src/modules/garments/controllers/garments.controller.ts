@@ -156,11 +156,13 @@ export class GarmentsController {
   @Roles(Role.ADMIN)
   @ResponseMessage('Garment published successfully')
   @ApiOperation({
-    summary: 'Publish. Enforces the A-11 test-render gate and the A-10 quality gate',
+    summary: 'Publish. The A-10 and A-11 conditions are reported, never enforced',
     description:
-      'TEST_RENDER_REQUIRED when no approved test render is recorded (A-11, E-10); ' +
-      'TRYON_SOURCE_REQUIRED with no try-on source image (A-9); ' +
-      'QUALITY_OVERRIDE_REQUIRED below `quality.minScore` with no override (A-10).',
+      'Always publishes on a legal transition. Any unmet condition — no approved test ' +
+      'render (A-11), no try-on source image (A-9), a score below `quality.minScore` ' +
+      'with no override (A-10) — is logged and recorded on the GARMENT_PUBLISHED audit ' +
+      'row as `metadata.unmetConditions`. The only refusal left is ' +
+      'INVALID_PUBLISH_TRANSITION.',
   })
   @ApiOkResponse({ type: GarmentResponseDto })
   @ApiStandardResponses({ notFound: true, conflict: true, unprocessable: true })

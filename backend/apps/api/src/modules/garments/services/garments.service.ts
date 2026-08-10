@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectRepository } from '@nestjs/typeorm';
 
@@ -54,7 +54,7 @@ import { PublishState } from '../enums/publish-state.enum';
 import { toGarmentResponse } from '../mappers/garment.mapper';
 import { MAX_GARMENT_SLUG_LENGTH } from '../utils/slug.util';
 
-import { evaluatePublishGate, isAllowedPublishTransition } from './garment-publish.gate';
+import { evaluatePublishAdvisories, isAllowedPublishTransition } from './garment-publish.gate';
 
 import type { CreateGarmentDto } from '../dto/create-garment.dto';
 import type { DeleteGarmentDto } from '../dto/delete-garment.dto';
@@ -88,13 +88,16 @@ export const STAR_RATE_SQL =
  *
  * Four things hold across every method:
  *
- * 1. **The publish gate is one function and there is no path around it.**
- *    `evaluatePublishGate()` decides whether a garment may enter `PUBLISHED`; every
- *    transition into that state — single or bulk — goes through {@link publish}, and
- *    {@link publish} calls it. A-11's promise ("no garment reaches the consumer
- *    catalog without an approved test render") is only worth anything if that is
- *    true, so bulk publish is implemented *as a loop over `publish()`* rather than as
- *    a faster bulk `UPDATE`.
+ * 1. **The publish conditions are advice, and they are evaluated in one place.**
+ *    `evaluatePublishAdvisories()` names what a garment has not met; nothing there
+ *    refuses a publish. Every transition into `PUBLISHED` — single or bulk — still goes
+ *    through {@link publish}, and bulk publish is still a loop over it rather than a
+ *    faster bulk `UPDATE`, so the warning and the audit row are written per garment
+ *    and no piece goes live without a record of what was outstanding.
+ *
+ *    A-11's promise ("no garment reaches the consumer catalog without an approved test
+ *    render") is **no longer enforced** here. That was asked for deliberately; the PRD
+ *    and §4.13 record the change.
  * 2. **A rental has a deposit and a sale does not.** Checked against the *merged*
  *    record on every write, because a PATCH can change `mode` without sending
  *    `deposit`.
@@ -111,6 +114,8 @@ export const STAR_RATE_SQL =
  */
 @Injectable()
 export class GarmentsService {
+  private readonly logger = new Logger(GarmentsService.name);
+
   constructor(
     @InjectRepository(Garment)
     private readonly garments: Repository<Garment>,
@@ -374,34 +379,33 @@ export class GarmentsService {
    * -------------------------------------------------------------------------------------- */
 
   /**
-   * `POST /admin/garments/:garmentId/publish` — **the A-11 and A-10 gates**.
+   * `POST /admin/garments/:garmentId/publish`.
    *
-   * Refuses with `TEST_RENDER_REQUIRED` when the garment carries no approved test
-   * render, and with `QUALITY_OVERRIDE_REQUIRED` when its quality score is below
-   * `quality.minScore` and no override has been recorded. Neither can be skipped:
-   * this is the only method in the module that writes `publishState = PUBLISHED`.
+   * **The A-10 and A-11 conditions are reported, never enforced.** An approved test
+   * render, a try-on source and a passing quality score are all advice: the publish
+   * proceeds regardless, and every unmet condition is logged and written into the
+   * `GARMENT_PUBLISHED` audit row so the decision is attributable afterwards.
+   *
+   * The one thing still refused is an illegal transition — publishing something already
+   * published is a contradiction, not a judgement about the photograph.
    */
   async publish(garmentId: string, actor: ICurrentUser): Promise<GarmentResponseDto> {
     const garment = await this.requireGarment(garmentId);
     this.assertTransition(garment, PublishState.PUBLISHED);
 
-    const refusal = evaluatePublishGate({
+    const advisories = evaluatePublishAdvisories({
       garment,
       hasTryOnSource: await this.hasTryOnSource(garment.id),
       minQualityScore: await this.minQualityScore(),
     });
 
-    if (refusal !== null) {
-      throw new ConflictException(refusal, {
-        // The spec's status is authoritative (§2.5); `ConflictException` fixes the
-        // code family, never the status.
-        details: {
-          garmentId: garment.id,
-          testRenderState: garment.testRenderState,
-          qualityScore: garment.qualityScore,
-          checks: garment.qualityChecks ?? [],
-        },
-      });
+    if (advisories.length > 0) {
+      // Logged at warn because it is the record of a piece going live below the bar the
+      // studio set for itself. `TRYON_SOURCE_REQUIRED` in this list is the serious one:
+      // the garment will be browsable and will fail at generation time.
+      this.logger.warn(
+        `garment ${garment.id} published with unmet conditions: ${advisories.join(', ')}`,
+      );
     }
 
     const from = garment.publishState;
@@ -426,6 +430,10 @@ export class GarmentsService {
       to: PublishState.PUBLISHED,
       qualityScore: garment.qualityScore,
       qualityOverridden: garment.qualityOverriddenBy !== null,
+      // The conditions that were unmet at the moment it went live. Empty on a clean
+      // publish. This is the only durable record that the advice was shown and passed
+      // over, which is what makes the decision reviewable later (A-4).
+      unmetConditions: advisories,
     });
 
     return this.present(garment);
@@ -715,7 +723,8 @@ export class GarmentsService {
     ]);
 
     const publishable =
-      evaluatePublishGate({ garment, hasTryOnSource: hasSource, minQualityScore }) === null;
+      evaluatePublishAdvisories({ garment, hasTryOnSource: hasSource, minQualityScore }).length ===
+      0;
 
     return toGarmentResponse(garment, category?.name ?? null, publishable);
   }
@@ -761,11 +770,11 @@ export class GarmentsService {
       toGarmentResponse(
         garment,
         categories.get(garment.categoryId)?.name ?? null,
-        evaluatePublishGate({
+        evaluatePublishAdvisories({
           garment,
           hasTryOnSource: withSource.has(garment.id),
           minQualityScore,
-        }) === null,
+        }).length === 0,
       ),
     );
   }

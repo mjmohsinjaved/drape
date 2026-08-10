@@ -5,7 +5,7 @@
  * What is pinned here is everything around it: that the pass mark really comes from
  * `quality.minScore` and can therefore be tuned without a deploy (§4.28), that a failed settings
  * read degrades instead of blocking a catalogue, that the report persists in the shape §4.13
- * declares — and that a score produced by this validator drives `evaluatePublishGate` exactly
+ * declares — and that a score produced by this validator drives `evaluatePublishAdvisories` exactly
  * the way A-10 says it must.
  */
 import { ErrorCode } from '@library/common';
@@ -23,7 +23,7 @@ import {
 } from '../validators/image-quality.constants';
 import { measurements } from '../validators/image-quality.fixtures';
 
-import { evaluatePublishGate } from './garment-publish.gate';
+import { evaluatePublishAdvisories } from './garment-publish.gate';
 import { ImageQualityService } from './image-quality.service';
 
 import type { Garment } from '../entities/garment.entity';
@@ -146,19 +146,23 @@ describe('ImageQualityService.toGarmentColumns (§4.13)', () => {
   });
 });
 
-describe('A-10 end to end — the score this validator produces drives the publish gate', () => {
-  it('refuses to publish a garment whose try-on source scored below the bar', async () => {
+describe('A-10 end to end — the score this validator produces drives the publish advisories', () => {
+  it('flags a garment whose try-on source scored below the bar', async () => {
     const { service } = build(measurements({ longEdgePx: 1200 }));
     const report = await service.evaluate(Buffer.from('x'));
     const garment = readyGarment({ qualityScore: report.score });
 
     expect(report.score).toBeLessThan(report.minScore);
     expect(
-      evaluatePublishGate({ garment, hasTryOnSource: true, minQualityScore: report.minScore }),
-    ).toBe(ErrorCode.QUALITY_OVERRIDE_REQUIRED);
+      evaluatePublishAdvisories({
+        garment,
+        hasTryOnSource: true,
+        minQualityScore: report.minScore,
+      }),
+    ).toEqual([ErrorCode.QUALITY_OVERRIDE_REQUIRED]);
   });
 
-  it('permits the same garment once an explicit override has been recorded', async () => {
+  it('says nothing about the same garment once an explicit override has been recorded', async () => {
     const { service } = build(measurements({ longEdgePx: 1200 }));
     const report = await service.evaluate(Buffer.from('x'));
     const garment = readyGarment({
@@ -170,28 +174,40 @@ describe('A-10 end to end — the score this validator produces drives the publi
     });
 
     expect(
-      evaluatePublishGate({ garment, hasTryOnSource: true, minQualityScore: report.minScore }),
-    ).toBeNull();
+      evaluatePublishAdvisories({
+        garment,
+        hasTryOnSource: true,
+        minQualityScore: report.minScore,
+      }),
+    ).toEqual([]);
   });
 
-  it('publishes a good photograph with no override at all', async () => {
+  it('says nothing about a good photograph with no override at all', async () => {
     const { service } = build();
     const report = await service.evaluate(Buffer.from('x'));
     const garment = readyGarment({ qualityScore: report.score });
 
     expect(report.score).toBe(100);
     expect(
-      evaluatePublishGate({ garment, hasTryOnSource: true, minQualityScore: report.minScore }),
-    ).toBeNull();
+      evaluatePublishAdvisories({
+        garment,
+        hasTryOnSource: true,
+        minQualityScore: report.minScore,
+      }),
+    ).toEqual([]);
   });
 
-  it('still refuses when the piece has no try-on source, whatever it scored', async () => {
+  it('still flags a piece with no try-on source, whatever it scored', async () => {
     const { service } = build();
     const report = await service.evaluate(Buffer.from('x'));
     const garment = readyGarment({ qualityScore: report.score });
 
     expect(
-      evaluatePublishGate({ garment, hasTryOnSource: false, minQualityScore: report.minScore }),
-    ).toBe(ErrorCode.TRYON_SOURCE_REQUIRED);
+      evaluatePublishAdvisories({
+        garment,
+        hasTryOnSource: false,
+        minQualityScore: report.minScore,
+      }),
+    ).toEqual([ErrorCode.TRYON_SOURCE_REQUIRED]);
   });
 });

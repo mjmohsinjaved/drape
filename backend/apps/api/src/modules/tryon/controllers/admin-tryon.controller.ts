@@ -168,8 +168,11 @@ export class AdminTryOnController {
   @ApiOperation({ summary: 'The render beside the source, for approval (A-11)' })
   @ApiOkResponse({ type: TestRenderResponseDto })
   @ApiStandardResponses({ notFound: true })
-  describe(@Param() params: GarmentIdParamDto): Promise<TestRenderResponseDto> {
-    return this.testRenders.describe(params.garmentId);
+  describe(
+    @Param() params: GarmentIdParamDto,
+    @CurrentUser() admin: ICurrentUser,
+  ): Promise<TestRenderResponseDto> {
+    return this.testRenders.describe(params.garmentId, admin.id);
   }
 
   @Post('admin/garments/:garmentId/test-render/approve')
