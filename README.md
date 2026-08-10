@@ -316,6 +316,40 @@ codes.
 Both roles land on `/en/dashboard`, which resolves server-side by role — admins get the
 studio console, consumers get the fitting room.
 
+### 4.9 Your first end-to-end try-on
+
+The seed creates categories and reference models but **no garments**, so the catalogue is
+empty at this point. This is the shortest path from a fresh clone to a render, and it
+exercises every moving part — upload, storage, the provider, the ledgers and the SSE
+stream.
+
+Keep `TRYON_DRIVER=mock` for this. It returns a placeholder render after
+`TRYON_MOCK_LATENCY_MS`, costs nothing, and behaves the same in every respect that
+matters here.
+
+**As the admin:**
+
+1. `/en/admin/categories` — the seed already made some; add one if you want your own.
+2. `/en/admin/catalog/new` — title, category, price, sizes. It starts as a draft.
+3. On the garment page, upload a photograph of the piece. A flat product shot works.
+4. Mark that image as the **try-on source**. This is the file sent upstream, and without
+   it every try-on against this piece fails — publishing will not stop you.
+5. Click **Publish**. Any unmet recommendations are listed and then published past; the
+   piece is live immediately.
+
+**As a customer** — sign out, then `/en/signup` for a second account:
+
+6. Verify the email. With `EMAIL_DRIVER=console` the link is printed in the API terminal —
+   copy it into the browser. (The settings *screen* is not built yet, but the API is:
+   an admin can `PATCH /api/v1/settings` to turn `quota.requireEmailVerification` off.)
+7. `/en/browse` — your piece is there. Open it and press **Try it on**.
+8. Accept the consent screen, then add a full-length photograph of a person.
+9. The try-on runs and lands on the result.
+
+If step 7 shows nothing, the garment is still a draft. If step 9 fails, check the API log
+— the error code names the step, and [section 10](#10-troubleshooting) maps the common
+ones.
+
 ---
 
 ## 5. The TryOnCloud API key
@@ -391,6 +425,12 @@ throughout.
 Every screen ships all six states: default, loading, empty, error, permission-denied and
 success. If you are adding a screen, it needs all six.
 
+> **🚧 marks a route whose screen is not built yet.** It resolves, carries its metadata,
+> loading skeleton and error boundary, and renders a placeholder. **The API behind it is
+> implemented** — the endpoints exist, are guarded and are tested; only the UI body is
+> outstanding. Eighteen of the fifty-one routes are in this state, so knowing which is the
+> difference between "this is broken" and "this is the next piece of work".
+
 ### 7.1 The customer journey
 
 ```
@@ -412,9 +452,9 @@ success. If you are adding a screen, it needs all six.
 | **Result** | `/en/renders/<resultId>` | The render, with the shortlisting caption. Shortlist it, share it, or start an enquiry. |
 | **History** | `/en/renders` | Every past render, rendered entirely from snapshots taken at generation time — it still reads correctly after the photo is deleted or the garment is withdrawn. |
 | **Shortlist** | `/en/shortlist` | Saved pieces. |
-| **Share** | `/en/share` | Expiring public links to a render: `/en/s/<token>`. |
-| **Enquiry** | `/en/enquiries/new` | Sends the studio a message about a piece. |
-| **Account** | `/en/account` | Profile, security, notification preferences, data export and account deletion. |
+| **Share** 🚧 | `/en/share`, `/en/s/<token>` | Expiring public links to a render. |
+| **Enquiry** 🚧 | `/en/enquiries`, `/en/enquiries/new` | Sends the studio a message about a piece. |
+| **Account** | `/en/account` | Profile, security and notification preferences. Data export and deletion (`/en/account/data`) is 🚧. |
 
 **Studio staff can never see a consumer's photograph.** That is enforced in the query
 layer and covered by a test, not by convention.
@@ -438,14 +478,19 @@ layer and covered by a test, not by convention.
 | **Test render** | `/en/admin/catalog/<id>/test-render` | Runs a generation against a **reference model**, never a consumer photograph. Charged to the platform budget under its own reason so admin work is separable from customer demand. |
 | **Approve** | same screen | An admin looks at the result and approves or rejects it. |
 | **Publish** | `/en/admin/catalog/<id>` | Publishing is the whole decision. The panel reports whatever is still missing — try-on source, approved test render, quality score — and publishes anyway, recording what was passed over in the audit trail. The piece is browsable and tryable immediately. The one condition with a consequence the studio will not see is a missing **try-on source**: that piece appears in the catalogue and fails every try-on against it, which surfaces on catalogue health rather than here. |
-| **Catalogue health** | `/en/admin/catalog/health` | Pieces flagged after a consumer generation failed against them. |
-| **Consumers** | `/en/admin/consumers` | Accounts, quota and status. Never their photographs. |
-| **Moderation** | `/en/admin/moderation` | Photographs an upstream rejection queued for review. |
-| **Enquiries** | `/en/admin/enquiries` | The customer enquiry inbox. |
-| **Usage & analytics** | `/en/admin/usage`, `/en/admin/analytics` | Budget burn, cache hit rate, failure breakdown by error code, funnel. |
-| **Audit** | `/en/admin/audit` | Every privileged action, append-only. |
-| **Team** | `/en/admin/team` | Invite staff. |
-| **Settings** | `/en/admin/settings` | Quota, budget, quality thresholds, retention, and the consent policy text. |
+| **Catalogue health** | `/en/admin/catalog/health` | Pieces flagged after a consumer generation failed against them. With publishing unrestricted, this is the main place a bad try-on source is caught. |
+| **Consumers** 🚧 | `/en/admin/consumers` | Accounts, quota and status. Never their photographs. |
+| **Moderation** 🚧 | `/en/admin/moderation` | Photographs an upstream rejection queued for review. |
+| **Enquiries** 🚧 | `/en/admin/enquiries` | The customer enquiry inbox. |
+| **Usage & analytics** 🚧 | `/en/admin/usage`, `/en/admin/analytics` | Budget burn, cache hit rate, failure breakdown by error code, funnel. |
+| **Audit** 🚧 | `/en/admin/audit` | Every privileged action, append-only. |
+| **Team** 🚧 | `/en/admin/team` | Invite staff. |
+| **Settings** 🚧 | `/en/admin/settings`, `/en/admin/settings/policy` | Quota, budget, quality thresholds, retention, and the consent policy text. Until the screen exists, `GET`/`PATCH /api/v1/settings` is the way in; `npm run seed` writes the defaults. |
+| **Preview mode** 🚧 | `/en/admin/preview` | Lets an admin walk the consumer flow without spending. |
+
+The catalogue path — categories, garment, images, try-on source, test render, publish,
+health — is complete end to end. The operational screens around it are the outstanding
+work, and their APIs are already there to build against.
 
 ---
 
