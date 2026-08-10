@@ -561,7 +561,7 @@ written for a guard-chain rejection.
 | 7 | `RATE_LIMIT_EXCEEDED` | 429 | `You're going a bit fast. Give it a minute and try again.` | `details.retryAfterSeconds`, plus a `Retry-After` header. |
 | 8 | `BUDGET_EXHAUSTED` | 403 | `Our fitting room is at capacity today — we'll email you when it's back.` | ✔︎ Alerts admin immediately and captures interest. |
 | 9 | `GARMENT_NOT_PUBLISHED` | 404 | `This piece isn't available right now. Browse the rest of the collection.` | Indistinguishable from "not found" by design. |
-| 10 | `TEST_RENDER_REQUIRED` | 409 | `This piece isn't ready for try-on yet.` | A-11 / E-10, consumer-facing form. |
+| 10 | `TEST_RENDER_REQUIRED` | 409 | `This piece isn't ready for try-on yet.` | A-11. Raised by the consumer try-on path, which still refuses an unproven piece. **Not** thrown by publish any more — there it is an advisory identifier only. |
 | 11 | `PHOTO_NOT_OWNED` | 403 | *(masked — never returned)* | |
 | 11 | `PHOTO_NOT_FOUND` | 404 | `We couldn't find that photo. Pick another or upload a new one.` | What the client actually receives. |
 | 12 | `IDEMPOTENCY_IN_FLIGHT` | 409 | `That try-on is already running. Hang tight.` | `details.jobId`, so the client attaches to the existing SSE stream instead of retrying. |
@@ -616,7 +616,7 @@ that the true code appears in the log line.
 | `TRYON_SOURCE_REQUIRED` | 409 | `Choose a try-on source image before publishing.` (A-9) |
 | `TRYON_SOURCE_ALREADY_SET` | 409 | `Only one image can be the try-on source.` |
 | `GARMENT_QUALITY_BELOW_THRESHOLD` | 422 | `This photo needs work before it can go live.` — `details.checks[]` carries the per-check remediation strings (A-10). |
-| `QUALITY_OVERRIDE_REQUIRED` | 409 | `This piece is marked "Needs a better photo". Override to publish anyway.` — the override writes an audit row (A-10). |
+| `QUALITY_OVERRIDE_REQUIRED` | 409 | `This piece is marked "Needs a better photo". Override to publish anyway.` — the override writes an audit row (A-10). **No longer thrown**: since A-10 became advisory this code is only used as an advisory identifier in `metadata.unmetConditions` and by the console to label the reason. |
 | `IMAGE_TOO_SMALL` | 422 | `This image is {actual}px on the long edge. It needs at least 2000px.` |
 | `IMAGE_FORMAT_UNSUPPORTED` | 415 | `We accept HEIC, WebP, PNG and JPEG.` |
 | `IMAGE_TOO_LARGE` | 413 | `That file is over {maxMb}MB. Try a smaller one.` |
@@ -1474,11 +1474,23 @@ The counters are denormalised for A-14 sorting, A-15 catalog health and A-37 lea
 maintained by `@OnEvent` listeners and reconciled nightly by a retention-module job — analytics
 endpoints (A-36…A-39) compute from source tables, never from these counters.
 
-**Publish state machine.** `DRAFT → PUBLISHED` requires: a try-on source image, `testRenderState =
-APPROVED`, and either `qualityScore ≥ QUALITY_MIN_SCORE` or an explicit override. `PUBLISHED →
-ARCHIVED`, `ARCHIVED → PUBLISHED` (re-validated), `PUBLISHED → DRAFT` (unpublish). Any other
-transition is `INVALID_PUBLISH_TRANSITION`. E-10 asserts no garment lacking an approved test render
-can appear in the consumer catalog.
+**Publish state machine.** `DRAFT → PUBLISHED`, `PUBLISHED → ARCHIVED`, `ARCHIVED → PUBLISHED`
+(re-evaluated), `PUBLISHED → DRAFT` (unpublish). Any other transition is
+`INVALID_PUBLISH_TRANSITION` — the state machine is the **only** thing publishing still refuses.
+
+**The publish conditions are advisory.** A try-on source image, `testRenderState = APPROVED` and
+`qualityScore ≥ QUALITY_MIN_SCORE` (or an override) are evaluated on every transition into
+`PUBLISHED` by `evaluatePublishAdvisories()`, which returns **all** unmet conditions rather than
+the first. None of them prevents the publish. Each one is logged at `warn` and written to the
+`GARMENT_PUBLISHED` audit row as `metadata.unmetConditions`, which is what makes the decision
+attributable afterwards.
+
+`GarmentResponseDto.publishable` now means "meets every recommendation", not "may publish" — the
+console shows the list and offers the button regardless.
+
+The consequence, stated plainly: a garment published with no try-on source appears in the consumer
+catalog and fails at generation time, because there is no image to send upstream. Nothing in the
+API prevents that. See PRD A-10, A-11 and E-10, all three of which were amended for this.
 
 ### 4.14 `garment_images` — module `garments`, table `garment_images`
 
@@ -2176,7 +2188,7 @@ group. Prices are omitted from every response when `catalog.showPricesPublicly` 
 | GET | `/admin/tryon/batches/:batchId` | ADMIN | Per-item progress and a success/failure summary (D-16). |
 | GET | `/admin/tryon/batches/:batchId/stream` | ADMIN | **SSE** progress for the batch. |
 | POST | `/admin/garments/:garmentId/test-render/approve` | ADMIN | Approve the stored test render; sets `testRenderState = APPROVED` and unblocks publishing (A-11). |
-| POST | `/admin/garments/:garmentId/test-render/reject` | ADMIN | Reject with a reason; the garment stays unpublishable. |
+| POST | `/admin/garments/:garmentId/test-render/reject` | ADMIN | Reject with a reason. The garment is flagged as unproven; publishing is still permitted and records it (A-11). |
 
 **SSE contract** for `/tryon/jobs/:jobId/stream`:
 

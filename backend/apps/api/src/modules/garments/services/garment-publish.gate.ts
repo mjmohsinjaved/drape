@@ -6,25 +6,32 @@ import { TestRenderState } from '../enums/test-render-state.enum';
 import type { Garment } from '../entities/garment.entity';
 
 /**
- * **The publish gate — PRD A-11 and A-10, ARCHITECTURE §4.13, E-10.**
+ * **The publish advisories — PRD A-10, A-11, ARCHITECTURE §4.13.**
  *
- * > A-11: "No garment reaches the consumer catalog without an approved test render."
- * > E-10: "A test asserts that no garment lacking an approved test render can appear
- * > in the consumer catalog."
+ * ### These no longer block anything
  *
- * Kept as a **pure function** rather than a method for two reasons. It is the rule
- * that must be impossible to bypass, so it is testable exhaustively over every
- * combination of `testRenderState`, `testRenderApprovedAt`, quality score and
- * override — no repository, no container, no mocking. And the same function answers
- * both questions the API asks: "may this publish proceed?" (the service throws on a
- * non-null result) and "would it?" (`GarmentResponseDto.publishable`, so the console
- * can disable the button rather than offer an action that will be refused).
+ * This was a gate: it returned the first unmet precondition and `publish()` threw it.
+ * It now returns **every** unmet condition and `publish()` reports them without
+ * refusing. An admin who wants a piece in the catalog gets it in the catalog; the
+ * conditions are advice, recorded in the audit trail, not a veto.
  *
- * There is exactly one caller-visible consequence of a `null` return: publishing is
- * permitted. Everything else is a refusal with the §2.4 code that names the reason.
+ * **This is a deliberate departure from A-11 and E-10**, which say no garment reaches
+ * the consumer catalog without an approved test render, and it was asked for
+ * explicitly. The consequence is worth stating plainly: a garment can now be published
+ * with no try-on source, in which case it appears in the catalog and fails when a
+ * consumer tries it on, because there is no image to send upstream. Nothing here
+ * prevents that any more.
+ *
+ * The state machine is untouched. `isAllowedPublishTransition` still governs which
+ * transitions are legal, and publishing something already published is still refused —
+ * that is a contradiction, not a quality opinion.
+ *
+ * Kept as a **pure function**, which is what makes it testable exhaustively over every
+ * combination of `testRenderState`, `testRenderApprovedAt`, quality score and override
+ * with no repository, no container and no mocking.
  */
 
-/** Everything the gate needs that is not on the row itself. */
+/** Everything the evaluation needs that is not on the row itself. */
 export interface PublishGateInput {
   readonly garment: Garment;
   /** Whether a `garment_images` row is marked `isTryOnSource` (A-9, §4.14). */
@@ -71,36 +78,40 @@ export function hasQualityOverride(garment: Garment): boolean {
 }
 
 /**
- * Evaluates the gate.
+ * Every unmet publishing condition, in the order §4.13 states them.
  *
- * @returns `null` when the garment may be published, or the `ErrorCode` naming the
- * first unmet precondition. The order is the order §4.13 states the preconditions in,
- * most fundamental first: no test render, no source image, then quality.
+ * **All of them, not the first one.** A gate could stop at the first refusal because
+ * the caller could only act on one thing at a time anyway. Advice is different: an
+ * admin about to publish a piece with no source image *and* a poor score should be
+ * told both at once, not discover the second after fixing the first.
+ *
+ * @returns the codes naming what is unmet. Empty means the garment meets every
+ * recommendation. Nothing here prevents publishing either way.
  */
-export function evaluatePublishGate(input: PublishGateInput): ErrorCode | null {
+export function evaluatePublishAdvisories(input: PublishGateInput): readonly ErrorCode[] {
   const { garment, hasTryOnSource, minQualityScore } = input;
+  const advisories: ErrorCode[] = [];
 
-  // A-11 / E-10. First, because it is the one that must never be bypassable, and
-  // because it is the most useful thing to tell an admin who has published nothing yet.
+  // A-11. Still reported first: it is the most useful thing to tell an admin who has
+  // published nothing yet, and the render is the only evidence the piece works at all.
   if (!hasApprovedTestRender(garment)) {
-    return ErrorCode.TEST_RENDER_REQUIRED;
+    advisories.push(ErrorCode.TEST_RENDER_REQUIRED);
   }
 
-  // A-9 / §4.13: the file sent upstream as `garment_image`. A garment with an approved
-  // render but no source row has had its source deleted since.
+  // A-9 / §4.13: the file sent upstream as `garment_image`. Publishing without one puts
+  // a garment in the catalog that cannot be tried on — the failure surfaces at
+  // generation time instead, which is the cost of not blocking here.
   if (!hasTryOnSource) {
-    return ErrorCode.TRYON_SOURCE_REQUIRED;
+    advisories.push(ErrorCode.TRYON_SOURCE_REQUIRED);
   }
 
   // A-10. An unscored garment counts as below threshold: the absence of a quality
-  // verdict is not evidence of a good photograph, and treating it as one would make
-  // "publish before the validator runs" a way around the threshold.
-  if (hasQualityOverride(garment)) {
-    return null;
-  }
-  if (garment.qualityScore === null || garment.qualityScore < minQualityScore) {
-    return ErrorCode.QUALITY_OVERRIDE_REQUIRED;
+  // verdict is not evidence of a good photograph. An override is an admin saying she
+  // has looked and is content, so it silences the advisory.
+  const belowThreshold = garment.qualityScore === null || garment.qualityScore < minQualityScore;
+  if (belowThreshold && !hasQualityOverride(garment)) {
+    advisories.push(ErrorCode.QUALITY_OVERRIDE_REQUIRED);
   }
 
-  return null;
+  return advisories;
 }

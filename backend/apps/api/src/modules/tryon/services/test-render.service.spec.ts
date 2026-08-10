@@ -1,6 +1,6 @@
 import { ErrorCode } from '@library/common';
 
-import { evaluatePublishGate, hasApprovedTestRender } from '@api/modules/garments';
+import { evaluatePublishAdvisories, hasApprovedTestRender } from '@api/modules/garments';
 import { Garment } from '@api/modules/garments/entities/garment.entity';
 import { PublishState } from '@api/modules/garments/enums/publish-state.enum';
 import { TestRenderState } from '@api/modules/garments/enums/test-render-state.enum';
@@ -210,14 +210,15 @@ describe('TestRenderService — A-11, A-12, §8.4', () => {
       const [garment] = context.harness.repository<Garment>(Garment).$rows;
       expect(response.testRenderState).toBe(TestRenderState.REJECTED);
       expect(response.publishable).toBe(false);
-      // The same function the garments module uses at publish time (E-10).
+      // The same function the garments module uses at publish time. It reports rather
+      // than refuses now, so this asserts the advisory is raised, not that publish fails.
       expect(
-        evaluatePublishGate({
+        evaluatePublishAdvisories({
           garment: garment,
           hasTryOnSource: true,
           minQualityScore: 60,
         }),
-      ).toBe(ErrorCode.TEST_RENDER_REQUIRED);
+      ).toEqual([ErrorCode.TEST_RENDER_REQUIRED]);
     });
 
     it('a rendered-but-unapproved garment cannot be tried on by a consumer (E-10)', async () => {

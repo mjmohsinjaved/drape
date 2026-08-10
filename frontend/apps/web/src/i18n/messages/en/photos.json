@@ -57,8 +57,8 @@
         "body": "Shoulders square, arms slightly away from your body."
       },
       "plainBackground": {
-        "title": "A plain wall behind you",
-        "body": "A clear background helps the outfit read correctly."
+        "title": "A simpler background, if you have one",
+        "body": "Any background is fine. A plainer one just helps the outfit read a little more clearly."
       },
       "fittedClothing": {
         "title": "Close-fitting clothes",
@@ -137,10 +137,6 @@
       "label": "Light",
       "failDark": "It's too dark to make out the outfit. Face a window, or turn on the room light.",
       "failBright": "The light behind you is washing you out. Turn around so the light falls on you instead."
-    },
-    "PLAIN_BACKGROUND": {
-      "label": "Background",
-      "fail": "The background is busy enough to confuse the outfit. A plain wall behind you works best."
     }
   },
   "errors": {

@@ -44,7 +44,7 @@ export {
 } from './dto/garment-image-batch.dto';
 export {
   ALLOWED_PUBLISH_TRANSITIONS,
-  evaluatePublishGate,
+  evaluatePublishAdvisories,
   hasApprovedTestRender,
   hasQualityOverride,
   isAllowedPublishTransition,

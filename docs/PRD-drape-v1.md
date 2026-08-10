@@ -134,8 +134,8 @@ Two roles exist. Every authenticated user is one or the other, stored as a singl
   - background uniformity
   - aspect ratio within band
   - accepted format — HEIC, WebP, PNG, JPEG
-  Below threshold the garment is marked **Needs a better photo** and cannot be published without an explicit override, which is logged.
-- **A-11** **Test render gate.** Before publishing, an Admin runs one try-on against a built-in reference model photo. The result is shown beside the source image for approval and stored on the garment. No garment reaches the consumer catalog without an approved test render.
+  Below threshold the garment is marked **Needs a better photo**. This does **not** stop it being published: the score and every failed check are shown with their remediation guidance, and publishing proceeds regardless. Whatever was outstanding is written into the `GARMENT_PUBLISHED` audit row. (Superseded: this previously required an explicit logged override before publishing.)
+- **A-11** **Test render.** Before publishing, an Admin runs one try-on against a built-in reference model photo. The result is shown beside the source image for approval and stored on the garment. Publishing without an approved test render is **advised against and recorded, not prevented** — the admin decides. (Superseded: this was a hard gate, "no garment reaches the consumer catalog without an approved test render".)
 - **A-12** Bulk actions: publish, unpublish, re-categorise, archive, and run test renders across a selection with a cost estimate shown and confirmed before it runs.
 - **A-13** Publish states: draft / published / archived. Archived garments retain analytics history.
 - **A-14** Catalog list with search, category filter, publish-state filter, and sort by newest, most tried, or highest star rate.
@@ -434,7 +434,7 @@ These screens carry the product's credibility and receive design attention beyon
 - **E-7** Authorisation tests for every Admin-only route, and cross-account access tests asserting that one consumer cannot read another's photos, renders, shortlists or enquiries.
 - **E-8** End-to-end test of the full consumer path: signup, verification, consent, photo upload, try-on, shortlist, share, enquiry.
 - **E-9** End-to-end test of the full admin path: category creation, garment upload, quality validation, test render, approval, publish.
-- **E-10** A test asserts that no garment lacking an approved test render can appear in the consumer catalog.
+- **E-10** A test asserts that publishing evaluates every A-10 / A-11 condition and records each unmet one on the `GARMENT_PUBLISHED` audit row — on the bulk route as well as the single one. (Superseded: this previously asserted that no garment lacking an approved test render could appear in the consumer catalog. A-11 is no longer a gate, so that assertion could not survive; the audit record is what replaces it, because it is now the only trace of who published an unproven piece.)
 
 ### 11.3 Reliability and observability
 
