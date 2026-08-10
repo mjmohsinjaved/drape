@@ -1,7 +1,6 @@
 import { ErrorCode, Role, UserStatus, type ICurrentUser } from '@library/common';
 
 import { ConsentStatus } from '@api/modules/consents';
-import { hasApprovedTestRender } from '@api/modules/garments';
 import type { Garment } from '@api/modules/garments/entities/garment.entity';
 import { PublishState } from '@api/modules/garments/enums/publish-state.enum';
 import { PhotoModerationState } from '@api/modules/person-photos/enums/photo-moderation-state.enum';
@@ -199,26 +198,43 @@ export function checkBudget(consumed: number, hardStopAt: number): GuardRejectio
 }
 
 /* -------------------------------------------------------------------------------------------------
- * 9 and 10 — garment published with an approved test render
+ * 9 — garment published
  * ---------------------------------------------------------------------------------------------- */
 
 /**
- * A-11 / E-10, restated at the point of spend.
+ * Published, and nothing more.
  *
  * A missing garment and an unpublished one are **indistinguishable by design** (§2.4):
  * both are `GARMENT_NOT_PUBLISHED`, so the catalogue's draft pipeline is not
- * enumerable by a consumer with a uuid generator.
+ * enumerable by a consumer with a uuid generator. That part is unchanged.
  *
- * The approved-test-render question is delegated to `hasApprovedTestRender()` from the
- * garments module rather than re-derived from two columns here — E-10 exists precisely
- * to stop "approved" meaning one thing at publish time and another at try-on time.
+ * ### The approved-test-render condition is gone
+ *
+ * This used to also refuse `TEST_RENDER_REQUIRED` for a published garment whose test
+ * render had not been approved, and `publicGarmentScope` hid the same garment from
+ * browse. Together they meant a piece an admin had deliberately published was invisible
+ * and untryable until a second, separate approval — which is not what "publish" means to
+ * the person clicking it.
+ *
+ * **This is a deliberate departure from A-11 and E-10, and it was asked for.** The
+ * consequence is worth stating rather than burying: an unproven try-on can now reach a
+ * consumer, so the first evidence that a garment renders correctly may be her own
+ * generation failing. Three things still hold, and they are what make that survivable:
+ *
+ *  - a garment with no try-on source is refused `TRYON_SOURCE_REQUIRED` by
+ *    `TryOnService.tryOnSourceOf` before a job row is written or anything is spent;
+ *  - a generation that fails upstream charges no quota and no budget (§8.3), so a bad
+ *    piece costs the consumer nothing;
+ *  - `UPSTREAM_NO_GARMENT_DETECTED` still increments `failureCount` and flags the piece
+ *    for review (A-15), so the catalogue-health screen is now the place a bad try-on
+ *    source is caught rather than the publish gate.
+ *
+ * The test render itself is untouched — it still runs, it is still approvable, and it is
+ * still the cheap way to find out. It is simply no longer a precondition.
  */
 export function checkGarmentReady(garment: Garment | null): GuardRejection | null {
   if (garment === null || garment.publishState !== PublishState.PUBLISHED) {
     return reject(ErrorCode.GARMENT_NOT_PUBLISHED);
-  }
-  if (!hasApprovedTestRender(garment)) {
-    return reject(ErrorCode.TEST_RENDER_REQUIRED);
   }
   return null;
 }

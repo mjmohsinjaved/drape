@@ -276,7 +276,7 @@ Neither the browser nor the Next.js Web service ever calls TryOnCloud. The API k
    - monthly quota remaining
    - per-hour and per-IP rate limits not exceeded
    - system-wide budget not exhausted
-   - garment published with an approved test render
+   - garment published (an approved test render is **not** required — see A-11)
    - the referenced photo belongs to this user
    - idempotency key not already in flight or completed
 4. Cache lookup on `sha256(garment_source_hash + person_photo_hash + api_version)`. On hit, return the stored render and consume no quota.
