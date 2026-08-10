@@ -78,7 +78,7 @@ describe('StorageService', () => {
 
   describe('put', () => {
     it('returns key, size, sha256 and mimeType', async () => {
-      const key = StorageKeys.render(OWNER);
+      const key = StorageKeys.render(OWNER, 'png');
       const body = pngBytes('render');
 
       const result = await service.put(key, body, { contentType: 'image/png' });
@@ -96,13 +96,13 @@ describe('StorageService', () => {
       const oversize = Buffer.concat([PNG_SIGNATURE, Buffer.alloc(MAX_BYTES)]);
       expect(
         await errorCodeOfAsync(() =>
-          service.put(StorageKeys.render(OWNER), oversize, { contentType: 'image/png' }),
+          service.put(StorageKeys.render(OWNER, 'png'), oversize, { contentType: 'image/png' }),
         ),
       ).toBe('IMAGE_TOO_LARGE');
     });
 
     it('cuts a stream off mid-flight rather than discovering the overrun afterwards', async () => {
-      const key = StorageKeys.render(OWNER);
+      const key = StorageKeys.render(OWNER, 'png');
       const chunks = [PNG_SIGNATURE, Buffer.alloc(600), Buffer.alloc(600)];
 
       expect(
@@ -116,7 +116,7 @@ describe('StorageService', () => {
 
   describe('signed URLs', () => {
     it('issues a URL that verifies for its owner and not for anyone else', async () => {
-      const key = StorageKeys.render(OWNER);
+      const key = StorageKeys.render(OWNER, 'png');
       await service.put(key, pngBytes('mine'), { contentType: 'image/png' });
 
       const url = service.signedUrl(key, OWNER);
@@ -224,10 +224,10 @@ describe('StorageService', () => {
       await service.put(StorageKeys.personPhoto(OWNER, 'jpg'), jpegBytes('a'), {
         contentType: 'image/jpeg',
       });
-      await service.put(StorageKeys.render(OWNER), pngBytes('b'), { contentType: 'image/png' });
-      await service.put(StorageKeys.render(OWNER), pngBytes('c'), { contentType: 'image/png' });
+      await service.put(StorageKeys.render(OWNER, 'png'), pngBytes('b'), { contentType: 'image/png' });
+      await service.put(StorageKeys.render(OWNER, 'png'), pngBytes('c'), { contentType: 'image/png' });
 
-      const otherKey = StorageKeys.render(OTHER);
+      const otherKey = StorageKeys.render(OTHER, 'png');
       await service.put(otherKey, pngBytes('d'), { contentType: 'image/png' });
 
       expect(await service.deleteUserObjects(OWNER)).toBe(3);
@@ -238,7 +238,7 @@ describe('StorageService', () => {
   describe('content hashing (§3.7)', () => {
     it('matches the sha256 a put returns', async () => {
       const body = pngBytes('same-bytes');
-      const stored = await service.put(StorageKeys.render(OWNER), body, {
+      const stored = await service.put(StorageKeys.render(OWNER, 'png'), body, {
         contentType: 'image/png',
       });
       expect(service.contentHash(body)).toBe(stored.sha256);

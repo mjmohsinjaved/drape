@@ -49,8 +49,25 @@ export function newIdempotencyKey(): string {
   return `tryon-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
 }
 
+/**
+ * How long the browser will hold `POST /tryon` open, in milliseconds.
+ *
+ * §8.2 has no queue: the API awaits the upstream call inside the request and answers with the
+ * finished render, so this POST is as long as a generation. The shared `BROWSER_TIMEOUT_MS` is
+ * 30s — right for every other call and shorter than a single TryOnCloud render, which lands at
+ * roughly 20s and is retried up to `TRYON_MAX_ATTEMPTS` times with backoff. The client was
+ * therefore aborting generations that were still running and were about to succeed, and showing
+ * "That took too long" over the top of a render the account had already paid for.
+ *
+ * Three minutes covers the API's own worst case (3 attempts × 60s + backoff). It is a ceiling on
+ * a request that normally answers in about twenty seconds, not an expected wait.
+ */
+const START_TRYON_TIMEOUT_MS = 180_000;
+
 export async function startTryOn(body: StartTryOnBody): Promise<TryOnJob> {
-  const response = await apiClient.post<TryOnJob>(tryOnPaths.start, body);
+  const response = await apiClient.post<TryOnJob>(tryOnPaths.start, body, {
+    timeout: START_TRYON_TIMEOUT_MS,
+  });
   return response.data;
 }
 

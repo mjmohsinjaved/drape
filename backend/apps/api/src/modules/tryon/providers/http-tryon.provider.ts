@@ -254,10 +254,21 @@ export class HttpTryOnProvider implements TryOnProvider {
       );
     }
 
+    // `ERR_CANCELED` / `CanceledError` belong here, and their absence was a live bug. Two
+    // deadlines are armed per attempt: axios's own `timeout` (which surfaces as
+    // `ECONNABORTED`) and the `AbortSignal.timeout` below it. They are set to the same
+    // number, so which one fires first is a coin toss — and when the signal won, axios
+    // wrapped it as `CanceledError`, none of the clauses matched, and a plain timeout was
+    // reported as `UPSTREAM_UNAVAILABLE`. Both codes retry, so nothing behaved differently;
+    // the operator was simply told the upstream was down when it was only slow, which is the
+    // one distinction this log line exists to make.
     const timedOut =
       (axios.isAxiosError(error) &&
-        (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT')) ||
-      (error instanceof Error && error.name === 'TimeoutError');
+        (error.code === 'ECONNABORTED' ||
+          error.code === 'ETIMEDOUT' ||
+          error.code === 'ERR_CANCELED')) ||
+      (error instanceof Error &&
+        (error.name === 'TimeoutError' || error.name === 'CanceledError'));
 
     const code = timedOut ? ErrorCode.UPSTREAM_TIMEOUT : ErrorCode.UPSTREAM_UNAVAILABLE;
 

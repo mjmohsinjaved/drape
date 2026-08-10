@@ -12,6 +12,18 @@ export interface GalleryImage {
   src: string;
   /** Required. Describe the garment and the view — "Back view, gold zari border" (D-20). */
   alt: string;
+  /**
+   * Required. The thumbnail tab's accessible name, already translated — "View image 2" (C-41).
+   *
+   * A string on the image rather than a `(image, index) => string` prop, and that is the whole
+   * point. This is a client component and the only caller is a server component, so a callback
+   * here is a function crossing the server boundary: React refuses to serialise it and the
+   * entire garment screen renders as the D-5 error state instead. A default of
+   * `View image ${n}` did not help either — it is English under `ur`.
+   *
+   * Labels are therefore built where the translator already lives, next to `alt`.
+   */
+  thumbnailLabel: string;
 }
 
 export interface ImageGalleryProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -22,7 +34,6 @@ export interface ImageGalleryProps extends React.HTMLAttributes<HTMLDivElement> 
   ratio?: AspectRatioName | number;
   /** Accessible name for the thumbnail strip. */
   label?: string;
-  thumbnailLabel?: (image: GalleryImage, index: number) => string;
 }
 
 /**
@@ -41,7 +52,6 @@ export const ImageGallery = React.forwardRef<HTMLDivElement, ImageGalleryProps>(
       onIndexChange,
       ratio = 'garment',
       label = 'Garment images',
-      thumbnailLabel = (_image, position) => `View image ${String(position + 1)}`,
       ...props
     },
     ref,
@@ -77,7 +87,7 @@ export const ImageGallery = React.forwardRef<HTMLDivElement, ImageGalleryProps>(
                 type="button"
                 role="tab"
                 aria-selected={position === current}
-                aria-label={thumbnailLabel(image, position)}
+                aria-label={image.thumbnailLabel}
                 tabIndex={position === current ? 0 : -1}
                 onClick={() => select(position)}
                 onKeyDown={(event) => {
