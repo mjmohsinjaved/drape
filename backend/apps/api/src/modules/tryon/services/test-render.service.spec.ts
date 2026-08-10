@@ -221,7 +221,7 @@ describe('TestRenderService — A-11, A-12, §8.4', () => {
       ).toEqual([ErrorCode.TEST_RENDER_REQUIRED]);
     });
 
-    it('a rendered-but-unapproved garment cannot be tried on by a consumer (E-10)', async () => {
+    it('a rendered-but-unapproved garment can still be tried on by a consumer', async () => {
       context = await createTryOnContext({
         garment: buildTryableGarment({
           testRenderState: TestRenderState.NONE,
@@ -230,12 +230,12 @@ describe('TestRenderService — A-11, A-12, §8.4', () => {
       });
       await context.testRenders.run({ garmentId: GARMENT_ID }, ADMIN);
 
-      // Published, rendered, and still refused — because it is not *approved*.
+      // The inverse of what this asserted. Approval is advice to the studio about
+      // whether a piece is ready; it is no longer a precondition for a consumer, so a
+      // published garment is tryable whatever `testRenderState` says.
       await expect(
-        context.tryOn.create({ garmentId: GARMENT_ID, idempotencyKey: 'idem-e10' }, CONSUMER),
-      ).rejects.toMatchObject({ errorCode: ErrorCode.TEST_RENDER_REQUIRED });
-
-      expect(context.quota.consumerCharges).toHaveLength(0);
+        context.tryOn.create({ garmentId: GARMENT_ID, idempotencyKey: 'idem-unapproved' }, CONSUMER),
+      ).resolves.toMatchObject({ jobId: expect.any(String) });
     });
 
     it('re-rendering an approved garment sends it back to PENDING', async () => {

@@ -30,8 +30,9 @@ import type {
  * The gallery half of A-9.
  *
  * Designating a try-on source is the one image action with a consequence beyond the gallery: it
- * resets `testRenderState` to `NONE`, which makes the garment unpublishable until a fresh render
- * is approved (A-11). Every mutation that can move that column therefore invalidates the garment
+ * resets `testRenderState` to `NONE`, because the approval described the file being replaced.
+ * That no longer blocks publishing (A-11 is advice, not a gate), but it does change what the
+ * publish panel recommends, so every mutation that can move that column invalidates the garment
  * detail as well as the image list.
  */
 

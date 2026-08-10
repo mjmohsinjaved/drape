@@ -75,11 +75,16 @@ function imageFor(garmentId: string): GarmentImage {
  *
  * Two things are being proved here, and they are the two the module exists for.
  *
- * **E-10.** No garment lacking an approved test render can appear through any public
- * route, by any filter or sort combination. That is asserted twice over: the query
- * every route builds carries the predicate, *and* rows that should not be visible are
- * fed back through the service as if the query had been wrong — and still nothing
- * comes out.
+ * **Visibility.** Nothing that is not published can appear through any public route, by
+ * any filter or sort combination. That is asserted twice over: the query every route
+ * builds carries the predicate, *and* rows that should not be visible are fed back
+ * through the service as if the query had been wrong — and still nothing comes out.
+ *
+ * The test render is no longer part of that rule. It used to be — E-10 required an
+ * approved one before a piece could be browsed — and the cases below now assert the
+ * opposite, that a published piece is reachable whatever state its test render is in.
+ * Keeping them pointed the other way rather than deleting them is what stops the gate
+ * coming back unnoticed.
  *
  * **A-30.** With `catalog.showPricesPublicly` off, no price reaches a public response
  * — not in the card, not in the detail, not as a filter that would let one be
@@ -136,18 +141,18 @@ describe('CatalogService', () => {
     };
   }
 
-  /** Every condition the A-11 / E-10 predicate must put on a query. */
+  /** Every condition the visibility predicate must put on a query — and the two it must not. */
   function expectVisibilityPredicate(spy: QueryBuilderSpy<Garment>): void {
     const sql = spy.sql();
     expect(sql).toContain('garment.publishState = :publicPublishState');
-    expect(sql).toContain('garment.testRenderState = :publicTestRenderState');
-    expect(sql).toContain('garment.testRenderApprovedAt IS NOT NULL');
     expect(sql).toContain('garment.deletedAt IS NULL');
+    expect(sql).not.toContain('garment.testRenderState');
+    expect(sql).not.toContain('garment.testRenderApprovedAt');
   }
 
   /* --------------------------------------------------------------------------------------- */
 
-  describe('E-10 — nothing without an approved test render is reachable', () => {
+  describe('nothing unpublished is reachable', () => {
     const invisible: ReadonlyArray<readonly [string, Garment]> = [
       ['a draft', buildGarment()],
       [
@@ -155,6 +160,14 @@ describe('CatalogService', () => {
         buildPublishedGarment({ publishState: PublishState.DRAFT, publishedAt: null }),
       ],
       ['an archived garment', buildArchivedGarment()],
+      ['a soft-deleted garment', buildPublishedGarment({ deletedAt: new Date() })],
+    ];
+
+    /**
+     * The rows that used to be in the list above. Publishing is now the whole decision,
+     * so each of these reaches the catalogue.
+     */
+    const visibleDespiteTestRender: ReadonlyArray<readonly [string, Garment]> = [
       [
         'a published garment whose test render is pending',
         buildPublishedGarment({
@@ -170,11 +183,46 @@ describe('CatalogService', () => {
         }),
       ],
       [
+        'a published garment that was never test-rendered',
+        buildPublishedGarment({
+          testRenderState: TestRenderState.NONE,
+          testRenderApprovedAt: null,
+        }),
+      ],
+      [
         'a published garment with no approval timestamp',
         buildPublishedGarment({ testRenderApprovedAt: null }),
       ],
-      ['a soft-deleted garment', buildPublishedGarment({ deletedAt: new Date() })],
     ];
+
+    describe.each(visibleDespiteTestRender)('%s', (_case, garment) => {
+      it('appears in the browse grid', async () => {
+        const harness = await arrange({
+          rows: [garment],
+          categories: [buildCategory({ id: garment.categoryId })],
+          images: [imageFor(garment.id)],
+        });
+
+        const page = await harness.service.list(browse());
+
+        expect(page.items.map((item) => item.id)).toEqual([garment.id]);
+        await harness.close();
+      });
+
+      it('is reachable on the detail route', async () => {
+        const harness = await arrange({
+          rows: [garment],
+          categories: [buildCategory({ id: garment.categoryId })],
+          images: [imageFor(garment.id)],
+        });
+
+        await expect(harness.service.findOne(garment.slug)).resolves.toMatchObject({
+          id: garment.id,
+        });
+
+        await harness.close();
+      });
+    });
 
     describe.each(invisible)('%s', (_case, garment) => {
       it('never appears in the browse grid, even if the query returned it', async () => {

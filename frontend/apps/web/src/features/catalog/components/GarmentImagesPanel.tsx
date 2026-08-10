@@ -68,8 +68,10 @@ export interface GarmentImagesPanelProps {
  * ordering, which is what the API expects.
  *
  * **Designating a try-on source has a consequence**, and the panel says so before it happens: it
- * resets the test render to none, which makes the piece unpublishable until a fresh render is
- * approved (A-11).
+ * resets the test render to none, because the approval described the old file. That no longer
+ * stops the piece being published — A-11 is advice rather than a gate — but it does mean a
+ * published piece can go on being browsed and tried on with a source nobody has ever seen
+ * rendered.
  */
 export function GarmentImagesPanel({
   garmentId,

@@ -2147,13 +2147,25 @@ Every mutating verb (`POST`/`PATCH`/`PUT`/`DELETE`) requires the CSRF header unl
 
 | Method | Path | Role | Purpose |
 | --- | --- | :-: | --- |
-| GET | `/catalog/garments` | PUBLIC | Published garments with an approved test render only. Filters: `categoryId`, `color`, `priceMin`, `priceMax`, `embellishmentWeight`, `size`, `mode`, `search`. Sort: `newest`, `mostTried`, `priceAsc`, `priceDesc` (C-1, C-17). |
+| GET | `/catalog/garments` | PUBLIC | Published garments. Filters: `categoryId`, `color`, `priceMin`, `priceMax`, `embellishmentWeight`, `size`, `mode`, `search`. Sort: `newest`, `mostTried`, `priceAsc`, `priceDesc` (C-1, C-17). |
 | GET | `/catalog/garments/:slugOrId` | PUBLIC | Garment detail: gallery, price, fabric, sizes (C-18). |
 | GET | `/catalog/filters` | PUBLIC | Available filter facets with counts, so the UI never offers an empty filter. |
 | GET | `/catalog/new-arrivals` | PUBLIC | Recently published, optionally scoped to `preferredCategories` for a signed-in consumer (C-8). |
 
-`E-10` asserts that no garment lacking an approved test render is ever returned by any route in this
-group. Prices are omitted from every response when `catalog.showPricesPublicly` is false (A-30).
+`publicGarmentScope` is the single predicate behind every route in this group: not soft-deleted and
+`publishState = PUBLISHED`. It is applied twice — once as SQL so the query is correct and the index
+usable, and once as a row filter so a future route that forgets the scope is still safe.
+
+**The test render is not part of it.** It was, and `E-10` asserted that no garment lacking an
+approved one could ever be returned here. A-11 is no longer a gate: publishing is the whole
+decision, so a piece is browsable and tryable the moment an admin publishes it, whatever
+`testRenderState` says. `evaluatePublishAdvisories` still reports a missing or unapproved test
+render at publish time and the `GARMENT_PUBLISHED` audit row records whatever was passed over,
+which is now the only trace of an unproven piece going live. The cost is that a try-on may fail in
+front of a consumer; it charges her nothing (§8.3) and flags the garment for review (A-15), so
+catalog health is where a bad try-on source is caught.
+
+Prices are omitted from every response when `catalog.showPricesPublicly` is false (A-30).
 
 ### 5.9 `person-photos`
 

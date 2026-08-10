@@ -134,7 +134,10 @@ describe('TryOnGuardService — §8.1 step 3, composed', () => {
       expect(context.photos.resolveGenerationPhoto).not.toHaveBeenCalled();
     });
 
-    it('the test-render gate before the photo (A-11)', async () => {
+    it('lets a published garment through whatever its test render says', async () => {
+      // This asserted TEST_RENDER_REQUIRED at this position in the §2.4 order. The gate
+      // is gone: publishing is the whole decision, so an unapproved test render no
+      // longer stops the chain here or anywhere else.
       context = await createTryOnContext({
         garment: buildTryableGarment({
           testRenderState: TestRenderState.PENDING,
@@ -142,8 +145,8 @@ describe('TryOnGuardService — §8.1 step 3, composed', () => {
         }),
       });
 
-      await expect(context.guards.assertMayGenerate(request())).rejects.toMatchObject({
-        errorCode: ErrorCode.TEST_RENDER_REQUIRED,
+      await expect(context.guards.assertMayGenerate(request())).resolves.toMatchObject({
+        garment: expect.objectContaining({ publishState: PublishState.PUBLISHED }),
       });
     });
 
