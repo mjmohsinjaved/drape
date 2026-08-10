@@ -83,6 +83,11 @@ export async function GarmentDetailScreen({
       image.altText,
       t('detail.imageAlt', { title, index: index + 1, total: garment.images.length }),
     ),
+    // Each thumbnail is a tab whose only accessible name comes from here. Built now, on the
+    // server, rather than handed to `ImageGallery` as a callback: that component is
+    // `'use client'`, so a function prop is a function crossing the server boundary and React
+    // refuses to serialise it — the whole screen threw before reaching the browser.
+    thumbnailLabel: t('detail.thumbnailLabel', { position: index + 1 }),
   }));
 
   return (
@@ -107,11 +112,6 @@ export async function GarmentDetailScreen({
             images={gallery}
             ratio="garment"
             label={t('detail.galleryLabel', { title })}
-            // Each thumbnail is a tab whose only accessible name comes from here. Without it,
-            // `ImageGallery` falls back to a hardcoded `View image 2` — English under `ur` (C-41).
-            thumbnailLabel={(_image, position) =>
-              t('detail.thumbnailLabel', { position: position + 1 })
-            }
           />
         )}
 

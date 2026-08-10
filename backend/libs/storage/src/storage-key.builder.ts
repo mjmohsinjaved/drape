@@ -156,8 +156,23 @@ export const StorageKeys = {
   personPhoto: (userId: string, ext: RasterImageExt): string =>
     `person-photos/${userId}/${randomUUID()}.${ext}`,
 
-  /** `renders/<userId>/<uuid>.png` — always png, that is what the upstream returns. */
-  render: (userId: string): string => `renders/${userId}/${randomUUID()}.png`,
+  /**
+   * `renders/<userId>/<uuid>.<ext>`
+   *
+   * The extension was hardcoded to `png` here, on the comment "always png, that is what the
+   * upstream returns". TryOnCloud returns **JPEG**, and nothing found out until the first real
+   * generation: the mock driver produces PNG, so every test agreed with the comment. The
+   * consequence was not a wrong file name — `LocalDiskDriver` checks the declared content type
+   * against the magic bytes, so the write was refused, the render was discarded, and the
+   * upstream image was spent for nothing.
+   *
+   * `ext` is required rather than defaulted for that reason: the caller holds the bytes and is
+   * the only thing that can answer honestly. `sniffMimeType` + `extForMimeType` turn them into
+   * this argument, and `sniffMimeType` is the same function the driver validates with, so the
+   * two cannot disagree.
+   */
+  render: (userId: string, ext: RasterImageExt): string =>
+    `renders/${userId}/${randomUUID()}.${ext}`,
 
   /**
    * `thumbnails/<kind>/<uuid>.webp`, or `thumbnails/<kind>/<uuid>-<width>.webp` when a width is

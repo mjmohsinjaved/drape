@@ -36,7 +36,7 @@ export function buildTryOnResult(overrides: Partial<TryOnResult> = {}): TryOnRes
       personPhotoId: uuid(),
 
       // The unwatermarked render. The C-23 watermark is composited at download time only.
-      storageKey: StorageKeys.render(userId),
+      storageKey: StorageKeys.render(userId, 'png'),
       thumbnailKey: StorageKeys.thumbnail('render'),
       cacheKey: hash64(`result-cache-${sequence}`),
 
