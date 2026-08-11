@@ -35,7 +35,8 @@ function build(): Harness {
   const storage = createMock<StorageService>(['createUploadTicket']);
   storage.createUploadTicket.mockImplementation((request) =>
     Promise.resolve<UploadTicket>({
-      uploadUrl: `https://api.test/api/v1/files/upload/token-for-${request.key}`,
+      uploadUrl: 'https://api.test/api/v1/files/upload',
+      ticket: `token-for-${request.key}`,
       key: request.key,
       fields: {},
       expiresAt: new Date('2026-08-05T10:00:00.000Z'),
@@ -215,7 +216,8 @@ describe('UploadTicketService — ceilings and scoping (§3.5)', () => {
     });
 
     expect(ticket.isDirect).toBe(false);
-    expect(ticket.uploadUrl).toContain('/api/v1/files/upload/');
+    expect(ticket.uploadUrl).toContain('/api/v1/files/upload');
+    expect(ticket.ticket.length).toBeGreaterThan(0);
     expect(ticket.fields).toEqual({});
   });
 });

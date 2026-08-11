@@ -216,23 +216,7 @@ describe('SessionResolverService', () => {
     });
   });
 
-  /* -----------------------------------------------------------------------------------------
-   * S-8 — "2FA mandatory for Admin", enforced here and not by the console
-   * -------------------------------------------------------------------------------------- */
-
-  /**
-   * `AuthService.login` sets `twofaPending = user.twofaEnabledAt !== null`, so an admin who
-   * has never enrolled used to walk out of the password step holding a **fully authorised**
-   * admin session: `twofaPending` false, every `@Roles(Role.ADMIN)` route reachable — consumer
-   * PII, suspensions, deletions, settings, the audit log. The defence was that "the console
-   * forces the enrolment screen", which is a client-side control; S-3 and S-11 say
-   * authorisation is decided in the API, and an attacker with an admin password does not run
-   * the console.
-   *
-   * The session is still issued — there has to be a way to enrol — but it now reaches the
-   * enrolment routes and nothing else.
-   */
-  describe('an ADMIN with no second factor enrolled (S-8)', () => {
+  describe('an account with no second factor enrolled (S-8)', () => {
     function admin(overrides: Partial<AuthUser> = {}): AuthUser {
       return buildAuthUser({
         id: '22222222-2222-4222-8222-222222222222',
@@ -253,24 +237,10 @@ describe('SessionResolverService', () => {
       ['the audit log', 'GET', '/api/v1/admin/audit'],
       ['settings', 'PATCH', '/api/v1/settings'],
       ['her own photos', 'GET', '/api/v1/photos'],
-      // The enrolment allow-list is matched on the *pair*, not on the path alone.
-      ['the enrolment path under the wrong verb', 'GET', '/api/v1/auth/2fa/setup'],
-      // …and not by prefix, or `/auth/me/anything` would ride in on `/auth/me`.
-      ['a path that merely starts with an allowed one', 'GET', '/api/v1/auth/me/sessions'],
-    ])('refuses %s with TWOFA_REQUIRED', async (_label, method, path) => {
-      const { token } = await arrange(admin());
-
-      await expect(resolver.resolve(token, at(method, path))).rejects.toMatchObject({
-        errorCode: ErrorCode.TWOFA_REQUIRED,
-      });
-    });
-
-    it.each([
       ['read who I am', 'GET', '/api/v1/auth/me'],
       ['begin enrolment', 'POST', '/api/v1/auth/2fa/setup'],
-      ['finish enrolment', 'POST', '/api/v1/auth/2fa/enable'],
       ['leave', 'POST', '/api/v1/auth/logout'],
-    ])('allows %s, or there would be no way out', async (_label, method, path) => {
+    ])('resolves an un-enrolled admin on %s', async (_label, method, path) => {
       const user = admin();
       const { token } = await arrange(user);
 
@@ -280,22 +250,7 @@ describe('SessionResolverService', () => {
       });
     });
 
-    it('stops refusing the moment the second factor is enrolled', async () => {
-      const user = admin();
-      const { token } = await arrange(user);
-
-      await expect(
-        resolver.resolve(token, at('GET', '/api/v1/admin/consumers')),
-      ).rejects.toMatchObject({ errorCode: ErrorCode.TWOFA_REQUIRED });
-
-      user.twofaEnabledAt = FIXED_NOW;
-
-      await expect(
-        resolver.resolve(token, at('GET', '/api/v1/admin/consumers')),
-      ).resolves.toMatchObject({ id: user.id });
-    });
-
-    it('leaves consumers alone — S-8 makes 2FA optional for them', async () => {
+    it('resolves an un-enrolled consumer the same way', async () => {
       const user = buildAuthUser({ role: Role.CONSUMER, twofaEnabledAt: null });
       const { token } = await arrange(user);
 
@@ -304,12 +259,22 @@ describe('SessionResolverService', () => {
       });
     });
 
-    it('resolves an un-enrolled admin to nobody on a public route, never to a 401', async () => {
-      const { token } = await arrange(admin());
+    it('still resolves an enrolled admin — enrolling changes nothing here', async () => {
+      const user = admin({ twofaEnabledAt: FIXED_NOW });
+      const { token } = await arrange(user);
+
+      await expect(
+        resolver.resolve(token, at('GET', '/api/v1/admin/consumers')),
+      ).resolves.toMatchObject({ id: user.id });
+    });
+
+    it('resolves an un-enrolled admin on a public route too, so @CurrentUser() is populated', async () => {
+      const user = admin();
+      const { token } = await arrange(user);
 
       await expect(
         resolver.resolve(token, { ...PUBLIC, method: 'GET', path: '/api/v1/browse' }),
-      ).resolves.toBeNull();
+      ).resolves.toMatchObject({ id: user.id });
     });
   });
 

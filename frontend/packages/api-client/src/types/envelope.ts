@@ -117,7 +117,6 @@ export const NON_RETRYABLE_ERROR_CODES: readonly string[] = [
   'INSUFFICIENT_ROLE',
   'ACCOUNT_SUSPENDED',
   'ACCOUNT_DEACTIVATED',
-  'TWOFA_REQUIRED_FOR_ROLE',
   'DELETION_IN_PROGRESS',
   'IP_BLOCKED',
   // The thing is not there. Asking again does not create it.
@@ -139,7 +138,7 @@ const nonRetryableCodes: ReadonlySet<string> = new Set(NON_RETRYABLE_ERROR_CODES
  *
  * "Your account may not do this", as distinct from "we do not know who you are".
  *
- * These five all mean the same thing to the person reading the screen: *signing in again will
+ * These four all mean the same thing to the person reading the screen: *signing in again will
  * not change the answer.* They get the S-9 treatment — plain language, a way back, no status
  * code, and nothing that reveals whether the resource exists.
  *
@@ -157,8 +156,6 @@ export const PERMISSION_DENIED_ERROR_CODES: readonly string[] = [
   'ACCOUNT_SUSPENDED',
   /** The account has been closed. */
   'ACCOUNT_DEACTIVATED',
-  /** S-8 — an admin without a second factor may not proceed, and re-authenticating changes nothing. */
-  'TWOFA_REQUIRED_FOR_ROLE',
   /** The erasure is running; nothing on this account may be touched again. */
   'DELETION_IN_PROGRESS',
 ];

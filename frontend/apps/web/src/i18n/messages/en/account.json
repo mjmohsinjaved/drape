@@ -119,7 +119,6 @@
   },
 
   "twoFactor": {
-    "requiredBody": "Admin accounts keep two-factor authentication on. Set it up to finish.",
     "optionalBody": "Add a second step to sign-in: a six-digit code from an app on your phone.",
     "startAction": "Set up two-factor authentication",
     "onceTitle": "This is shown once",
@@ -140,7 +139,6 @@
     "doneAction": "Done",
     "onTitle": "Two-factor authentication is on",
     "onBody": "You enter a code from your authenticator app each time you sign in.",
-    "adminLocked": "Admin accounts keep this on, so there's nothing to turn off here.",
     "disableIntro": "Confirm it's you: your password, and a live code from your app.",
     "disablePasswordLabel": "Current password",
     "disableCodeLabel": "Six-digit code",
@@ -240,9 +238,6 @@
     "admin": {
       "title": "Good to see you, {name}",
       "description": "Enquiries, the catalog and the people using the fitting room.",
-      "twofaTitle": "Set up two-factor authentication",
-      "twofaBody": "Your account handles other people's photos and enquiries, so a second step at sign-in is required before you carry on.",
-      "twofaAction": "Set it up",
       "links": {
         "enquiries": {
           "title": "Enquiries",

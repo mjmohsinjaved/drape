@@ -1,14 +1,3 @@
-/**
- * The person-photo contract — ARCHITECTURE §5.9, §3.5.
- *
- * Written against the real `PersonPhotoResponseDto`, `CreatePersonPhotoDto` and the `files`
- * DTOs, which differ from the sketch in `@repo/api-client/types/person-photos`: the list is a
- * plain array with no `maxPhotos` / `activePhotoId` envelope, the photo carries a single flat
- * signed `url` with **no separate thumbnail**, finalise takes `{ key, label, activate }` rather
- * than a ticket, and `DELETE` answers `204` with no body.
- *
- * **No admin-facing type exists for any of this and none may be added** (S-10).
- */
 
 export type PhotoModerationState = 'PENDING' | 'APPROVED' | 'BLOCKED';
 
@@ -60,6 +49,7 @@ export interface CreateUploadTicketBody {
  */
 export interface UploadTicket {
   uploadUrl: string;
+  ticket: string;
   key: string;
   fields: Record<string, string>;
   expiresAt: string;
@@ -70,7 +60,6 @@ export interface UploadTicket {
   contentType: string;
 }
 
-/** What `PUT /files/upload/:ticket` returns once the bytes have landed. */
 export interface UploadResult {
   key: string;
   byteSize: number;

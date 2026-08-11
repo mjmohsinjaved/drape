@@ -18,24 +18,6 @@ import { isOtpComplete } from '@/features/auth/lib/password-policy';
 
 import type { MyAccount } from '@repo/api-client';
 
-/**
- * The two-factor panel on the security screen — S-8.
- *
- * **Mandatory for admins, optional for consumers.** An admin sees no way to turn it off, and
- * the API refuses with `TWOFA_REQUIRED_FOR_ROLE` if one is contrived anyway — the rule lives
- * server-side and this screen only reflects it (S-3).
- *
- * Turning it off asks for the current password and a live code, because a security downgrade is
- * exactly what a hijacked session would attempt.
- *
- * ### The six D-5 states
- * - **default** — enrolment, or the "it's on" panel with the turn-off control.
- * - **loading** — the busy buttons.
- * - **empty** — not applicable.
- * - **error** — `TWOFA_INVALID` and `INVALID_CREDENTIALS`, each saying what to do next.
- * - **permission denied** — an admin's `TWOFA_REQUIRED_FOR_ROLE` renders the S-9 shell.
- * - **success** — turned on, with the recovery codes; or turned off, confirmed.
- */
 export interface TwoFactorSettingsProps {
   account: MyAccount;
 }
@@ -52,13 +34,9 @@ export function TwoFactorSettings({ account }: TwoFactorSettingsProps) {
   const [code, setCode] = useState('');
   const [touched, setTouched] = useState(false);
 
-  // Presentation only. The API decides; this decides what to draw (S-3, B-10).
-  const mustKeepOn = account.role === 'ADMIN';
-
   if (!account.twofaEnabled) {
     return (
       <TwoFactorEnrolment
-        required={mustKeepOn}
         completionAction={
           <Button
             variant="secondary"
@@ -141,9 +119,7 @@ export function TwoFactorSettings({ account }: TwoFactorSettingsProps) {
         {t('onBody')}
       </Callout>
 
-      {mustKeepOn ? (
-        <p className="text-sm text-ink-muted">{t('adminLocked')}</p>
-      ) : showDisable ? (
+      {showDisable ? (
         <form noValidate onSubmit={handleDisable} className="flex flex-col gap-5">
           <p className="text-sm text-ink-muted">{t('disableIntro')}</p>
 

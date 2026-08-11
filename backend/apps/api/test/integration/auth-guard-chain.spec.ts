@@ -218,10 +218,10 @@ describe('POST /auth/login and /auth/signup — CSRF (HIGH-1)', () => {
 });
 
 /* ═══════════════════════════════════════════════════════════════════════════════════════════
- * HIGH-3 — "2FA mandatory for Admin" is decided in the API
+ * S-8 — a second factor is opt-in, and the guard chain says so
  * ════════════════════════════════════════════════════════════════════════════════════════ */
 
-/** Stand-ins for the surface an un-enrolled admin must not reach, and the one she must. */
+/** Stand-ins for the console surface and the enrolment surface, both open to any admin. */
 @Controller('admin')
 class AdminProbeController {
   @Get('consumers')
@@ -254,18 +254,16 @@ class EnrolmentProbeController {
 }
 
 /**
- * `AuthService.login` sets `twofaPending = user.twofaEnabledAt !== null`, so an admin who has
- * never enrolled walked out of the password step with a session that was **not** pending and
- * therefore fully authorised. `InviteAcceptanceService` issued a freshly created admin the
- * same thing and logged a warning. The defence on record was that "the console forces the
- * enrolment screen" — a client-side control, while S-3 and S-11 say authorisation is decided
- * in the API. An attacker with an admin password calls the API directly and reaches every
- * `@Roles(Role.ADMIN)` route: consumer PII, suspensions, deletions, settings, the audit log.
+ * A second factor is **opt-in for every role** (S-8): nothing forces enrolment, and an account
+ * that has not enrolled is authorised on exactly the routes its role allows.
  *
- * This drives the real `SessionAuthGuard` → real `SessionResolverService` → real `RolesGuard`
- * over HTTP, with a real session row addressed by a real cookie.
+ * This used to be the opposite — an un-enrolled admin was refused everywhere outside a
+ * four-route enrolment allow-list, so a freshly seeded operator met a 401 on every console
+ * call. These cases drive the real `SessionAuthGuard` → real `SessionResolverService` → real
+ * `RolesGuard` over HTTP, with a real session row addressed by a real cookie, so a re-added
+ * enrolment gate cannot pass unnoticed.
  */
-describe('an ADMIN with no second factor enrolled (HIGH-3)', () => {
+describe('an ADMIN with no second factor enrolled (S-8)', () => {
   let app: INestApplication;
   let sessions: SessionService;
   let directory: FakeUserDirectory;
@@ -326,21 +324,20 @@ describe('an ADMIN with no second factor enrolled (HIGH-3)', () => {
     await app?.close();
   });
 
-  it('is refused on an admin route with TWOFA_REQUIRED, not authorised', async () => {
+  it('reaches an admin route without ever enrolling', async () => {
     const token = await signIn(admin());
 
     const response = await request(app.getHttpServer())
       .get('/api/v1/admin/consumers')
       .set('Cookie', `${SESSION_COOKIE}=${token}`);
 
-    expect(response.status).toBe(401);
-    expect(response.body.errorCode).toBe(ErrorCode.TWOFA_REQUIRED);
+    expect(response.status).toBe(200);
   });
 
   it.each([
     ['GET', '/api/v1/auth/me'],
     ['POST', '/api/v1/auth/2fa/setup'],
-  ])('may still reach %s %s, or enrolment would be impossible', async (method, path) => {
+  ])('reaches %s %s, so enrolment stays available to whoever wants it', async (method, path) => {
     const token = await signIn(admin());
 
     const agent = request(app.getHttpServer());
@@ -352,7 +349,7 @@ describe('an ADMIN with no second factor enrolled (HIGH-3)', () => {
     expect(response.status).toBe(method === 'GET' ? 200 : 201);
   });
 
-  it('reaches the admin route the moment the second factor is enrolled', async () => {
+  it('still reaches the admin route once the second factor is enrolled', async () => {
     const user = admin();
     const token = await signIn(user);
     user.twofaEnabledAt = FIXED_NOW;

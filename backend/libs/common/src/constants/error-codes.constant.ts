@@ -21,7 +21,6 @@ export enum ErrorCode {
   TWOFA_REQUIRED = 'TWOFA_REQUIRED',
   TWOFA_INVALID = 'TWOFA_INVALID',
   TWOFA_ALREADY_ENABLED = 'TWOFA_ALREADY_ENABLED',
-  TWOFA_REQUIRED_FOR_ROLE = 'TWOFA_REQUIRED_FOR_ROLE',
   PASSWORD_POLICY_VIOLATION = 'PASSWORD_POLICY_VIOLATION',
   TOKEN_INVALID = 'TOKEN_INVALID',
   TOKEN_EXPIRED = 'TOKEN_EXPIRED',
@@ -142,24 +141,9 @@ export interface ErrorCodeSpec {
   consumerFacing: boolean;
 }
 
-/**
- * NestJS's `HttpStatus` enum ships no member for 207 Multi-Status or 423 Locked,
- * both of which §2.4 requires. The contract types `ErrorCodeSpec.status` as
- * `HttpStatus`, so the two literals are widened here — once, with a name — rather
- * than loosening the type of every spec.
- */
 const HTTP_MULTI_STATUS = 207 as HttpStatus;
 const HTTP_LOCKED = 423 as HttpStatus;
 
-/**
- * Copy marked ✔︎ in §2.4 is verbatim from PRD §8.3 and must never be reworded.
- * Everything else has already passed the §9.4 shortlisting check and the §10.5
- * copy standards: translate it, do not rewrite it.
- *
- * Braced fragments (`{from}`, `{max}`, …) are placeholders the throw site fills in
- * via `AppExceptionOptions.message`; the default text is kept verbatim so a missed
- * interpolation is obvious in review rather than silently wrong.
- */
 export const ERROR_CODE_SPECS: Readonly<Record<ErrorCode, ErrorCodeSpec>> = {
   // ── Authentication and session ────────────────────────────────────────────
   [ErrorCode.AUTH_REQUIRED]: {
@@ -223,12 +207,6 @@ export const ERROR_CODE_SPECS: Readonly<Record<ErrorCode, ErrorCodeSpec>> = {
     status: HttpStatus.CONFLICT,
     message: 'Two-factor authentication is already on for this account.',
     consumerFacing: true,
-  },
-  [ErrorCode.TWOFA_REQUIRED_FOR_ROLE]: {
-    // S-8: admins cannot disable it.
-    status: HttpStatus.CONFLICT,
-    message: 'Admin accounts must keep two-factor authentication on.',
-    consumerFacing: false,
   },
   [ErrorCode.PASSWORD_POLICY_VIOLATION]: {
     status: HttpStatus.BAD_REQUEST,

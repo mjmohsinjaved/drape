@@ -1,35 +1,4 @@
-/**
- * The admin catalog wire types, as the API actually serialises them.
- *
- * ## Why these are declared here and not imported from `@repo/api-client`
- *
- * `@repo/api-client/types/garments.ts`, `garment-images.ts` and `files.ts` were written from
- * ARCHITECTURE §5.6/§5.7/§5.20 before the modules were built, and several shapes drifted while
- * the backend was implemented. `packages/**` is owned by another workstream, so the drift is
- * reported rather than patched, and the console codes against what the API sends:
- *
- * | `@repo/api-client` says | `apps/api` actually sends | Source |
- * | --- | --- | --- |
- * | `AdminGarmentListItem.thumbnailUrl` | not on the DTO at all | `garment-response.dto.ts` |
- * | `AdminGarmentDetail.images` | a separate `GET …/images` call | `garment-images.controller.ts` |
- * | `qualityChecks: … \| null` | always an array; `score` required, `remediation: string \| null` | `garment-response.dto.ts` |
- * | `qualityOverriddenByName` | `qualityOverridden: boolean` + `qualityOverriddenBy: uuid` | idem |
- * | `approvedByName` | `approvedBy: uuid` | idem |
- * | `AdminGarmentListQuery.sort: 'newest' \| …` | `sortBy: 'createdAt' \| 'tryOnCount' \| 'starRate' \| …` | `garment-query.dto.ts` |
- * | `BulkGarmentRequest.operation` | `action` | `garment-bulk.dto.ts` |
- * | `BulkItemResult.{id,success}` | `{garmentId,succeeded}` | `garment-response.dto.ts` |
- * | `DeleteGarmentRequest.confirmation` | `confirmTitle` | `delete-garment.dto.ts` |
- * | `FinaliseGarmentImageRequest.ticket` | `key` | `garment-image-create.dto.ts` |
- * | `ReorderGarmentImagesRequest.orderedIds` | `imageIds` | idem |
- * | `GarmentImage.qualityScore/qualityChecks` | a sibling `quality` report object | `garment-image-response.dto.ts` |
- * | `CreateUploadTicketRequest.{filename,mimeType,targetId}` | `{contentType,byteSize,ownerId}` | `create-upload-ticket.dto.ts` |
- * | `UploadTicket.ticket` | `uploadUrl` + `key`; there is no bare ticket field | `upload-ticket-response.dto.ts` |
- * | `BulkEstimateRequest/Response` | lives on `/admin/tryon/test-render/bulk/estimate` with different fields | `test-render-response.dto.ts` |
- * | `CatalogHealthResponse` | **no `GET /admin/catalog-health` route exists** | `apps/api/src/modules` |
- *
- * Everything that *did* match — the enums, `Uuid`, `IsoDateTime`, `Paginated`, `ApiError` — is
- * imported from `@repo/api-client` rather than restated.
- */
+
 
 import type {
   EmbellishmentWeight,
@@ -68,16 +37,12 @@ export interface GarmentQualityCheck {
 export const QUALITY_VERDICTS = ['READY', 'NEEDS_BETTER_PHOTO'] as const;
 export type QualityVerdict = (typeof QUALITY_VERDICTS)[number];
 
-/** `ImageQualityReportDto` — the verdict for a try-on source (§5.7). */
 export interface ImageQualityReport {
   score: number;
-  /** The pass mark this was judged against (`quality.minScore`, default 70). */
   minScore: number;
   passed: boolean;
   verdict: QualityVerdict;
-  /** True when A-10 marks the garment "Needs a better photo". */
   needsBetterPhoto: boolean;
-  /** A-10's own label, served by the API so the console cannot drift from it. */
   label: string;
   checks: GarmentQualityCheck[];
 }
@@ -86,7 +51,6 @@ export interface ImageQualityReport {
  * Garments — §5.6
  * ================================================================== */
 
-/** `GarmentResponseDto`. One shape for the list rows and the detail screen. */
 export interface AdminGarment {
   id: Uuid;
   sku: string;
@@ -118,12 +82,7 @@ export interface AdminGarment {
   testRenderState: TestRenderState;
   testRenderApprovedAt: IsoDateTime | null;
   approvedBy: Uuid | null;
-  /** Set by `UPSTREAM_NO_GARMENT_DETECTED` (A-15). */
   flaggedForReview: boolean;
-  /**
-   * Whether the A-11 and A-10 gates would currently pass. The console disables Publish from
-   * this rather than offering an action the API will refuse (D-5).
-   */
   publishable: boolean;
   tryOnCount: number;
   loveCount: number;
@@ -151,10 +110,6 @@ export const GARMENT_SORT_KEYS = [
 
 export type GarmentSortKey = (typeof GARMENT_SORT_KEYS)[number];
 
-/**
- * A-14 names three sorts. Each is a `sortBy` + `sortOrder` pair, so the table exposes the three
- * by name and the wire stays the API's own vocabulary.
- */
 export const GARMENT_SORT_PRESETS = ['newest', 'mostTried', 'highestStarRate'] as const;
 export type GarmentSortPreset = (typeof GARMENT_SORT_PRESETS)[number];
 
@@ -412,9 +367,9 @@ export interface CreateUploadTicketBody {
   ownerId?: Uuid;
 }
 
-/** `UploadTicketResponseDto`. `uploadUrl` already carries the signed ticket. */
 export interface UploadTicket {
   uploadUrl: string;
+  ticket: string;
   key: string;
   fields: Record<string, string>;
   expiresAt: IsoDateTime;
@@ -424,7 +379,6 @@ export interface UploadTicket {
   contentType: string;
 }
 
-/** What `PUT /files/upload/:ticket` answers once the bytes have landed. */
 export interface UploadResult {
   key: string;
   byteSize: number;
@@ -446,18 +400,6 @@ export const MAX_GARMENT_IMAGE_BYTES = 25 * 1024 * 1024;
 /** `UPLOAD_PURPOSE_POLICIES.CATEGORY_COVER.maxBytes`. */
 export const MAX_CATEGORY_COVER_BYTES = 10 * 1024 * 1024;
 
-/* ================================================================== *
- * A-15 catalog health
- * ================================================================== */
-
-/**
- * ARCHITECTURE §5.6 lists `GET /admin/catalog-health`, but **no such route exists in `apps/api`**
- * — there is no `catalog-health` controller, service or DTO anywhere in the backend. The panel is
- * therefore composed in the console from four narrow `GET /admin/garments` reads, which is
- * honest about what it can see: every field A-15 asks about is already on `GarmentResponseDto`.
- *
- * When the route lands, `useCatalogHealth` collapses to a single query and this type is deleted.
- */
 export interface CatalogHealthGroup {
   items: AdminGarment[];
   total: number;

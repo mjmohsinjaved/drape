@@ -1,16 +1,5 @@
-/**
- * One typed function per admin-catalog route in ARCHITECTURE §5.5 – §5.7, §5.11 and §5.20.
- *
- * §6.4 puts these in `packages/api-client/src/endpoints/`. That directory does not exist yet and
- * `packages/**` belongs to another workstream, so the functions live beside the feature that
- * needs them and keep the rule that matters: **a component never touches `apiClient`.** When the
- * package directory lands, this file moves wholesale and the hooks below it do not change.
- *
- * Every call goes through the one browser instance, so the session cookie, the CSRF
- * double-submit, the `X-Request-Id` and the §2.3 envelope unwrapping are all inherited (§6.4).
- */
 
-import { apiClient, type Paginated, type Uuid } from '@repo/api-client';
+import { apiClient, UPLOAD_TICKET_HEADER, type Paginated, type Uuid } from '@repo/api-client';
 
 import type {
   AdminGarment,
@@ -273,20 +262,13 @@ export interface RedeemTicketOptions {
   signal?: AbortSignal;
 }
 
-/**
- * Step 2 of §3.5 — stream the bytes at the signed `uploadUrl`.
- *
- * `uploadUrl` is absolute, so axios ignores the instance `baseURL`; `withCredentials` and the
- * interceptors still apply. The `Content-Type` has to be the file's own, because the API matches
- * it against the magic bytes and refuses a mismatch (§3.2 requirement 9).
- */
 export async function redeemUploadTicket(
   ticket: UploadTicket,
   file: File,
   options: RedeemTicketOptions = {},
 ): Promise<UploadResult> {
   const response = await apiClient.put<UploadResult>(ticket.uploadUrl, file, {
-    headers: { 'Content-Type': ticket.contentType },
+    headers: { [UPLOAD_TICKET_HEADER]: ticket.ticket, 'Content-Type': ticket.contentType },
     signal: options.signal,
     onUploadProgress: (event) => {
       if (!options.onProgress) return;

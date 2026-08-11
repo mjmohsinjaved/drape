@@ -82,10 +82,15 @@ export function InviteAcceptanceForm({ locale, token, preview }: InviteAcceptanc
         <Callout tone="success" title={t('createdTitle')}>
           {t('createdBody')}
         </Callout>
+
         <TwoFactorEnrolment
-          required
           completionAction={
             <Button asChild variant="primary">
+              <Link href={routes.dashboard(locale)}>{tc('goToConsole')}</Link>
+            </Button>
+          }
+          skipAction={
+            <Button asChild variant="secondary">
               <Link href={routes.dashboard(locale)}>{tc('goToConsole')}</Link>
             </Button>
           }

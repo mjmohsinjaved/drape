@@ -71,6 +71,7 @@ export class UploadTicketService {
 
     const response = new UploadTicketResponseDto();
     response.uploadUrl = ticket.uploadUrl;
+    response.ticket = ticket.ticket;
     response.key = ticket.key;
     response.fields = ticket.fields;
     response.expiresAt = ticket.expiresAt;
@@ -81,14 +82,6 @@ export class UploadTicketService {
     return response;
   }
 
-  /* -----------------------------------------------------------------------------------------
-   * Internals
-   * -------------------------------------------------------------------------------------- */
-
-  /**
-   * §3.5 step 1. `INSUFFICIENT_ROLE` rather than a 404: the purpose vocabulary is public and
-   * documented, so there is nothing to conceal by pretending it does not exist.
-   */
   private assertRoleMayUse(policy: UploadPurposePolicy, actor: ICurrentUser): void {
     if (!policy.roles.includes(actor.role)) {
       throw new ForbiddenException(ErrorCode.INSUFFICIENT_ROLE, {
@@ -118,11 +111,6 @@ export class UploadTicketService {
     return ext;
   }
 
-  /**
-   * `SELF` ignores the client entirely. `GARMENT`/`CATEGORY` require a uuid, which the owning
-   * module re-checks at finalise — a ticket for a garment that does not exist writes an object
-   * nobody ever claims, and the §3.5 step 4 sweep removes it after six hours.
-   */
   private resolveOwnerId(
     policy: UploadPurposePolicy,
     dto: CreateUploadTicketDto,
@@ -150,11 +138,6 @@ export class UploadTicketService {
     }
   }
 
-  /**
-   * A built key is server-generated, so this can only fire on a programming error — a key
-   * builder changed, or a policy points at the wrong prefix. Loud and early beats an object
-   * landing somewhere nobody expects.
-   */
   private assertBuiltKeyIsSound(policy: UploadPurposePolicy, key: string, ownerId: string): void {
     if (isValidStorageKey(key) && key.startsWith(policy.prefix(ownerId))) {
       return;

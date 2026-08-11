@@ -17,6 +17,7 @@ export {
 
 export {
   SignedUrlService,
+  UPLOAD_TICKET_HEADER,
   URL_EXPIRY_BUCKET_SECONDS,
   type IssueOptions,
   type SignedUrlPayload,

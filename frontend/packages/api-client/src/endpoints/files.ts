@@ -6,23 +6,20 @@
  * URL in an `<img src>` or an anchor. A typed function for it would invite exactly the wrong thing.
  */
 
-import { post, put, type EndpointOptions } from './http';
+import { apiClient } from '../axios-instance';
+
+import { post, type EndpointOptions } from './http';
 
 import type { CreateUploadTicketRequest, UploadResult, UploadTicket } from '../types/files';
 
+export const UPLOAD_TICKET_HEADER = 'X-Upload-Ticket';
+
 export const filePaths = {
   uploadTicket: '/files/upload-ticket',
-  /** `PUT /files/upload/:ticket`. Normally you PUT to `UploadTicket.uploadUrl` instead. */
-  upload: (ticket: string): string => `/files/upload/${ticket}`,
+  /** `PUT /files/upload`. Normally you PUT to `UploadTicket.uploadUrl` instead. */
+  upload: '/files/upload',
 } as const;
 
-/**
- * `POST /files/upload-ticket` (ADMIN, CONSUMER) — step 1 of §3.5.
- *
- * The purpose is authorised against the role: a consumer asking for a `GARMENT_IMAGE` ticket is
- * refused, and so is an admin asking for a `PERSON_PHOTO` one — an admin has no route to a
- * consumer's photo at all (S-10).
- */
 export async function createUploadTicket(
   body: CreateUploadTicketRequest,
   options?: EndpointOptions,
@@ -30,20 +27,14 @@ export async function createUploadTicket(
   return post<UploadTicket, CreateUploadTicketRequest>(filePaths.uploadTicket, body, options);
 }
 
-/**
- * Step 2 of §3.5 — send the bytes to the URL the ticket named.
- *
- * `uploadUrl` comes straight off {@link UploadTicket} and already carries the signed ticket, so
- * this takes the URL rather than rebuilding a path. It is passed to axios as an absolute URL when
- * the driver is direct-to-bucket, and as a same-origin path otherwise; axios honours both.
- *
- * The declared `Content-Type` is checked against the file's magic bytes on the server. A mismatch
- * is refused — the client cannot talk its way past the check by relabelling.
- */
 export async function uploadFileBytes(
-  uploadUrl: string,
+  ticket: UploadTicket,
   file: Blob,
-  options?: EndpointOptions,
+  options: EndpointOptions = {},
 ): Promise<UploadResult> {
-  return put<UploadResult, Blob>(uploadUrl, file, options);
+  const response = await (options.client ?? apiClient).put<UploadResult>(ticket.uploadUrl, file, {
+    headers: { [UPLOAD_TICKET_HEADER]: ticket.ticket, 'Content-Type': ticket.contentType },
+    signal: options.signal,
+  });
+  return response.data;
 }

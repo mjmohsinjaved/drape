@@ -795,35 +795,75 @@ describe('AuthService', () => {
   });
 
   describe('disableTwoFactor (S-8)', () => {
-    it('refuses an admin outright, before any credential is checked', async () => {
+
+    function callerFor(user: AuthUser): ICurrentUser {
+      return {
+        id: user.id,
+        role: user.role,
+        email: user.email,
+        name: user.name,
+        status: user.status,
+        emailVerifiedAt: user.emailVerifiedAt,
+        phoneVerifiedAt: user.phoneVerifiedAt,
+        sessionId: 'session',
+        locale: user.locale,
+      };
+    }
+
+    /** An enrolled admin, plus a live code for the secret they actually hold. */
+    async function seedEnrolledAdmin(): Promise<{ user: AuthUser; code: string }> {
+      const totp = suite.harness.get<TotpService>(TotpService);
+      const enrolment = totp.enrol('admin@example.invalid');
       const user = buildAuthUser({
         role: Role.ADMIN,
         email: 'admin@example.invalid',
-        passwordHash: 'never-verified',
+        passwordHash: await suite.passwords.hash(PASSWORD),
+        twofaSecret: enrolment.encryptedSecret,
         twofaEnabledAt: FIXED_NOW,
+        twofaRecoveryCodes: ['hash'],
       });
       suite.directory.rows.push(user);
-      const verify = jest.spyOn(suite.passwords, 'verify');
+
+      const { authenticator } = await import('otplib');
+      return { user, code: authenticator.clone({}).generate(enrolment.secret) };
+    }
+
+    it('turns it off for an admin once the password and the code both check out', async () => {
+      const { user, code } = await seedEnrolledAdmin();
+
+      await expect(
+        suite.service.disableTwoFactor(callerFor(user), { currentPassword: PASSWORD, code }, FACTS),
+      ).resolves.toBeDefined();
+
+      expect(suite.directory.rows.find((row) => row.id === user.id)).toMatchObject({
+        twofaEnabledAt: null,
+        twofaSecret: null,
+        twofaRecoveryCodes: null,
+      });
+    });
+
+    it('refuses an admin holding the wrong password', async () => {
+      const { user, code } = await seedEnrolledAdmin();
 
       await expect(
         suite.service.disableTwoFactor(
-          {
-            id: user.id,
-            role: Role.ADMIN,
-            email: user.email,
-            name: user.name,
-            status: user.status,
-            emailVerifiedAt: user.emailVerifiedAt,
-            phoneVerifiedAt: user.phoneVerifiedAt,
-            sessionId: 'session',
-            locale: user.locale,
-          },
-          { currentPassword: PASSWORD, code: '123456' },
+          callerFor(user),
+          { currentPassword: 'not-the-password-1!', code },
           FACTS,
         ),
-      ).rejects.toMatchObject({ errorCode: ErrorCode.TWOFA_REQUIRED_FOR_ROLE });
+      ).rejects.toMatchObject({ errorCode: ErrorCode.INVALID_CREDENTIALS });
+    });
 
-      expect(verify).not.toHaveBeenCalled();
+    it('refuses an admin holding the wrong code', async () => {
+      const { user } = await seedEnrolledAdmin();
+
+      await expect(
+        suite.service.disableTwoFactor(
+          callerFor(user),
+          { currentPassword: PASSWORD, code: '000000' },
+          FACTS,
+        ),
+      ).rejects.toMatchObject({ errorCode: ErrorCode.TWOFA_INVALID });
     });
   });
 });

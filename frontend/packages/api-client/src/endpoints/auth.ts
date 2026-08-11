@@ -137,7 +137,6 @@ export async function enableTwoFactor(
   return post<TwoFaEnableResponse, TwoFaCodeRequest>(authPaths.twoFactorEnable, body, options);
 }
 
-/** `POST /auth/2fa/disable` (ANY) — refused for admins with `TWOFA_REQUIRED_FOR_ROLE` (S-8). */
 export async function disableTwoFactor(
   body: TwoFaDisableRequest,
   options?: EndpointOptions,
@@ -149,14 +148,6 @@ export async function disableTwoFactor(
   );
 }
 
-/* ------------------------------------------------------------------ passwords */
-
-/**
- * `POST /auth/password/forgot` (PUBLIC).
- *
- * Always 200 and always the same body, whether or not the address exists (S-6). The screen that
- * calls this must confirm in wording that does not imply either outcome.
- */
 export async function forgotPassword(
   body: ForgotPasswordRequest,
   options?: EndpointOptions,
@@ -253,12 +244,6 @@ export async function previewInviteToken(
   return get<InviteTokenPreview>(authPaths.invitePreview(token), options);
 }
 
-/**
- * `POST /invites/token/:token/accept` (PUBLIC) — creates the admin account behind an invitation.
- *
- * The token is an argument rather than a body field, and the body carries no role and no email:
- * both come from the invite row the token resolves to (S-4, S-5).
- */
 export async function acceptInvite(
   token: string,
   body: AcceptInviteRequest,

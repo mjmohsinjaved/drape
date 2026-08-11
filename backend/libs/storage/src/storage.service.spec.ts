@@ -147,7 +147,8 @@ describe('StorageService', () => {
     it('issues a non-direct ticket for the local driver', async () => {
       const ticket = await ticketFor(StorageKeys.personPhoto(OWNER, 'jpg'));
       expect(ticket.isDirect).toBe(false);
-      expect(ticket.uploadUrl).toContain('/api/v1/files/upload/');
+      expect(ticket.uploadUrl).toContain('/api/v1/files/upload');
+      expect(ticket.uploadUrl).not.toContain(ticket.ticket);
     });
 
     it('accepts only the PRD A-10 formats', async () => {
@@ -167,14 +168,14 @@ describe('StorageService', () => {
 
     it('clamps a requested ceiling to STORAGE_MAX_UPLOAD_MB', async () => {
       const ticket = await ticketFor(StorageKeys.personPhoto(OWNER, 'jpg'), 'image/jpeg', 1 << 30);
-      const token = ticket.uploadUrl.slice(ticket.uploadUrl.lastIndexOf('/') + 1);
+      const token = ticket.ticket;
       expect(signedUrls.verifyUploadTicket(token, { subject: OWNER }).maxBytes).toBe(MAX_BYTES);
     });
 
     it('redeems by streaming to disk and returns the stored result', async () => {
       const key = StorageKeys.personPhoto(OWNER, 'jpg');
       const ticket = await ticketFor(key);
-      const token = ticket.uploadUrl.slice(ticket.uploadUrl.lastIndexOf('/') + 1);
+      const token = ticket.ticket;
       const body = jpegBytes('photo-bytes');
 
       const result = await service.redeemUploadTicket(token, Readable.from([body]), OWNER);
@@ -186,7 +187,7 @@ describe('StorageService', () => {
 
     it('cannot be redeemed by another account', async () => {
       const ticket = await ticketFor(StorageKeys.personPhoto(OWNER, 'jpg'));
-      const token = ticket.uploadUrl.slice(ticket.uploadUrl.lastIndexOf('/') + 1);
+      const token = ticket.ticket;
 
       expect(
         await errorCodeOfAsync(() => service.redeemUploadTicket(token, jpegBytes('theirs'), OTHER)),
@@ -196,7 +197,7 @@ describe('StorageService', () => {
     it('enforces the ticket byte ceiling at redemption', async () => {
       const key = StorageKeys.personPhoto(OWNER, 'jpg');
       const ticket = await ticketFor(key, 'image/jpeg', 32);
-      const token = ticket.uploadUrl.slice(ticket.uploadUrl.lastIndexOf('/') + 1);
+      const token = ticket.ticket;
 
       expect(
         await errorCodeOfAsync(() =>
@@ -209,7 +210,7 @@ describe('StorageService', () => {
     it('rejects bytes that do not match the declared type (§3.2 requirement 9)', async () => {
       const key = StorageKeys.personPhoto(OWNER, 'jpg');
       const ticket = await ticketFor(key);
-      const token = ticket.uploadUrl.slice(ticket.uploadUrl.lastIndexOf('/') + 1);
+      const token = ticket.ticket;
 
       expect(
         await errorCodeOfAsync(() =>
@@ -224,8 +225,12 @@ describe('StorageService', () => {
       await service.put(StorageKeys.personPhoto(OWNER, 'jpg'), jpegBytes('a'), {
         contentType: 'image/jpeg',
       });
-      await service.put(StorageKeys.render(OWNER, 'png'), pngBytes('b'), { contentType: 'image/png' });
-      await service.put(StorageKeys.render(OWNER, 'png'), pngBytes('c'), { contentType: 'image/png' });
+      await service.put(StorageKeys.render(OWNER, 'png'), pngBytes('b'), {
+        contentType: 'image/png',
+      });
+      await service.put(StorageKeys.render(OWNER, 'png'), pngBytes('c'), {
+        contentType: 'image/png',
+      });
 
       const otherKey = StorageKeys.render(OTHER, 'png');
       await service.put(otherKey, pngBytes('d'), { contentType: 'image/png' });

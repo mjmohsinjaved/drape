@@ -511,10 +511,9 @@ All other consumer-facing messages here have already been through the §9.4 shor
 | `ACCOUNT_DEACTIVATED` | 403 | `This account is no longer active.` | A-2. |
 | `EMAIL_NOT_VERIFIED` | 403 | `Confirm your email to start trying pieces on. We've sent you a link.` | C-3 / A-28 guard-chain step. |
 | `PHONE_NOT_VERIFIED` | 403 | `Confirm your phone number to send this enquiry.` | C-3, enquiry submission only. |
-| `TWOFA_REQUIRED` | 401 | `Enter the code from your authenticator app.` | S-8. Session is in `twofaPending` state. |
+| `TWOFA_REQUIRED` | 401 | `Enter the code from your authenticator app.` | S-8. Session is in `twofaPending` state — the **only** thing that raises this. An account that never enrolled is authorised normally. |
 | `TWOFA_INVALID` | 401 | `That code didn't work. Try the next one.` | |
 | `TWOFA_ALREADY_ENABLED` | 409 | `Two-factor authentication is already on for this account.` | |
-| `TWOFA_REQUIRED_FOR_ROLE` | 409 | `Admin accounts must keep two-factor authentication on.` | S-8: admins cannot disable it. |
 | `PASSWORD_POLICY_VIOLATION` | 400 | `Choose a password with at least 10 characters, including a number and a symbol.` | |
 | `TOKEN_INVALID` | 400 | `That link isn't valid. Request a new one.` | Reset, verification and invite tokens. |
 | `TOKEN_EXPIRED` | 410 | `That link has expired. Request a new one.` | Reset link TTL 30 minutes (S-6). |
@@ -777,7 +776,7 @@ logged at `error` — the client never sees an internal message.
 | `@Roles(...roles: Role[])` | `roles` | The route's authorisation contract. `Role.PUBLIC \| Role.CONSUMER \| Role.ADMIN`. **Every route handler carries exactly one.** `scripts/check-route-guards.ts` walks the route table and fails CI on any handler without it (B-5). |
 | `@CurrentUser()` / `@CurrentUser('id')` | — | Param decorator returning `ICurrentUser` from `request.user`, or one property of it. Returns `undefined` on `@Public()` routes with no session. |
 | `@ResponseMessage('…')` | `responseMessage` | Sets `message` in the success envelope. |
-| `@SkipCsrf()` | `skipCsrf` | Bypasses `CsrfGuard`. Permitted **only** where the request's credential travels in the URL rather than in an ambient cookie, so a cross-site form cannot forge it: `PUT /api/v1/files/upload/:ticket` (§3.5 step 2) is the one such route. It is **not** permitted on `POST /auth/login` or `POST /auth/signup` — those forms fetch an anonymous-scope token from `GET /auth/csrf` first, exactly as `POST /invites/token/:token/accept` does, and skipping the guard there allows forced authentication (signing a victim into an attacker-controlled account). Every use carries a comment naming the reason. |
+| `@SkipCsrf()` | `skipCsrf` | Bypasses `CsrfGuard`. Permitted **only** where the request carries its own signed credential in a custom header rather than in an ambient cookie, so a cross-site form cannot forge it: `PUT /api/v1/files/upload` (§3.5 step 2) is the one such route — the `X-Upload-Ticket` header cannot be set by a form post, and a custom header forces a CORS preflight besides. It is **not** permitted on `POST /auth/login` or `POST /auth/signup` — those forms fetch an anonymous-scope token from `GET /auth/csrf` first, exactly as `POST /invites/token/:token/accept` does, and skipping the guard there allows forced authentication (signing a victim into an attacker-controlled account). Every use carries a comment naming the reason. |
 
 `ICurrentUser`:
 
@@ -1101,10 +1100,12 @@ independent storage host, so the pattern is preserved at the interface and adapt
 1. Client calls `POST /api/v1/files/upload-ticket` with `{ purpose, contentType, byteSize }`.
    `purpose` ∈ `PERSON_PHOTO | GARMENT_IMAGE | CATEGORY_COVER | BRAND_ASSET`. The API authorises the
    purpose against the caller's role, builds the key, and returns an `UploadTicket`.
-2. Client `PUT`s the bytes to `ticket.uploadUrl`. For the local driver that is
-   `PUT /api/v1/files/upload/:ticket` on the API, streamed straight to disk with no buffering of the
-   whole file and a hard `maxBytes` cut-off. For the future S3 driver it is the bucket URL and the
-   API is not in the data path — `isDirect` tells the client which it is.
+2. Client `PUT`s the bytes to `ticket.uploadUrl`, sending the signed credential in the
+   **`X-Upload-Ticket` request header** — never in the URL, so the ticket cannot land in access
+   logs, proxies or browser history. For the local driver the URL is `PUT /api/v1/files/upload`
+   on the API, streamed straight to disk with no buffering of the whole file and a hard
+   `maxBytes` cut-off. For the future S3 driver it is the bucket URL and the API is not in the
+   data path — `isDirect` tells the client which it is.
 3. Client calls the owning module's finalise endpoint (e.g. `POST /api/v1/person-photos`) with the
    returned `key`. The module verifies the object exists, re-probes it with `sharp`, strips EXIF,
    generates thumbnails, records `hash`/`width`/`height`/`byteSize`, and writes the row.
@@ -2043,7 +2044,7 @@ Every mutating verb (`POST`/`PATCH`/`PUT`/`DELETE`) requires the CSRF header unl
 | POST | `/auth/phone/otp/verify` | CONSUMER | Verify the OTP and stamp `phoneVerifiedAt`. |
 | POST | `/auth/2fa/setup` | ANY | Return a TOTP secret and provisioning URI. |
 | POST | `/auth/2fa/enable` | ANY | Confirm a code, enable 2FA, return recovery codes once. |
-| POST | `/auth/2fa/disable` | ANY | Disable 2FA. Rejected for admins (S-8). |
+| POST | `/auth/2fa/disable` | ANY | Disable 2FA. Open to every role — 2FA is opt-in (S-8) — but the current password **and** a live code are both required. |
 | POST | `/auth/2fa/recovery` | PUBLIC | Complete a `twofaPending` session with a recovery code. |
 
 ### 5.2 `users` — admins, consumers, self
@@ -2086,7 +2087,7 @@ Every mutating verb (`POST`/`PATCH`/`PUT`/`DELETE`) requires the CSRF header unl
 | POST | `/invites/:inviteId/resend` | ADMIN | Re-issue the token and reset the expiry. |
 | DELETE | `/invites/:inviteId` | ADMIN | Revoke a pending invite. |
 | GET | `/invites/token/:token` | PUBLIC | Validate a token and return `{ email, role, expiresAt }` for the acceptance form. |
-| POST | `/invites/token/:token/accept` | PUBLIC | Create the admin account from the invite. 2FA setup is forced immediately after (S-8). |
+| POST | `/invites/token/:token/accept` | PUBLIC | Create the admin account from the invite. 2FA enrolment is offered immediately after, never forced (S-8). |
 
 ### 5.4 `settings`
 
@@ -2315,7 +2316,7 @@ replays the terminal state if the job already finished. A consumer may only stre
 | --- | --- | :-: | --- |
 | GET | `/files/:token` | PUBLIC | Serve a stored object against an HMAC token. `sub`-scoped tokens additionally require a matching session (§3.4). |
 | POST | `/files/upload-ticket` | ANY | Issue an upload ticket for a declared purpose, after authorising purpose against role (§3.5). |
-| PUT | `/files/upload/:ticket` ⊘ | PUBLIC | Redeem an upload ticket by streaming the bytes. Local driver only; the ticket is the credential. |
+| PUT | `/files/upload` ⊘ | PUBLIC | Redeem an upload ticket by streaming the bytes. The signed ticket travels in the `X-Upload-Ticket` header — never in the URL. Local driver only; the ticket is the credential. |
 
 ### 5.21 `health`
 

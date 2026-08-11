@@ -376,7 +376,8 @@ export class LocalDiskDriver implements StorageDriver, OnModuleInit {
       subject: options.subject,
     });
     return Promise.resolve({
-      uploadUrl: this.signedUrls.buildUploadUrl(token),
+      uploadUrl: this.signedUrls.buildUploadUrl(),
+      ticket: token,
       key,
       fields: {},
       expiresAt: new Date(payload.exp * 1000),
@@ -393,34 +394,6 @@ export class LocalDiskDriver implements StorageDriver, OnModuleInit {
     return Number(stats.bavail) * Number(stats.bsize);
   }
 
-  /* ---------------------------------------------------------------------------------------------
-   * Requirement 4 — sweeping `.tmp`
-   * ------------------------------------------------------------------------------------------ */
-
-  /**
-   * Removes `<root>/.tmp/*` entries last modified before `olderThan`, up to `limit`.
-   *
-   * ### Why this is a driver method and not a caller's loop
-   *
-   * `.tmp` is not addressable by a storage key — the dot prefix is forbidden by
-   * `STORAGE_KEY_PATTERN` precisely so no caller can reach it, and `collectKeys` skips
-   * dot-directories so `list()` never returns one. That is the right design and it leaves
-   * exactly one consequence: nothing outside this file can see a stale temporary file, so
-   * nothing outside this file can remove one. §3.2 requirement 4 gives the job to the
-   * retention cron; this is the operation the cron calls.
-   *
-   * ### Why the age check is per file, read fresh
-   *
-   * `readdir` gives names, not times. A write in flight *right now* has a `.tmp` file with
-   * a recent mtime, and deleting it would corrupt an upload that is about to succeed —
-   * which is the one failure mode a sweep of this directory can cause. So every candidate
-   * is `stat`ed and only files strictly older than the cutoff are removed. Six hours is
-   * several orders of magnitude longer than any legitimate write.
-   *
-   * Failures are counted as "not removed" rather than thrown: a file another process holds
-   * open (Windows) or removed between the `readdir` and the `unlink` is not a reason to
-   * abandon the rest of the sweep.
-   */
   async sweepTemporaryFiles(olderThan: Date, limit: number): Promise<number> {
     if (limit <= 0) {
       return 0;
@@ -446,10 +419,6 @@ export class LocalDiskDriver implements StorageDriver, OnModuleInit {
       if (!entry.isFile()) {
         continue;
       }
-
-      // Built from the driver's own directory and a name `readdir` returned, so it is
-      // inside the root by construction; asserted anyway, because requirement 2 says
-      // there is no path to disk that skips the check.
       const full = this.assertInsideRoot(join(TEMP_DIR_NAME, entry.name));
 
       try {

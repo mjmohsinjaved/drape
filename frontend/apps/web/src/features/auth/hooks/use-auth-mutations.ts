@@ -172,7 +172,6 @@ export function useTwoFactorEnable(): Mutation<TwoFaEnableResponse, TwoFaCodeReq
   });
 }
 
-/** `POST /auth/2fa/disable` — refused for admins with `TWOFA_REQUIRED_FOR_ROLE` (S-8). */
 export function useTwoFactorDisable(): Mutation<AuthAcknowledgement, TwoFaDisableRequest> {
   return useApiMutation<AuthAcknowledgement, TwoFaDisableRequest>({
     request: (body) => authApi.disableTwoFactor(body),
@@ -181,12 +180,6 @@ export function useTwoFactorDisable(): Mutation<AuthAcknowledgement, TwoFaDisabl
   });
 }
 
-/**
- * `POST /invites/token/:token/accept` — creates the admin account behind an invitation (S-5).
- *
- * The token is a closure argument rather than a body field, and the body carries no role and
- * no email: both come from the invite row the token resolves to.
- */
 export function useAcceptInvite(token: string): Mutation<SessionUser, AcceptInviteRequest> {
   return useApiMutation<SessionUser, AcceptInviteRequest>({
     request: (body) => authApi.acceptInvite(token, body),

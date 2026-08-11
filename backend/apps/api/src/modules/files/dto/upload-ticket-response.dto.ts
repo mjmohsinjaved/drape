@@ -18,10 +18,18 @@ export class UploadTicketResponseDto {
   @ApiProperty({
     description:
       'Where to PUT the bytes. For the local driver this is a route on this API; for a future ' +
-      'S3 driver it is the bucket. `isDirect` says which.',
-    example: 'http://localhost:4000/api/v1/files/upload/eyJrZXkiOi…',
+      'S3 driver it is the bucket. `isDirect` says which. Carries no credential — see `ticket`.',
+    example: 'http://localhost:4000/api/v1/files/upload',
   })
   uploadUrl: string;
+
+  @ApiProperty({
+    description:
+      'The signed credential. Send it in the `X-Upload-Ticket` request header of the PUT — ' +
+      'never in the URL (§3.5 step 2).',
+    example: 'eyJrZXkiOi….xlJ10v5c…',
+  })
+  ticket: string;
 
   @ApiProperty({
     description: 'The key the object will occupy. Hand it to the owning finalise endpoint.',
@@ -55,7 +63,6 @@ export class UploadTicketResponseDto {
   contentType: string;
 }
 
-/** What `PUT /api/v1/files/upload/:ticket` returns once the bytes have landed. */
 export class UploadResultResponseDto {
   @ApiProperty({ description: 'Hand this to the owning module’s finalise endpoint.' })
   key: string;

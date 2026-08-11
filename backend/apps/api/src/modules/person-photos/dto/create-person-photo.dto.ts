@@ -6,19 +6,6 @@ import { MAX_KEY_LENGTH } from '@library/storage';
 
 import { MAX_PHOTO_LABEL_LENGTH } from '../constants/person-photo.constants';
 
-/**
- * `POST /person-photos` — step 3 of the §3.5 upload dance.
- *
- * The client has already asked for an upload ticket, streamed the bytes to
- * `PUT /files/upload/:ticket` and been handed back the key the object now occupies.
- * All it does here is name that key.
- *
- * `key` is validated for **shape** only. Everything that matters about it —
- * that it exists, that it sits under this consumer's own `person-photos/<userId>/`
- * prefix, what its real dimensions, format, byte size and sha256 are — is re-derived
- * server-side from the stored bytes. Nothing the client says about the file is
- * trusted (§3.5 step 3, C-14).
- */
 export class CreatePersonPhotoDto {
   @ApiProperty({
     description:

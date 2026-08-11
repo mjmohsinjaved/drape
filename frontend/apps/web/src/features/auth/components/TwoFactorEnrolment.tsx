@@ -40,8 +40,8 @@ import { isOtpComplete } from '@/features/auth/lib/password-policy';
 export interface TwoFactorEnrolmentProps {
   /** Rendered under the success confirmation — "go to the console", "back to your account". */
   completionAction?: ReactNode;
-  /** Admin accounts cannot skip this (S-8); the copy says so rather than offering a way out. */
-  required?: boolean;
+
+  skipAction?: ReactNode;
 }
 
 /** Base32 in groups of four: a secret typed from a screen is read four characters at a time. */
@@ -49,10 +49,7 @@ function groupSecret(secret: string): string {
   return (secret.match(/.{1,4}/g) ?? [secret]).join(' ');
 }
 
-export function TwoFactorEnrolment({
-  completionAction,
-  required = false,
-}: TwoFactorEnrolmentProps) {
+export function TwoFactorEnrolment({ completionAction, skipAction }: TwoFactorEnrolmentProps) {
   const t = useTranslations('account.twoFactor');
   const tc = useTranslations('auth.common');
   const copy = useErrorCopy();
@@ -111,20 +108,23 @@ export function TwoFactorEnrolment({
           />
         ) : null}
 
-        <p className="text-sm text-ink-muted">{required ? t('requiredBody') : t('optionalBody')}</p>
+        <p className="text-sm text-ink-muted">{t('optionalBody')}</p>
 
-        <Button
-          variant="primary"
-          startIcon={<ShieldCheck aria-hidden="true" className="size-4" />}
-          loading={setup.isPending}
-          loadingLabel={tc('starting')}
-          onClick={() => {
-            if (setup.isPending) return;
-            setup.mutate();
-          }}
-        >
-          {t('startAction')}
-        </Button>
+        <div className="flex flex-wrap gap-3">
+          <Button
+            variant="primary"
+            startIcon={<ShieldCheck aria-hidden="true" className="size-4" />}
+            loading={setup.isPending}
+            loadingLabel={tc('starting')}
+            onClick={() => {
+              if (setup.isPending) return;
+              setup.mutate();
+            }}
+          >
+            {t('startAction')}
+          </Button>
+          {skipAction}
+        </div>
       </div>
     );
   }
