@@ -210,13 +210,6 @@ export class StructuredLoggerService implements LoggerService {
         record.method = store.method;
       }
       if (store.path !== undefined) {
-        // Redacted like everything else. The middleware strips the query string,
-        // but `GET /api/v1/files/:token` and `PUT /api/v1/files/upload/:ticket`
-        // carry their credential in a **path segment** — and that token
-        // base64-decodes to the storage key, the object class and the owning
-        // user id (E-12, §3.4). For a class that needs no `sub` it is also
-        // directly replayable for the remainder of its TTL, so an unredacted
-        // access log was handing out bearer URLs.
         record.path = redactString(store.path);
       }
     }
@@ -248,8 +241,4 @@ export class StructuredLoggerService implements LoggerService {
   }
 }
 
-/**
- * A process-wide logger for code that runs outside the injector — `main.ts` before
- * `NestFactory.create()`, and `validateRequiredEnvVars()`.
- */
 export const rootLogger = new StructuredLoggerService({ context: 'Bootstrap' });

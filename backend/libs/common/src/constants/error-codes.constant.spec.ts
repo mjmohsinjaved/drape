@@ -32,7 +32,6 @@ const EXPECTED_STATUS: Readonly<Record<ErrorCode, number>> = {
   [ErrorCode.TWOFA_REQUIRED]: 401,
   [ErrorCode.TWOFA_INVALID]: 401,
   [ErrorCode.TWOFA_ALREADY_ENABLED]: 409,
-  [ErrorCode.TWOFA_REQUIRED_FOR_ROLE]: 409,
   [ErrorCode.PASSWORD_POLICY_VIOLATION]: 400,
   [ErrorCode.TOKEN_INVALID]: 400,
   [ErrorCode.TOKEN_EXPIRED]: 410,

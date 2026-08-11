@@ -309,9 +309,9 @@ Set `EXPOSE_API_DOCS=true` in `backend/.env` for Swagger at
 ### 4.8 First login
 
 Open `http://localhost:3000/en/login` and sign in with `SEED_ADMIN_EMAIL` /
-`SEED_ADMIN_PASSWORD`. Admins carry a mandatory TOTP second factor, so the first sign-in
-walks through enrolment: scan the QR with any authenticator app and store the recovery
-codes.
+`SEED_ADMIN_PASSWORD`. You land straight on the console — a TOTP second factor is optional
+for both roles (S-8). To turn one on, go to `/en/account/security`, scan the provisioning
+URI with any authenticator app and store the recovery codes.
 
 Both roles land on `/en/dashboard`, which resolves server-side by role — admins get the
 studio console, consumers get the fitting room.

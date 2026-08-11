@@ -6,7 +6,6 @@ import {
   ConflictException,
   ErrorCode,
   ForbiddenException,
-  isAdmin,
   Locale,
   NotFoundException,
   UserStatus,
@@ -64,13 +63,6 @@ export interface AuthResult<T> {
   readonly clearCookies?: boolean;
 }
 
-/**
- * The one acknowledgement returned by every enumeration-sensitive endpoint.
- *
- * Frozen so no code path can accidentally decorate it for one branch and not the
- * other — the S-6 guarantee is that the bytes are identical, and a shared frozen
- * object makes that structural rather than a promise.
- */
 const GENERIC_ACKNOWLEDGEMENT: Readonly<AuthAcknowledgementDto> = Object.freeze({
   accepted: true,
 });
@@ -78,26 +70,6 @@ const GENERIC_ACKNOWLEDGEMENT: Readonly<AuthAcknowledgementDto> = Object.freeze(
 const MINUTE_MS = 60_000;
 const HOUR_MS = 60 * MINUTE_MS;
 
-/**
- * The `auth` feature service — ARCHITECTURE §5.1, PRD S-1 … S-8, C-2, C-3, C-7.
- *
- * ### The three rules that shape this file
- *
- * 1. **Signup cannot produce an admin (S-4).** The only account-creating call
- *    available here is `UserDirectory.createConsumer`, whose input type has no role
- *    field. A `role` in the payload is stripped and audit-logged, never rejected and
- *    never read.
- * 2. **Nothing enumerates accounts (S-6).** Login and password reset return the same
- *    bytes for a known and an unknown address, and the absent-account branch runs a
- *    real Argon2 verification against a dummy hash so the timing matches too.
- * 3. **The session id rotates on every privilege change.** Login, 2FA completion and
- *    password change all mint a new row and retire the old one, and password change,
- *    deactivation and suspension revoke every other session (A-2, A-19).
- *
- * No method here logs a password, a token or an OTP (E-12). Audit rows are written
- * by the `audit` module's `@OnEvent` listener from the events emitted here, never
- * inline (§2.9 rule 4).
- */
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
@@ -114,15 +86,6 @@ export class AuthService {
     private readonly events: EventEmitter2,
   ) {}
 
-  /* ---------------------------------------------------------------------- */
-  /* Signup (S-4, C-2)                                                       */
-  /* ---------------------------------------------------------------------- */
-
-  /**
-   * Creates a **Consumer** account. There is no code path here, or below here, that
-   * can produce an admin (S-4): admins arrive only from the seed script or from an
-   * invitation (S-5), which is the `invites` module's endpoint, not this one.
-   */
   async signup(dto: SignupDto, facts: RequestFacts): Promise<AuthResult<AuthUserDto>> {
     const now = new Date();
     const email = dto.email.trim().toLowerCase();
@@ -139,9 +102,6 @@ export class AuthService {
         outcome: AuthOutcome.INVALID_CREDENTIALS,
         route: AUTH_ROUTES.SIGNUP,
       });
-      // Signup is not enumeration-sensitive in the same way login is: the form has
-      // to tell the visitor the address is taken, or she cannot get past it. The
-      // §5.1 contract carries `EMAIL_ALREADY_EXISTS` for exactly this.
       throw new ConflictException(ErrorCode.EMAIL_ALREADY_EXISTS);
     }
 
@@ -157,9 +117,6 @@ export class AuthService {
       locale: dto.locale ?? Locale.EN,
     });
 
-    // S-4: "A role passed in the signup payload is ignored and logged." Logged, not
-    // rejected — and logged *after* the consumer exists, so the audit row can point
-    // at a real account.
     if (typeof dto.role === 'string' && dto.role.trim().length > 0) {
       this.recordIgnoredSignupRole(user, dto.role.trim(), facts, now);
     }
@@ -184,9 +141,6 @@ export class AuthService {
 
     await this.dispatchEmailVerification(user, facts, now);
 
-    // A brand-new consumer is signed in straight away: C-2 asks for four fields and
-    // then gets out of the way. Email verification gates the first generation (C-3),
-    // not the session.
     const issued = await this.sessionService.issue({
       user,
       ip: facts.ip,
@@ -198,18 +152,6 @@ export class AuthService {
     return { body: toAuthUserDto(user), issued };
   }
 
-  /* ---------------------------------------------------------------------- */
-  /* Login (S-1, S-6, S-7, S-8)                                              */
-  /* ---------------------------------------------------------------------- */
-
-  /**
-   * Authenticates an email and password.
-   *
-   * Every failure below throws the **same** `INVALID_CREDENTIALS` with the same
-   * message, and the "no such account" branch performs a real Argon2 verification
-   * against a dummy hash, so neither the response nor the time taken distinguishes
-   * an unknown address from a wrong password (S-6).
-   */
   async login(
     email: string,
     password: string,
@@ -240,17 +182,7 @@ export class AuthService {
       throw new AuthException(ErrorCode.INVALID_CREDENTIALS);
     }
 
-    // Only now — once the caller has proved they hold the password — is it safe to
-    // say anything about the account's state. Saying it earlier would turn the login
-    // form into a directory of suspended accounts.
     this.assertAccountUsable(user);
-
-    // C-38: once deletion is under way, nothing more happens on the account — including
-    // signing back into it. `assertAccountUsable` covers this only while the status is
-    // still `DEACTIVATED`, and an admin who suspends and then unsuspends a
-    // deletion-pending consumer sets it back to `ACTIVE`. That path is refused at source
-    // now (`AdminConsumersService`), and this is the second lock: `deletionRequestedAt`
-    // is the durable fact, and it is the one worth checking.
     this.assertNotBeingDeleted(user);
 
     const twofaRequired = user.twofaEnabledAt !== null;
@@ -278,16 +210,6 @@ export class AuthService {
       outcome: AuthOutcome.SUCCESS,
       route: AUTH_ROUTES.LOGIN,
     });
-
-    if (isAdmin(user.role) && !twofaRequired) {
-      // S-8 makes 2FA mandatory for admins. The session is still issued — an admin
-      // with no second factor yet (the E-4 seed, or an invite accepted moments ago)
-      // would otherwise have no way to enrol one — but it is **not** a fully
-      // authorised admin session: `SessionResolverService` refuses it with
-      // `TWOFA_REQUIRED` on every route outside `ADMIN_ENROLMENT_ROUTES`, so the
-      // enforcement is the API's, not the console's (S-3, S-11).
-      this.logger.warn(`admin ${user.id} signed in without a second factor enrolled (S-8)`);
-    }
 
     this.events.emit(AUTH_EVENTS.LOGGED_IN, {
       userId: user.id,
@@ -805,11 +727,12 @@ export class AuthService {
   }
 
   /**
-   * `POST /auth/2fa/disable` — **rejected for admins** (S-8).
+   * `POST /auth/2fa/disable` — available to **every** role.
    *
-   * "2FA mandatory for Admin, optional for Consumer." An admin asking to turn it off
-   * gets `TWOFA_REQUIRED_FOR_ROLE`, before the password is even checked: there is no
-   * credential that makes this allowed, so there is nothing to verify.
+   * A second factor is opt-in, so turning it back off is the account's own decision
+   * whatever its role. What still has to hold is that the person asking is the account
+   * holder: the current password *and* a live code are both checked below, because a
+   * security downgrade is exactly what a hijacked session would attempt.
    */
   async disableTwoFactor(
     caller: ICurrentUser,
@@ -818,10 +741,6 @@ export class AuthService {
   ): Promise<AuthAcknowledgementDto> {
     const now = new Date();
     const user = await this.requireUser(caller.id);
-
-    if (isAdmin(user.role)) {
-      throw new ForbiddenException(ErrorCode.TWOFA_REQUIRED_FOR_ROLE);
-    }
 
     this.assertAccountUsable(user);
 

@@ -295,11 +295,10 @@ describe('SignedUrlService', () => {
       });
     });
 
-    it('builds the local upload URL', () => {
+    it('builds the local upload URL without the credential — the ticket travels as a header', () => {
       const { token } = service.issueUploadTicket(PHOTO_KEY, ticketOptions);
-      expect(service.buildUploadUrl(token)).toBe(
-        `http://localhost:4000/api/v1/files/upload/${token}`,
-      );
+      expect(service.buildUploadUrl()).toBe('http://localhost:4000/api/v1/files/upload');
+      expect(service.buildUploadUrl()).not.toContain(token);
     });
 
     it('rejects an expired ticket', () => {
@@ -334,7 +333,7 @@ describe('SignedUrlService', () => {
     /**
      * `''` is not a subject.
      *
-     * `POST /files/upload/:token` is a `@Public()` route, so a caller with no session
+     * `PUT /files/upload` is a `@Public()` route, so a caller with no session
      * reaches `verifyUploadTicket` with `subject` resolved from nothing. A ticket whose
      * `sub` were `''` would compare **equal** to that and be redeemable by anybody.
      * Unreachable today because every call site passes a session id — but the local

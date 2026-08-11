@@ -129,7 +129,9 @@ describe('LocalDiskDriver', () => {
     });
 
     it('leaves nothing behind in .tmp — the write is staged then renamed', async () => {
-      await driver.put(StorageKeys.render(USER_ID, 'png'), pngBytes('x'), { contentType: 'image/png' });
+      await driver.put(StorageKeys.render(USER_ID, 'png'), pngBytes('x'), {
+        contentType: 'image/png',
+      });
       expect(await readdir(join(root, '.tmp'))).toEqual([]);
     });
 
@@ -232,9 +234,15 @@ describe('LocalDiskDriver', () => {
 
   describe('deletePrefix (§3.3, §9.3 deletion log)', () => {
     it('removes every object under the prefix and returns the count', async () => {
-      await driver.put(StorageKeys.render(USER_ID, 'png'), pngBytes('a'), { contentType: 'image/png' });
-      await driver.put(StorageKeys.render(USER_ID, 'png'), pngBytes('b'), { contentType: 'image/png' });
-      await driver.put(StorageKeys.render(USER_ID, 'png'), pngBytes('c'), { contentType: 'image/png' });
+      await driver.put(StorageKeys.render(USER_ID, 'png'), pngBytes('a'), {
+        contentType: 'image/png',
+      });
+      await driver.put(StorageKeys.render(USER_ID, 'png'), pngBytes('b'), {
+        contentType: 'image/png',
+      });
+      await driver.put(StorageKeys.render(USER_ID, 'png'), pngBytes('c'), {
+        contentType: 'image/png',
+      });
       const survivor = StorageKeys.garmentImage(GARMENT_ID, 'png');
       await driver.put(survivor, pngBytes('keep'), { contentType: 'image/png' });
 
@@ -439,8 +447,12 @@ describe('LocalDiskDriver', () => {
       expect(ticket.key).toBe(key);
       expect(ticket.isDirect).toBe(false);
       expect(ticket.fields).toEqual({});
-      expect(ticket.uploadUrl.startsWith('http://localhost:4000/api/v1/files/upload/')).toBe(true);
+      // The URL names the endpoint and nothing else; the credential is the separate `ticket`
+      // field, which the client sends in the `X-Upload-Ticket` header (§3.5 step 2).
+      expect(ticket.uploadUrl).toBe('http://localhost:4000/api/v1/files/upload');
       expect(ticket.uploadUrl).not.toContain(key);
+      expect(ticket.ticket.length).toBeGreaterThan(0);
+      expect(ticket.uploadUrl).not.toContain(ticket.ticket);
       expect(ticket.expiresAt.getTime()).toBeGreaterThan(Date.now());
     });
 

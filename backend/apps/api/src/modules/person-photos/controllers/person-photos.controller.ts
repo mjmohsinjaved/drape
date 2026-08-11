@@ -26,25 +26,6 @@ import { PersonPhotoResponseDto } from '../dto/person-photo-response.dto';
 import { UpdatePersonPhotoDto } from '../dto/update-person-photo.dto';
 import { PersonPhotosService } from '../services/person-photos.service';
 
-/**
- * A consumer's own photographs — ARCHITECTURE §5.9, PRD C-11 … C-16, C-38.
- *
- * **Every handler is `@Roles(Role.CONSUMER)`, and there is no admin controller in
- * this module — not here, not in a sibling file, not anywhere.** PRD S-10 says an
- * admin can never read a consumer's photo, and §5.9 lists five routes, all of them
- * hers. The only derivative that ever reaches an admin is the blurred 160w thumbnail,
- * served through the A-34 moderation queue in `modules/moderation`, against a signed
- * URL whose `sub` is the reviewing admin's own id and whose every read is audit-logged.
- * The spec beside this controller asserts an admin session is refused on all five.
- *
- * There is no upload route here either. Bytes arrive through `POST /files/upload-ticket`
- * and `PUT /files/upload/:ticket` (§3.5), which is also where EXIF stripping happens
- * (§3.6). `POST /person-photos` is step 3 — finalise — and nothing more.
- *
- * Ownership is decided in the service, on every route, from `{ id, userId }` in the
- * predicate. The guard chain authorises the route; the service authorises the row
- * (§2.7, §9.2).
- */
 @ApiTags('Person photos')
 @Controller('person-photos')
 export class PersonPhotosController {

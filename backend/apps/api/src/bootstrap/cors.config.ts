@@ -29,6 +29,7 @@ export function buildCorsOptions(env: EnvironmentVariables): CorsOptions {
       'Accept-Language',
       'X-CSRF-Token',
       'X-Request-Id',
+      'X-Upload-Ticket',
       'Idempotency-Key',
     ],
     exposedHeaders: ['X-Request-Id', 'Retry-After', 'Content-Disposition'],

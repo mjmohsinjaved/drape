@@ -1,4 +1,4 @@
-import { apiClient } from '@repo/api-client';
+import { apiClient, UPLOAD_TICKET_HEADER } from '@repo/api-client';
 
 import type {
   CreateUploadTicketBody,
@@ -9,18 +9,6 @@ import type {
   UploadTicket,
 } from '@/features/photos/api/types';
 
-/**
- * Person-photo and upload calls — ARCHITECTURE §5.9, §5.20, §3.5.
- *
- * The three-step upload (C-15) is deliberately three calls, not one:
- *
- *   1. `POST /files/upload-ticket` — declare the type and size, receive a signed `uploadUrl`.
- *   2. `PUT <uploadUrl>` — **stream the bytes straight at storage**. This never touches the
- *      Next.js server; there is no route handler in the web app and no proxy (B-9, C-15).
- *   3. `POST /person-photos` — hand the key back, which probes, hashes and moderates it.
- *
- * Step 2 is the only one with real progress, which is what the upload bar reports.
- */
 
 export const photoPaths = {
   list: '/person-photos',
@@ -45,18 +33,13 @@ export interface RedeemTicketOptions {
   signal?: AbortSignal;
 }
 
-/**
- * Step 2. `uploadUrl` is absolute, so axios ignores the instance `baseURL`. The `Content-Type`
- * has to be the ticket's, because the API matches it against the file's magic bytes and refuses
- * a mismatch (§3.2 requirement 9).
- */
 export async function redeemUploadTicket(
   ticket: UploadTicket,
   file: File,
   options: RedeemTicketOptions = {},
 ): Promise<UploadResult> {
   const response = await apiClient.put<UploadResult>(ticket.uploadUrl, file, {
-    headers: { 'Content-Type': ticket.contentType },
+    headers: { [UPLOAD_TICKET_HEADER]: ticket.ticket, 'Content-Type': ticket.contentType },
     signal: options.signal,
     onUploadProgress: (event) => {
       if (!options.onProgress) return;
