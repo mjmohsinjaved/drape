@@ -2,9 +2,17 @@
  * ARCHITECTURE.md §3.4 (signed download URLs) and §3.5 (upload tickets).
  *
  * ```
- * token   = base64url(payload) + "." + base64url(HMAC-SHA256(base64url(payload), STORAGE_URL_SECRET))
+ * token   = base64url(payload) + "." + base64url(HMAC-SHA256(base64url(payload), STORAGE_URL_SECRET)[0..15])
  * payload = JSON.stringify({ key, exp, sub? })        // compact, keys in this order
  * ```
+ *
+ * The MAC is truncated to its first 128 bits — a deliberate §3.4 deviation (2026-08-12). The full
+ * person-photo token was 262 characters, and Windows http.sys rejects any URL segment over 260 by
+ * default (`UrlSegmentMaxLength`), killing the request before it reaches any application code.
+ * Truncation to 128 bits is the standard remedy (RFC 2104 §5 explicitly permits truncation to no
+ * less than half the digest); forging a link still takes 2^128 work, and every token now fits any
+ * host's default limits with room to spare. Deploying this invalidates outstanding URLs — which
+ * expire within minutes anyway and is the documented STORAGE_URL_SECRET rotation behaviour.
  *
  * The token is opaque to the frontend. A storage key must never cross the network boundary, so the
  * only thing a response DTO ever carries is the finished URL.
@@ -91,6 +99,9 @@ export const UPLOAD_TICKET_HEADER = 'X-Upload-Ticket';
 const BLURRED_MODERATION_PREFIX = 'thumbnails/person-blurred/';
 
 const UPLOAD_DOMAIN_SEPARATOR = 'upload:';
+
+/** 128 bits. See the file header for why the MAC is truncated and why that is sound. */
+const TRUNCATED_MAC_BYTES = 16;
 
 const SUBJECT_REQUIRED_SEGMENTS: ReadonlySet<string> = new Set([
   'person-photos',
@@ -272,7 +283,11 @@ export class SignedUrlService {
    * ------------------------------------------------------------------------------------------ */
 
   private hmac(signedString: string): string {
-    return createHmac('sha256', this.config.urlSecret).update(signedString).digest('base64url');
+    return createHmac('sha256', this.config.urlSecret)
+      .update(signedString)
+      .digest()
+      .subarray(0, TRUNCATED_MAC_BYTES)
+      .toString('base64url');
   }
 
   /** Constant-time comparison. Length is compared first because `timingSafeEqual` throws otherwise. */
