@@ -194,6 +194,7 @@ export class GarmentsService {
     const deposit = dto.deposit ?? null;
     this.assertDepositConsistent(mode, deposit);
 
+    const publishedAt = new Date();
     const garment = this.garments.create({
       sku: dto.sku,
       title: dto.title,
@@ -211,16 +212,36 @@ export class GarmentsService {
       descriptionUr: dto.descriptionUr ?? null,
       sizes: dto.sizes ?? [],
       styleTags: dto.styleTags ?? [],
-      // A new garment is always a draft. There is no create-and-publish shortcut,
-      // because the A-11 gate needs a test render that cannot exist yet (A-13).
-      publishState: PublishState.DRAFT,
-      publishedAt: null,
+      // Published on arrival — the studio runs a one-step flow (2026-08): the create IS
+      // the publish, and images are attached in the requests that follow immediately.
+      // The A-10/A-11 conditions were already advisory-only for the publish endpoint;
+      // here they cannot even be evaluated yet, so the audit rows below are the record.
+      publishState: PublishState.PUBLISHED,
+      publishedAt,
     });
 
-    const saved = await this.garments.save(garment);
+    // Save and the A-7 counter move together, exactly as `publish()` does it: a crash
+    // between the two would leave the category deletable while it holds a live piece.
+    const saved = await runInTransaction(
+      this.dataSource,
+      async (manager: EntityManager): Promise<Garment> => {
+        const row = await manager.getRepository(Garment).save(garment);
+        await this.categories.applyPublishedGarmentDelta(manager, row.categoryId, 1);
+        return row;
+      },
+      { label: 'garments.create' },
+    );
+
     this.emitAudit(AUDIT_ACTIONS.GARMENT_CREATED, saved, actor, {
       categoryId: saved.categoryId,
       mode: saved.mode,
+    });
+    // A separate publish row, so "when did it go live and by whose hand" stays answerable
+    // the same way it is for pieces published through the endpoint.
+    this.emitAudit(AUDIT_ACTIONS.GARMENT_PUBLISHED, saved, actor, {
+      from: PublishState.DRAFT,
+      to: PublishState.PUBLISHED,
+      createAndPublish: true,
     });
 
     return this.present(saved);

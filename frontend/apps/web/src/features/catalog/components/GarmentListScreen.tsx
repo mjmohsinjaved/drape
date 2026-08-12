@@ -43,7 +43,6 @@ import { BulkRunDialog } from '@/features/catalog/components/BulkRunDialog';
 import {
   PublishStatePill,
   QualityPill,
-  TestRenderStatePill,
 } from '@/features/catalog/components/CatalogPills';
 import { FirstRunGuide } from '@/features/catalog/components/FirstRunGuide';
 import {
@@ -65,7 +64,6 @@ import {
   DEFAULT_QUALITY_MIN_SCORE,
   GARMENT_SORT_PRESETS,
   MAX_BULK_GARMENTS,
-  MAX_BULK_TEST_RENDERS,
   type AdminGarment,
 } from '@/features/catalog/types/admin-catalog';
 import {
@@ -246,12 +244,6 @@ export function GarmentListScreen({
         if (garment) {
           event.preventDefault();
           void publishRow(garment);
-        }
-        break;
-      case 'a':
-        if (garment) {
-          event.preventDefault();
-          router.push(routes.admin.garmentTestRender(locale, garment.id));
         }
         break;
       default:
@@ -523,8 +515,6 @@ export function GarmentListScreen({
         <span>{t('shortcuts.select')}</span>
         <Kbd>p</Kbd>
         <span>{t('shortcuts.publish')}</span>
-        <Kbd>a</Kbd>
-        <span>{t('shortcuts.approve')}</span>
         <Kbd>/</Kbd>
         <span>{t('shortcuts.search')}</span>
       </p>
@@ -545,7 +535,6 @@ export function GarmentListScreen({
               {t('columns.price')}
             </TableHead>
             <TableHead>{t('columns.state')}</TableHead>
-            <TableHead className="hidden sm:table-cell">{t('columns.testRender')}</TableHead>
             <TableHead className="hidden lg:table-cell">{t('columns.quality')}</TableHead>
             <TableHead numeric className="hidden xl:table-cell">
               {t('columns.tryOns')}
@@ -632,10 +621,6 @@ export function GarmentListScreen({
                 <PublishStatePill state={garment.publishState} />
               </TableCell>
 
-              <TableCell className="hidden sm:table-cell">
-                <TestRenderStatePill state={garment.testRenderState} />
-              </TableCell>
-
               <TableCell className="hidden lg:table-cell">
                 <QualityPill
                   score={garment.qualityScore}
@@ -679,7 +664,6 @@ export function GarmentListScreen({
       <BulkActionBar
         selectedCount={selectedIds.length}
         maxForRecords={MAX_BULK_GARMENTS}
-        maxForTestRender={MAX_BULK_TEST_RENDERS}
         busy={bulkOperation !== null}
         onRun={setBulkOperation}
         onClear={() => setSelectedIds([])}

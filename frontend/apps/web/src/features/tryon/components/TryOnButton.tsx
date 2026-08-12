@@ -61,7 +61,7 @@ export function TryOnButton({
   if (!isAuthenticated) {
     return (
       <div className="flex flex-col gap-2">
-        <Button asChild variant="primary" size="lg" fullWidth>
+        <Button asChild variant="primary" fullWidth>
           <Link href={`${routes.login(locale)}?from=${encodeURIComponent(returnTo)}`}>
             {t('signIn')}
           </Link>
@@ -83,7 +83,6 @@ export function TryOnButton({
       <Button
         type="button"
         variant="primary"
-        size="lg"
         fullWidth
         loading={isStarting}
         loadingLabel={t('starting')}

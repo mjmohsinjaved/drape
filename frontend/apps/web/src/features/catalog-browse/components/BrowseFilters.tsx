@@ -16,8 +16,12 @@ import {
   DrawerFooter,
   DrawerHeader,
   DrawerTitle,
+  IconButton,
   Input,
   Label,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
   Spinner,
 } from '@repo/ui';
 
@@ -53,9 +57,10 @@ export interface BrowseFiltersProps {
  * whole read failed, and that is not a small collection, it is an incomplete list. The screen
  * says so above this island rather than letting a partial set pass for the whole (D-7).
  *
- * On a phone the controls live in a drawer behind one 44px trigger; from `md` they sit inline.
- * The applied filters are always visible as removable chips, so nothing is ever filtering
- * silently behind a closed drawer.
+ * The controls live behind one 44px trigger at the end of the toolbar: a drawer on a phone, an
+ * anchored dropdown panel from `md`. The trigger wears the applied count, and the applied
+ * filters are always visible as removable chips, so nothing is ever filtering silently behind
+ * a closed panel.
  */
 export function BrowseFilters({
   locale,
@@ -211,39 +216,39 @@ export function BrowseFilters({
     </div>
   );
 
-  return (
-    <section aria-label={t('filters.heading')} className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-end gap-3">
-        <form onSubmit={submitSearch} className="flex min-w-0 flex-1 items-end gap-2">
-          <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-            <Label htmlFor={searchId}>{t('search.label')}</Label>
-            <Input
-              id={searchId}
-              type="search"
-              inputMode="search"
-              value={searchDraft}
-              placeholder={t('search.placeholder')}
-              onChange={(event) => {
-                setSearchDraft(event.target.value);
-              }}
-            />
-          </div>
-          <Button type="submit" variant="secondary" startIcon={<Search aria-hidden="true" />}>
-            {t('search.submit')}
-          </Button>
-        </form>
+  const triggerLabel =
+    appliedCount > 0 ? t('filters.openWithCount', { count: appliedCount }) : t('filters.open');
 
-        <Button
-          type="button"
-          variant="secondary"
-          className="md:hidden"
-          startIcon={<SlidersHorizontal aria-hidden="true" />}
-          onClick={() => {
-            setDrawerOpen(true);
-          }}
-        >
-          {appliedCount > 0 ? t('filters.openWithCount', { count: appliedCount }) : t('filters.open')}
-        </Button>
+  return (
+    <section aria-label={t('filters.heading')} className="flex flex-col gap-3">
+      {/*
+        One 44px-tall toolbar row: search, sort, and the filter trigger at the reading-end.
+        The labels stay in the markup for assistive tech; visually the row relies on the
+        placeholder and the icons, which is what gives the grid the vertical room back.
+      */}
+      <div className="flex items-center gap-2">
+        <form onSubmit={submitSearch} className="flex min-w-0 flex-1 items-center gap-2">
+          <Label htmlFor={searchId} className="sr-only">
+            {t('search.label')}
+          </Label>
+          <Input
+            id={searchId}
+            type="search"
+            inputMode="search"
+            value={searchDraft}
+            placeholder={t('search.placeholder')}
+            className="min-w-0 flex-1"
+            onChange={(event) => {
+              setSearchDraft(event.target.value);
+            }}
+          />
+          <IconButton
+            type="submit"
+            variant="secondary"
+            label={t('search.submit')}
+            icon={<Search aria-hidden="true" />}
+          />
+        </form>
 
         <SortSelect
           label={t('sort.label')}
@@ -253,6 +258,35 @@ export function BrowseFilters({
             navigate({ sort });
           }}
         />
+
+        {/* Below `md` the same trigger opens the drawer instead of the anchored panel. */}
+        <span className="relative md:hidden">
+          <IconButton
+            variant="secondary"
+            label={triggerLabel}
+            icon={<SlidersHorizontal aria-hidden="true" />}
+            onClick={() => {
+              setDrawerOpen(true);
+            }}
+          />
+          <AppliedCountBadge count={appliedCount} />
+        </span>
+
+        <Popover>
+          <span className="relative hidden md:inline-flex">
+            <PopoverTrigger asChild>
+              <IconButton
+                variant="secondary"
+                label={triggerLabel}
+                icon={<SlidersHorizontal aria-hidden="true" />}
+              />
+            </PopoverTrigger>
+            <AppliedCountBadge count={appliedCount} />
+          </span>
+          <PopoverContent align="end" className="panel-scroll w-96">
+            {controls}
+          </PopoverContent>
+        </Popover>
       </div>
 
       <div className="flex flex-wrap items-center gap-2" aria-live="polite">
@@ -276,8 +310,6 @@ export function BrowseFilters({
           </Button>
         ) : null}
       </div>
-
-      <div className="hidden md:block">{controls}</div>
 
       <Drawer open={drawerOpen} onOpenChange={setDrawerOpen}>
         <DrawerContent>
@@ -305,6 +337,24 @@ export function BrowseFilters({
         </DrawerContent>
       </Drawer>
     </section>
+  );
+}
+
+/**
+ * The count worn by the filter trigger. Decorative on purpose: the trigger's accessible name
+ * already carries the count (`filters.openWithCount`), so the dot is hidden from assistive tech
+ * rather than read out twice.
+ */
+function AppliedCountBadge({ count }: { count: number }) {
+  if (count === 0) return null;
+
+  return (
+    <span
+      aria-hidden="true"
+      className="pointer-events-none absolute -top-1 -end-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-brand px-1 text-xs font-semibold text-brand-fg"
+    >
+      {count}
+    </span>
   );
 }
 
@@ -425,8 +475,10 @@ function SortSelect({
   const id = useId();
 
   return (
-    <div className="flex flex-col gap-1.5">
-      <Label htmlFor={id}>{label}</Label>
+    <div className="flex items-center">
+      <Label htmlFor={id} className="sr-only">
+        {label}
+      </Label>
       {/*
         A native select rather than the Radix one: it is a plain, four-option preference, and the
         platform picker is faster on a phone and free of any extra JavaScript.
@@ -437,7 +489,7 @@ function SortSelect({
         onChange={(event) => {
           onChange(event.target.value as CatalogSort);
         }}
-        className="min-h-11 rounded-md border border-line-strong bg-surface px-3 text-sm text-ink focus-visible:outline-none focus-visible:shadow-[var(--shadow-focus)]"
+        className="h-11 rounded-md border border-line-strong bg-surface px-3 text-sm text-ink focus-visible:outline-none focus-visible:shadow-[var(--shadow-focus)]"
       >
         {CATALOG_SORTS.map((sort) => (
           <option key={sort} value={sort}>

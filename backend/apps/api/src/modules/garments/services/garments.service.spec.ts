@@ -461,7 +461,8 @@ describe('GarmentsService', () => {
 
       expect(created.mode).toBe(GarmentMode.RENTAL);
       expect(created.deposit).toBe(45_000);
-      expect(created.publishState).toBe(PublishState.DRAFT);
+      // Create IS the publish since the one-step flow (2026-08).
+      expect(created.publishState).toBe(PublishState.PUBLISHED);
 
       await harness.close();
     });

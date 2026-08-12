@@ -92,7 +92,7 @@ export async function GarmentDetailScreen({
   }));
 
   return (
-    <div className="flex flex-col gap-8 md:gap-12">
+    <div className="flex flex-col gap-6 md:gap-8">
       <Link
         href={routes.browse(locale)}
         className="inline-flex min-h-11 w-fit items-center gap-2 text-sm text-ink-muted hover:text-ink focus-visible:outline-none focus-visible:shadow-[var(--shadow-focus)]"
@@ -103,7 +103,16 @@ export async function GarmentDetailScreen({
         {t('detail.backToBrowse')}
       </Link>
 
-      <div className="grid gap-8 lg:grid-cols-2 lg:gap-12">
+      {/*
+        Her photographs, at the start of the screen and above the piece they will be tried
+        against. The panels it opens are anchored here and never navigate — the garment stays
+        visible while she browses or adds a photo.
+      */}
+      {isAuthenticated ? (
+        <TryOnPhotoPicker locale={locale} returnTo={routes.garment(locale, garment.slug)} />
+      ) : null}
+
+      <div className="grid gap-6 lg:grid-cols-2 lg:gap-8">
         {gallery.length === 0 ? (
           <div className="flex aspect-card w-full items-center justify-center rounded-xl bg-surface-sunken px-4 text-center text-sm text-ink-subtle">
             {t('card.noImage')}
@@ -116,26 +125,17 @@ export async function GarmentDetailScreen({
           />
         )}
 
-        <div className="flex flex-col gap-6">
-          <header className="flex flex-col gap-3">
-            <h1 className="font-display text-3xl text-balance md:text-4xl">{title}</h1>
+        <div className="flex flex-col gap-4">
+          <header className="flex flex-col gap-2">
+            <h1 className="font-display text-2xl text-balance md:text-3xl">{title}</h1>
 
             <div className="flex flex-wrap items-center gap-3">
-              <p className="text-xl font-medium">{price ?? t('detail.priceOnRequest')}</p>
+              <p className="text-lg font-medium">{price ?? t('detail.priceOnRequest')}</p>
               <Badge variant={garment.mode === 'RENTAL' ? 'gold' : 'neutral'}>
                 {t(`modes.${garment.mode}`)}
               </Badge>
             </div>
           </header>
-
-          {/*
-            Which photograph this will use, immediately above the button that uses it. Signed-in
-            only: there is nothing to show a visitor with no account, and the button below is
-            already a sign-in invitation for her.
-          */}
-          {isAuthenticated ? (
-            <TryOnPhotoPicker locale={locale} returnTo={routes.garment(locale, garment.slug)} />
-          ) : null}
 
           {/* The one primary action on this screen (§6.2). */}
           <TryOnButton

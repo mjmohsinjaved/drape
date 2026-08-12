@@ -113,7 +113,10 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = [
   {
     key: SETTINGS_KEYS.QUOTA_REQUIRE_EMAIL_VERIFICATION,
     valueType: SettingsValueType.BOOLEAN,
-    defaultValue: true,
+    // Off by default since 2026-08: the studio does not want verification standing
+    // between sign-up and the first try-on. An admin can turn it back on via
+    // PATCH /settings without a deploy.
+    defaultValue: false,
     description: 'Require a verified email address before the first generation.',
     isPublic: false,
     requirement: 'A-28, C-3',
