@@ -63,8 +63,12 @@ export type Namespace = (typeof namespaces)[number];
 export const CLIENT_NAMESPACES = {
   /** Header, footer, locale switcher, theme toggle, and the six D-5 state shells. */
   base: ['common', 'errors'],
-  /** + the filter island and the try-on tray/button that sit on the public grid. */
-  public: ['common', 'errors', 'browse', 'tryon'],
+  /**
+   * + the filter island and the try-on tray/button that sit on the public grid, and `photos`
+   * for the picker's in-page add-a-photo panel on the garment page (`TryOnPhotoPicker` hosts
+   * `PhotoGuidance` + `PhotoUploader` in a sheet, so the C-13/C-15 flow no longer navigates).
+   */
+  public: ['common', 'errors', 'browse', 'photos', 'tryon'],
   /** + the consumer fitting room's islands. Deliberately no `admin`. */
   consumer: ['common', 'errors', 'consent', 'photos', 'renders', 'shortlist', 'tryon'],
   /** + the sign-in forms, which share field copy with the account screens. */

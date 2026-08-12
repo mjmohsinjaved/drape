@@ -30,18 +30,16 @@ export interface FirstRunGuideProps {
   publishedCount: number;
 }
 
-/** The five things that stand between an empty catalog and a live piece, in order. */
-const STEP_IDS = ['category', 'garment', 'photo', 'testRender', 'publish'] as const;
+/**
+ * The two things that stand between an empty catalog and a live piece. The one-step flow
+ * (2026-08) folded photographs, test render and publish into "add a piece": the create form
+ * takes the photographs and the save is the publish.
+ */
+const STEP_IDS = ['category', 'garment'] as const;
 type StepId = (typeof STEP_IDS)[number];
 
-function currentStep(hasCategory: boolean, draft: AdminGarment | null): StepId {
-  if (!hasCategory) return 'category';
-  if (draft === null) return 'garment';
-  // The A-10 validator only ever runs against a try-on source, so a null score means there
-  // isn't one yet — and without one the publish gate answers `TRYON_SOURCE_REQUIRED` (A-9).
-  if (draft.qualityScore === null) return 'photo';
-  if (draft.testRenderState !== 'APPROVED') return 'testRender';
-  return 'publish';
+function currentStep(hasCategory: boolean): StepId {
+  return hasCategory ? 'garment' : 'category';
 }
 
 /**
@@ -54,12 +52,12 @@ function currentStep(hasCategory: boolean, draft: AdminGarment | null): StepId {
  *
  * It disappears the moment something is published, without being dismissed — the run is over.
  */
-export function FirstRunGuide({ locale, hasCategory, draft, publishedCount }: FirstRunGuideProps) {
+export function FirstRunGuide({ locale, hasCategory, publishedCount }: FirstRunGuideProps) {
   const t = useTranslations('admin.catalog.firstRun');
 
   if (publishedCount > 0) return null;
 
-  const active = currentStep(hasCategory, draft);
+  const active = currentStep(hasCategory);
   const activeIndex = STEP_IDS.indexOf(active);
 
   const steps: StepperStep[] = STEP_IDS.map((id) => ({
@@ -68,21 +66,8 @@ export function FirstRunGuide({ locale, hasCategory, draft, publishedCount }: Fi
     description: t(`steps.${id}.description`),
   }));
 
-  const href = ((): string => {
-    switch (active) {
-      case 'category':
-        return routes.admin.categories(locale);
-      case 'garment':
-        return routes.admin.catalogNew(locale);
-      case 'testRender':
-        return draft
-          ? routes.admin.garmentTestRender(locale, draft.id)
-          : routes.admin.catalog(locale);
-      case 'photo':
-      case 'publish':
-        return draft ? routes.admin.garment(locale, draft.id) : routes.admin.catalogNew(locale);
-    }
-  })();
+  const href =
+    active === 'category' ? routes.admin.categories(locale) : routes.admin.catalogNew(locale);
 
   return (
     <Card variant="admin" className="border-brand/30 bg-brand-tint">

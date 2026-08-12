@@ -83,3 +83,12 @@
 @utility h-below-topbar {
   block-size: calc(100dvh - var(--topbar-height-admin));
 }
+
+/*
+ * An anchored panel (the browse filter dropdown, the try-on photo panel) never outgrows the
+ * viewport: Radix reports the room left beside the trigger, and the panel scrolls inside it.
+ */
+@utility panel-scroll {
+  max-block-size: var(--radix-popover-content-available-height);
+  overflow-y: auto;
+}

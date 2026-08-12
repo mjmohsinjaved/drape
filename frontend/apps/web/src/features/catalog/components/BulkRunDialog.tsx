@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 
-import { AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
+import { CheckCircle2, XCircle } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import {
@@ -19,7 +19,6 @@ import {
   FormField,
   FormHint,
   FormLabel,
-  ProgressBar,
   ScrollArea,
   Select,
   SelectContent,
@@ -29,18 +28,12 @@ import {
   Spinner,
   StatusPill,
 } from '@repo/ui';
-import { formatCurrency } from '@repo/utils';
 
 import { useCatalogErrorCopy } from '@/features/catalog/hooks/use-catalog-error';
 import { useBulkGarments } from '@/features/catalog/hooks/use-garments';
-import {
-  useQueueBulkTestRender,
-  useTestRenderBatch,
-  useTestRenderEstimate,
-} from '@/features/catalog/hooks/use-test-render';
 
 import type { BulkOperation } from '@/features/catalog/components/BulkActionBar';
-import type { AdminGarment, TestRenderEstimate } from '@/features/catalog/types/admin-catalog';
+import type { AdminGarment } from '@/features/catalog/types/admin-catalog';
 import type { AdminCategory } from '@/features/categories/types/admin-categories';
 import type { Uuid } from '@repo/api-client';
 
@@ -65,16 +58,15 @@ interface ReportRow {
  * A-12 and D-16, in one dialog with three phases.
  *
  * **Confirm.** It names what is about to be affected — the count and the first few titles, not
- * "3 items" (D-17). A test render additionally fetches its cost estimate *before* the run button
- * is live, because A-12 requires the cost to be shown and confirmed before anything is spent,
- * and because this is the only place the remaining budget appears in the flow (A-29).
+ * "3 items" (D-17).
  *
- * **Running.** A record bulk is one call. A test-render batch is queued and processed at
- * concurrency one, so this polls the batch and reports item by item.
+ * **Running.** A record bulk is one call, so this phase is a spinner rather than a bar.
  *
  * **Report.** Successes counted, failures named one by one with their own reason. Never one
  * opaque result: forty pieces where three failed is neither a success nor a failure, and D-16
  * wants the three named.
+ *
+ * The test-render batch phase left with the test-render workflow (2026-08).
  */
 export function BulkRunDialog({
   operation,
@@ -95,47 +87,15 @@ export function BulkRunDialog({
   const [phase, setPhase] = useState<Phase>('confirm');
   const [destinationId, setDestinationId] = useState<Uuid | ''>('');
   const [reportRows, setReportRows] = useState<ReportRow[]>([]);
-  const [batchId, setBatchId] = useState<Uuid | null>(null);
   const [failureMessage, setFailureMessage] = useState<string | null>(null);
 
   const bulkRecords = useBulkGarments();
-  const estimate = useTestRenderEstimate();
-  const queueBatch = useQueueBulkTestRender();
-  const batch = useTestRenderBatch(batchId);
-
-  const isTestRender = operation === 'TEST_RENDER';
-  const { mutate: runEstimate } = estimate;
-
-  // The estimate is read-only and spends nothing, so it runs as the dialog opens.
-  useEffect(() => {
-    if (isTestRender) runEstimate(garmentIds);
-  }, [garmentIds, isTestRender, runEstimate]);
-
-  // A queued batch finishes asynchronously; the report is drawn from its final item list.
-  const batchData = batch.data;
-  useEffect(() => {
-    if (phase !== 'running' || !batchData || batchData.pending > 0) return;
-    setReportRows(
-      batchData.items.map((item) => ({
-        id: item.garmentId,
-        ok: item.status === 'SUCCEEDED',
-        code: item.errorCode,
-      })),
-    );
-    setPhase('report');
-  }, [batchData, phase]);
 
   const handleRun = async (): Promise<void> => {
     setFailureMessage(null);
     setPhase('running');
 
     try {
-      if (isTestRender) {
-        const queued = await queueBatch.mutateAsync({ garmentIds });
-        setBatchId(queued.batchId);
-        return;
-      }
-
       const result = await bulkRecords.mutateAsync({
         action: operation,
         garmentIds,
@@ -157,8 +117,7 @@ export function BulkRunDialog({
     }
   };
 
-  const canRun =
-    operation === 'RECATEGORISE' ? destinationId !== '' : isTestRender ? estimate.isSuccess : true;
+  const canRun = operation === 'RECATEGORISE' ? destinationId !== '' : true;
 
   const namedTitles = garments.slice(0, 3).map((garment) => garment.title);
   const remaining = garments.length - namedTitles.length;
@@ -210,17 +169,6 @@ export function BulkRunDialog({
                 </FormField>
               ) : null}
 
-              {isTestRender ? (
-                <EstimatePanel
-                  // `isPending` on a mutation is false until it is fired, so the panel keys off
-                  // "no answer yet" instead — otherwise it renders nothing for the frame between
-                  // the dialog opening and the effect below firing the estimate.
-                  loading={!estimate.isSuccess && !estimate.isError}
-                  errorMessage={estimate.isError ? errorCopy.message(estimate.error) : null}
-                  estimate={estimate.data ?? null}
-                />
-              ) : null}
-
               {failureMessage !== null ? (
                 <Callout tone="danger" title={t('runFailedTitle')}>
                   {failureMessage}
@@ -230,11 +178,14 @@ export function BulkRunDialog({
           ) : null}
 
           {phase === 'running' ? (
-            <RunningPanel
-              total={batchData?.total ?? null}
-              done={batchData ? batchData.succeeded + batchData.failed : null}
-              failed={batchData?.failed ?? 0}
-            />
+            <p
+              className="flex items-center gap-2 text-sm text-ink-muted"
+              role="status"
+              aria-live="polite"
+            >
+              <Spinner size="sm" label={null} />
+              {t('working')}
+            </p>
           ) : null}
 
           {phase === 'report' ? <ReportPanel rows={reportRows} titleById={titleById} /> : null}
@@ -270,94 +221,6 @@ export function BulkRunDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
-}
-
-interface EstimatePanelProps {
-  loading: boolean;
-  errorMessage: string | null;
-  estimate: TestRenderEstimate | null;
-}
-
-/** A-12 / A-29 — what the run will spend, and what is left, before it is allowed to start. */
-function EstimatePanel({ loading, errorMessage, estimate }: EstimatePanelProps) {
-  const t = useTranslations('admin.catalog.bulk.estimate');
-
-  if (loading) {
-    return (
-      <p className="flex items-center gap-2 text-sm text-ink-muted">
-        <Spinner size="sm" label={null} />
-        {t('loading')}
-      </p>
-    );
-  }
-
-  if (errorMessage !== null) {
-    return (
-      <Callout tone="danger" title={t('failedTitle')}>
-        {errorMessage}
-      </Callout>
-    );
-  }
-
-  if (!estimate) return null;
-
-  return (
-    <Callout
-      tone={estimate.withinBudget ? 'info' : 'warning'}
-      title={t('title', { generations: estimate.generations })}
-      icon={
-        estimate.withinBudget ? undefined : <AlertTriangle aria-hidden="true" className="size-4" />
-      }
-    >
-      <ul className="flex flex-col gap-1 text-sm">
-        <li>{t('selected', { count: estimate.selected })}</li>
-        <li>{t('alreadyApproved', { count: estimate.alreadyApproved })}</li>
-        {/* A budget figure the admin is about to spend against — `exact`, never rounded. */}
-        <li>
-          {t('budgetRemaining', {
-            amount: formatCurrency(estimate.budgetRemaining, { precision: 'exact' }),
-          })}
-        </li>
-        {!estimate.withinBudget ? <li className="font-medium">{t('overBudget')}</li> : null}
-      </ul>
-    </Callout>
-  );
-}
-
-interface RunningPanelProps {
-  total: number | null;
-  done: number | null;
-  failed: number;
-}
-
-function RunningPanel({ total, done, failed }: RunningPanelProps) {
-  const t = useTranslations('admin.catalog.bulk');
-
-  if (total === null || done === null) {
-    return (
-      <p
-        className="flex items-center gap-2 text-sm text-ink-muted"
-        role="status"
-        aria-live="polite"
-      >
-        <Spinner size="sm" label={null} />
-        {t('working')}
-      </p>
-    );
-  }
-
-  return (
-    <div className="flex flex-col gap-3">
-      <ProgressBar
-        value={total === 0 ? 0 : Math.round((done / total) * 100)}
-        label={t('progressLabel')}
-        showLabel
-      />
-      <p className="text-sm text-ink-muted" role="status" aria-live="polite">
-        {t('progressCounts', { done, total, failed })}
-      </p>
-    </div>
   );
 }
 

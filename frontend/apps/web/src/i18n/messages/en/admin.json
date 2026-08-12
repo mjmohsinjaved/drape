@@ -475,9 +475,9 @@
     },
     "new": {
       "title": "Add a piece",
-      "description": "Details first, photographs next.",
+      "description": "Details and photographs together. The piece goes live the moment you save.",
       "cancel": "Cancel",
-      "save": "Save and add photographs",
+      "save": "Publish this piece",
       "photosNextTitle": "Photographs come next",
       "photosNextBody": "Save the details and the piece opens ready for its photographs. Uploads are filed against a piece, so it has to exist first.",
       "noCategories": {
@@ -486,9 +486,11 @@
         "action": "Add a category"
       },
       "toast": {
-        "created": "Added {title}",
-        "createdHint": "Add its photographs next."
-      }
+        "created": "Published {title}",
+        "createdHint": "It is live in the collection.",
+        "imagesFailed": "{count, plural, one {1 photograph} other {# photographs}} did not upload — retry from the gallery below."
+      },
+      "photosOnCreate": "Chosen photographs upload when you save. The first one is the try-on source."
     },
     "testRender": {
       "metaTitle": "Test render",

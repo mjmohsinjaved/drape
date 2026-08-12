@@ -85,17 +85,25 @@ describe('TryOnPhotoPicker', () => {
     await waitFor(() => {
       expect(activatePhoto).toHaveBeenCalledWith('p2');
     });
+
+    // The panel stays open after a selection: flipping between photographs and watching the
+    // "in use" mark move is the point of an anchored panel over a closing dialog.
+    expect(screen.getByText('Indoors')).toBeDefined();
   });
 
   it('offers to add one when she has no photograph, rather than waiting for the button to fail', async () => {
+    const user = userEvent.setup();
     listPhotos.mockResolvedValue([]);
 
     await renderPicker();
 
-    const add = await screen.findByRole('link', { name: /add a photo/i });
-    expect(add.getAttribute('href')).toContain('/en/photos/new');
-    // Carries her back to the piece she was looking at, rather than dumping her on the grid.
-    expect(add.getAttribute('href')).toContain(encodeURIComponent('/en/garments/a-lehenga'));
+    // Adding is a panel on this same screen now, not a navigation: the garment stays visible
+    // and there is no route to carry her back from.
+    const add = await screen.findByRole('button', { name: /add a photo/i });
+    await user.click(add);
+
+    // The C-13 flow, hosted in a labelled panel — the same title `/photos/new` carries.
+    expect(await screen.findByRole('dialog', { name: /add a photo/i })).toBeDefined();
   });
 
   it('treats a blocked photograph as no photograph, and never says why', async () => {
@@ -106,7 +114,7 @@ describe('TryOnPhotoPicker', () => {
     // The empty state, because a blocked photo cannot be generated from. The copy is the neutral
     // "no photo yet" — disclosing the moderation outcome here would disclose it to whoever is
     // looking over her shoulder.
-    expect(await screen.findByRole('link', { name: /add a photo/i })).toBeDefined();
+    expect(await screen.findByRole('button', { name: /add a photo/i })).toBeDefined();
     expect(screen.queryByText(/blocked|rejected|moderation/i)).toBeNull();
   });
 

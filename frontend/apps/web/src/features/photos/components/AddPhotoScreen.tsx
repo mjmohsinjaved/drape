@@ -2,12 +2,11 @@ import Link from 'next/link';
 
 import { getTranslations } from 'next-intl/server';
 
-import { Button, Separator } from '@repo/ui';
+import { Button } from '@repo/ui';
 
 import { DeniedState, ScreenError, SignedOutState } from '@/components/states';
 import { DeleteMyDataLink } from '@/features/consent/components/DeleteMyDataLink';
 import { listPhotosServer } from '@/features/photos/api/server';
-import { PhotoGuidance } from '@/features/photos/components/PhotoGuidance';
 import { PhotoUploader } from '@/features/photos/components/PhotoUploader';
 import {
   isAuthenticationRequired,
@@ -24,12 +23,11 @@ export interface AddPhotoScreenProps {
 }
 
 /**
- * Add a photo — C-13, C-14, C-15.
+ * Add a photo — C-14, C-15.
  *
- * **The guidance comes first and the picker second**, which is the requirement rather than a
- * layout preference: C-13 says "guidance *before* the picker", and §10.3 asks for it to be clear
- * enough that a first attempt usually passes. Putting the button above the six drawings would
- * technically satisfy neither.
+ * A plain picker: the C-13 guidance drawings were removed at the studio's request (2026-08) —
+ * the C-14 validation report still tells her exactly what failed and how to fix it, which is
+ * where the same instructions now surface.
  *
  * The list read below answers one question — is this her first photo? — which decides whether
  * the new one silently becomes active, and whether she is already at the C-16 limit. Both are
@@ -81,10 +79,6 @@ export async function AddPhotoScreen({ locale, returnTo }: AddPhotoScreenProps) 
         <h1 className="font-display text-3xl text-balance md:text-4xl">{t('meta.newTitle')}</h1>
         <p className="max-w-prose text-ink-muted">{t('meta.newDescription')}</p>
       </header>
-
-      <PhotoGuidance />
-
-      <Separator />
 
       <PhotoUploader locale={locale} isFirstPhoto={isFirstPhoto} returnTo={returnTo} />
 

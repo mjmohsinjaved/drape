@@ -80,7 +80,7 @@ export async function BrowseScreen({
   const resultCount = meta?.total ?? items.length;
 
   return (
-    <div className="flex flex-col gap-8 md:gap-12">
+    <div className="flex flex-col gap-6 md:gap-8">
       <header className="flex flex-col gap-2">
         <h1 className="font-display text-3xl text-balance md:text-4xl">
           {title ?? t('heading.title')}

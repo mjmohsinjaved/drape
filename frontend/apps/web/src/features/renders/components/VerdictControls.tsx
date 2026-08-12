@@ -5,7 +5,7 @@ import { useCallback, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
-import { Heart, HelpCircle, X } from 'lucide-react';
+import { Heart, HelpCircle } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { Button, Callout } from '@repo/ui';
@@ -15,7 +15,7 @@ import { useErrorMessage } from '@/features/tryon/hooks/use-error-message';
 import { resolveErrorCode } from '@/features/tryon/lib/error-copy';
 import { routes } from '@/lib/routes';
 
-import type { RejectReason, Verdict } from '@/features/renders/api/types';
+import type { Verdict } from '@/features/renders/api/types';
 import type { Locale } from '@/i18n/config';
 
 export interface VerdictControlsProps {
@@ -27,24 +27,13 @@ export interface VerdictControlsProps {
   current: Verdict | undefined;
 }
 
-const REASONS: readonly RejectReason[] = [
-  'NECKLINE',
-  'COLOR',
-  'TOO_HEAVY',
-  'SILHOUETTE',
-  'PRICE',
-];
-
 /**
- * Love it / Maybe / Not for me — C-20, and the one-tap reason of C-21.
+ * Love it / Maybe — C-20.
  *
- * Three equally weighted controls. None is styled as the expected answer: a shortlisting tool
- * that nudges toward "Love it" produces a shortlist she does not believe, and the rejection data
- * is what the studio actually learns from (A-38).
- *
- * The reason prompt appears **after** the verdict is already saved, never as a condition of it —
- * C-21 says "optionally captures", so Not for me is one tap and the reason is a second,
- * skippable one. Skipping is a visible control, not a dismissal she has to guess at.
+ * Two equally weighted controls; neither is styled as the expected answer. "Not for me" and its
+ * C-21 reason prompt were removed at the studio's request (2026-08) — walking away without
+ * voting is the rejection now, and the API still accepts the old verdict for anything recorded
+ * before the change.
  */
 export function VerdictControls({
   locale,
@@ -58,20 +47,18 @@ export function VerdictControls({
 
   const [verdict, setVerdict] = useState<Verdict | undefined>(current);
   const [pending, setPending] = useState<Verdict | null>(null);
-  const [askReason, setAskReason] = useState(false);
   const [errorCode, setErrorCode] = useState<string | null>(null);
 
   const save = useCallback(
-    (next: Verdict, rejectReason?: RejectReason): void => {
+    (next: Verdict): void => {
       if (garmentId === null) return;
 
       setPending(next);
       setErrorCode(null);
 
-      void recordVerdict({ garmentId, verdict: next, rejectReason, resultId })
+      void recordVerdict({ garmentId, verdict: next, resultId })
         .then(() => {
           setVerdict(next);
-          setAskReason(next === 'NOT_FOR_ME' && rejectReason === undefined);
           // The shortlist and the history badge both change; the server components above are
           // what render them, so the segment is refreshed rather than patched by hand.
           router.refresh();
@@ -91,7 +78,6 @@ export function VerdictControls({
   const options: Array<{ value: Verdict; icon: React.ReactNode }> = [
     { value: 'LOVE_IT', icon: <Heart aria-hidden="true" /> },
     { value: 'MAYBE', icon: <HelpCircle aria-hidden="true" /> },
-    { value: 'NOT_FOR_ME', icon: <X aria-hidden="true" /> },
   ];
 
   return (
@@ -101,7 +87,7 @@ export function VerdictControls({
         <p className="text-sm text-ink-muted">{t('hint')}</p>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {options.map((option) => (
           <Button
             key={option.value}
@@ -126,37 +112,6 @@ export function VerdictControls({
         <p role="status" aria-live="polite" className="text-sm text-ink-muted">
           {verdict === 'NOT_FOR_ME' ? t('savedRejected') : t('saved')}
         </p>
-      ) : null}
-
-      {askReason ? (
-        <fieldset className="flex flex-col gap-3 rounded-lg bg-surface-sunken p-4">
-          <legend className="pb-2 text-sm font-medium text-pretty">{t('reasonHeading')}</legend>
-          <div className="flex flex-wrap gap-2">
-            {REASONS.map((reason) => (
-              <Button
-                key={reason}
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={() => {
-                  save('NOT_FOR_ME', reason);
-                }}
-              >
-                {t(`reasons.${reason}`)}
-              </Button>
-            ))}
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setAskReason(false);
-              }}
-            >
-              {t('reasonSkip')}
-            </Button>
-          </div>
-        </fieldset>
       ) : null}
 
       {errorCode !== null ? <Callout tone="warning">{messageFor(errorCode)}</Callout> : null}

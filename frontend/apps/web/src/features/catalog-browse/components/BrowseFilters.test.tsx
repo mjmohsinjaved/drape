@@ -20,6 +20,15 @@ import type { BrowseFilters as Filters } from '@/features/catalog-browse/lib/fil
  */
 
 const routerSpy = createRouterSpy();
+async function openFilterPanel(
+  user: ReturnType<typeof userEvent.setup>,
+  name = /filters/i,
+): Promise<void> {
+  const triggers = screen.getAllByRole('button', { name });
+  const panelTrigger = triggers[triggers.length - 1];
+  if (!panelTrigger) throw new Error('no filter trigger rendered');
+  await user.click(panelTrigger);
+}
 
 vi.mock('next/navigation', () => ({
   useRouter: () => routerSpy.router,
@@ -77,6 +86,7 @@ describe('C-17 — the controls follow the URL', () => {
   });
 
   it('empties the price band when the applied band is cleared from the URL', async () => {
+    const user = userEvent.setup();
     const { BrowseFilters } = await import(
       '@/features/catalog-browse/components/BrowseFilters'
     );
@@ -90,6 +100,8 @@ describe('C-17 — the controls follow the URL', () => {
       />,
       { group: 'public' },
     );
+
+    await openFilterPanel(user);
 
     const lowest = screen.getByLabelText('Lowest price') as HTMLInputElement;
     const highest = screen.getByLabelText('Highest price') as HTMLInputElement;
@@ -132,18 +144,22 @@ describe('C-17 — the controls follow the URL', () => {
   });
 
   it('isolates each price so an Urdu reader is not shown the maximum first', async () => {
+    const user = userEvent.setup();
     const { BrowseFilters } = await import(
       '@/features/catalog-browse/components/BrowseFilters'
     );
 
-    const { container } = await renderWithProviders(
+    await renderWithProviders(
       <BrowseFilters locale="ur" filters={filters()} facets={FACETS} resultCount={40} />,
       { locale: 'ur', group: 'public' },
     );
 
+    await openFilterPanel(user, /چھانٹیں/);
+
     // `<bdi>` is what keeps a left-to-right amount left-to-right inside right-to-left prose.
     // Concatenated in source order without it, the bidi algorithm swaps the two amounts.
-    const isolated = [...container.querySelectorAll('bdi')].map((node) => node.textContent);
+    // The panel renders in a portal, so the query runs over the document, not the container.
+    const isolated = [...document.querySelectorAll('bdi')].map((node) => node.textContent);
     expect(isolated.length).toBe(2);
     expect(isolated[0]).toContain('12,000');
     expect(isolated[1]).toContain('185,000');

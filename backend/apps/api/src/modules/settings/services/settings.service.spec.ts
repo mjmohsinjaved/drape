@@ -83,9 +83,10 @@ describe('SettingsService', () => {
       const { service, harness } = await build();
 
       await expect(service.getNumber(SETTINGS_KEYS.QUOTA_DEFAULT_MONTHLY)).resolves.toBe(15);
+      // Off by default since 2026-08 — verification no longer stands before the first try-on.
       await expect(
         service.getBoolean(SETTINGS_KEYS.QUOTA_REQUIRE_EMAIL_VERIFICATION),
-      ).resolves.toBe(true);
+      ).resolves.toBe(false);
 
       await harness.close();
     });

@@ -89,8 +89,6 @@ export const routes = {
     catalogHealth: (locale: Locale): string => `${root(locale)}/admin/catalog/health`,
     garment: (locale: Locale, garmentId: string): string =>
       `${root(locale)}/admin/catalog/${garmentId}`,
-    garmentTestRender: (locale: Locale, garmentId: string): string =>
-      `${root(locale)}/admin/catalog/${garmentId}/test-render`,
     consumers: (locale: Locale): string => `${root(locale)}/admin/consumers`,
     consumer: (locale: Locale, userId: string): string => `${root(locale)}/admin/consumers/${userId}`,
     enquiries: (locale: Locale): string => `${root(locale)}/admin/enquiries`,

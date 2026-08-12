@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 
-import { CameraOff, Clock, ImageOff, TriangleAlert } from 'lucide-react';
+import { CameraOff, Clock, TriangleAlert } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import {
@@ -32,7 +32,6 @@ import {
 import {
   PublishStatePill,
   QualityPill,
-  TestRenderStatePill,
 } from '@/features/catalog/components/CatalogPills';
 import {
   isPermissionDenied,
@@ -111,8 +110,9 @@ export function CatalogHealthScreen({ locale }: CatalogHealthScreenProps) {
   }
 
   const health = query.data;
+  // `missingTestRender` still arrives from the API but is no longer a problem the console
+  // reports — the test-render workflow left with the one-step publish flow (2026-08).
   const totalProblems =
-    health.missingTestRender.total +
     health.lowQualityScore.total +
     health.elevatedFailureRate.total +
     health.zeroTryOnsIn30Days.total;
@@ -136,13 +136,7 @@ export function CatalogHealthScreen({ locale }: CatalogHealthScreenProps) {
         </Callout>
       ) : null}
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Stat
-          label={t('groups.missingTestRender.title')}
-          value={health.missingTestRender.total}
-          hint={t('groups.missingTestRender.hint')}
-          icon={<ImageOff aria-hidden="true" />}
-        />
+      <div className="grid gap-3 sm:grid-cols-3">
         <Stat
           label={t('groups.lowQualityScore.title')}
           value={health.lowQualityScore.total}
@@ -181,14 +175,6 @@ export function CatalogHealthScreen({ locale }: CatalogHealthScreenProps) {
         <>
           <HealthGroup
             locale={locale}
-            title={t('groups.missingTestRender.title')}
-            description={t('groups.missingTestRender.description')}
-            group={health.missingTestRender}
-            emptyLabel={t('groups.empty')}
-            fixLabelKey="testRender"
-          />
-          <HealthGroup
-            locale={locale}
             title={t('groups.lowQualityScore.title')}
             description={t('groups.lowQualityScore.description', {
               minScore: DEFAULT_QUALITY_MIN_SCORE,
@@ -225,7 +211,7 @@ interface HealthGroupProps {
   description: string;
   group: CatalogHealthGroup;
   emptyLabel: string;
-  fixLabelKey: 'testRender' | 'photo' | 'review';
+  fixLabelKey: 'photo' | 'review';
 }
 
 /** One problem, one table, every row a link to the screen that fixes it. */
@@ -247,10 +233,7 @@ function HealthGroup({
     );
   }
 
-  const fixHref = (garment: AdminGarment): string =>
-    fixLabelKey === 'testRender'
-      ? routes.admin.garmentTestRender(locale, garment.id)
-      : routes.admin.garment(locale, garment.id);
+  const fixHref = (garment: AdminGarment): string => routes.admin.garment(locale, garment.id);
 
   return (
     <AdminSection title={title} description={description}>
@@ -260,7 +243,6 @@ function HealthGroup({
             <TableHead>{t('columns.piece')}</TableHead>
             <TableHead className="hidden md:table-cell">{t('columns.category')}</TableHead>
             <TableHead>{t('columns.state')}</TableHead>
-            <TableHead className="hidden sm:table-cell">{t('columns.testRender')}</TableHead>
             <TableHead className="hidden lg:table-cell">{t('columns.quality')}</TableHead>
             <TableHead numeric className="hidden lg:table-cell">
               {t('columns.failures')}
@@ -285,9 +267,6 @@ function HealthGroup({
               </TableCell>
               <TableCell>
                 <PublishStatePill state={garment.publishState} />
-              </TableCell>
-              <TableCell className="hidden sm:table-cell">
-                <TestRenderStatePill state={garment.testRenderState} />
               </TableCell>
               <TableCell className="hidden lg:table-cell">
                 <QualityPill

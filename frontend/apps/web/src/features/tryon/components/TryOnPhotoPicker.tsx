@@ -2,10 +2,8 @@
 
 import { useState } from 'react';
 
-import Link from 'next/link';
-
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Camera, Check } from 'lucide-react';
+import { Check, ImagePlus, Images } from 'lucide-react';
 import { useFormatter, useTranslations } from 'next-intl';
 
 import { queryKeys, STALE_TIMES } from '@repo/api-client';
@@ -13,36 +11,39 @@ import {
   Badge,
   Button,
   Callout,
-  Dialog,
-  DialogBody,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
+  IconButton,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  Sheet,
+  SheetBody,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
   Skeleton,
+  Toolbar,
+  ToolbarButton,
 } from '@repo/ui';
 
 import { activatePhoto, listPhotos } from '@/features/photos/api/endpoints';
-import { routes } from '@/lib/routes';
+import { PhotoUploader } from '@/features/photos/components/PhotoUploader';
 
 import type { PersonPhoto } from '@/features/photos/api/types';
 import type { Locale } from '@/i18n/config';
 
 export interface TryOnPhotoPickerProps {
   locale: Locale;
-  /** Where to come back to after adding a photo. */
+  /** Where the C-15 uploader sends her after saving, were she to follow its links. */
   returnTo: string;
 }
 
 /**
- * **Which photo this try-on will use, and how to change it — beside the button that spends it.**
+ * **Which photo this try-on will use, and how to change it — without ever leaving the piece.**
  *
- * The photo was decidable in exactly one place: `/photos`. From a garment she had no way to see
- * which of her photographs the generation would use, and changing it meant leaving the piece,
- * switching the active photo, and finding her way back. The API has always accepted a photo per
- * request and `/person-photos/:id/activate` has always existed; nothing here is a new capability,
- * only a new place to reach one.
+ * A small icon toolbar at the start of the screen: *your photos* opens an anchored panel with
+ * the photo grid, *add a photo* opens the C-13/C-14/C-15 flow in a side sheet on this same
+ * screen. Neither is a navigation — the garment stays visible behind both, which is the point:
+ * choosing or adding a photograph is preparation for the try-on, not a trip away from it.
  *
  * ### Why it activates rather than passing `personPhotoId`
  *
@@ -50,11 +51,12 @@ export interface TryOnPhotoPickerProps {
  * generation and leave the active photo alone. It does not, deliberately: two ways to answer
  * "which photo am I using" is the complexity being removed, not added. Choosing here changes the
  * active photo, so the garment page, `/photos` and the next try-on all agree, and the answer
- * survives a reload.
+ * survives a reload. Selection applies immediately and the panel stays open — she can flip
+ * between photographs and watch the *in use* mark move.
  *
  * ### States
  *
- * All six of D-5 are reachable. Loading is a skeleton row rather than a spinner, because the
+ * All six of D-5 are reachable. Loading is a skeleton toolbar rather than a spinner, because the
  * shape is known. Empty is the interesting one — a consumer with no photograph at all gets the
  * add-a-photo invitation here rather than discovering the requirement by pressing Try it on and
  * being bounced. A `BLOCKED` photograph is shown and disabled with neutral copy: it is listed
@@ -63,13 +65,12 @@ export interface TryOnPhotoPickerProps {
  */
 export function TryOnPhotoPicker({ locale, returnTo }: TryOnPhotoPickerProps) {
   const t = useTranslations('tryon.photoPicker');
-  // `start.usingPhoto` and `start.changePhoto` were already written for this panel and had no
-  // reader until now.
   const tStart = useTranslations('tryon.start');
+  const tPhotos = useTranslations('photos');
   const format = useFormatter();
   const queryClient = useQueryClient();
 
-  const [open, setOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
 
   const photos = useQuery({
     queryKey: queryKeys.photos.list(),
@@ -83,11 +84,22 @@ export function TryOnPhotoPicker({ locale, returnTo }: TryOnPhotoPickerProps) {
     mutationFn: (photoId: string) => activatePhoto(photoId),
     onSuccess: async () => {
       // The list is the only reader of `isActive`, and the try-on posts nothing about the photo,
-      // so this is the whole invalidation.
+      // so this is the whole invalidation. The panel stays open on purpose: the *in use* badge
+      // moving to the photograph she chose is the confirmation.
       await queryClient.invalidateQueries({ queryKey: queryKeys.photos.all });
-      setOpen(false);
     },
   });
+
+  /*
+    The uploader manages its whole flow internally and exposes no saved-callback, so the moment
+    the sheet closes is when this screen re-reads the list. A close without an upload costs one
+    background refetch; a close after one is what makes the new photograph appear — already
+    active, because the C-16 default is to activate it.
+  */
+  const onAddOpenChange = (open: boolean): void => {
+    setAddOpen(open);
+    if (!open) void queryClient.invalidateQueries({ queryKey: queryKeys.photos.all });
+  };
 
   const nameOf = (photo: PersonPhoto): string =>
     photo.label ??
@@ -95,9 +107,10 @@ export function TryOnPhotoPicker({ locale, returnTo }: TryOnPhotoPickerProps) {
 
   if (photos.isPending) {
     return (
-      <div className="flex items-center gap-3" aria-busy="true" aria-label={t('loading')}>
-        <Skeleton className="size-12 shrink-0 rounded-lg" />
-        <Skeleton className="h-4 w-48" />
+      <div className="flex items-center gap-2" aria-busy="true" aria-label={t('loading')}>
+        <Skeleton className="size-8 shrink-0 rounded-sm" />
+        <Skeleton className="size-8 shrink-0 rounded-sm" />
+        <Skeleton className="h-4 w-40" />
       </div>
     );
   }
@@ -112,26 +125,145 @@ export function TryOnPhotoPicker({ locale, returnTo }: TryOnPhotoPickerProps) {
   const usable = all.filter((photo) => photo.moderationState !== 'BLOCKED');
   const active = usable.find((photo) => photo.isActive) ?? usable[0];
 
+  const addSheet = (
+    <Sheet open={addOpen} onOpenChange={onAddOpenChange}>
+      <SheetContent side="end" className="sm:max-w-xl">
+        <SheetHeader>
+          <SheetTitle>{tPhotos('meta.newTitle')}</SheetTitle>
+        </SheetHeader>
+        <SheetBody className="flex flex-col gap-6">
+          <PhotoUploader locale={locale} isFirstPhoto={all.length === 0} returnTo={returnTo} />
+        </SheetBody>
+      </SheetContent>
+    </Sheet>
+  );
+
   if (active === undefined) {
     return (
-      <Callout
-        tone="info"
-        title={t('none')}
-        action={
-          <Button asChild variant="secondary" size="sm">
-            <Link href={`${routes.photoNew(locale)}?from=${encodeURIComponent(returnTo)}`}>
+      <>
+        <Callout
+          tone="info"
+          title={t('none')}
+          action={
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              startIcon={<ImagePlus aria-hidden="true" />}
+              onClick={() => {
+                setAddOpen(true);
+              }}
+            >
               {t('addFirst')}
-            </Link>
-          </Button>
-        }
-      >
-        {t('noneNote')}
-      </Callout>
+            </Button>
+          }
+        >
+          {t('noneNote')}
+        </Callout>
+        {addSheet}
+      </>
     );
   }
 
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-line bg-surface-sunken p-3">
+    <div className="flex min-w-0 items-center gap-3">
+      <Toolbar aria-label={t('title')} className="shrink-0 flex-nowrap gap-1">
+        <Popover>
+          <ToolbarButton asChild>
+            <PopoverTrigger asChild>
+              <IconButton
+                variant="secondary"
+                size="sm"
+                label={tStart('changePhoto')}
+                icon={<Images aria-hidden="true" />}
+              />
+            </PopoverTrigger>
+          </ToolbarButton>
+
+          <PopoverContent align="start" className="panel-scroll w-96">
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-1">
+                <p className="text-sm font-medium">{t('title')}</p>
+                <p className="text-xs text-ink-muted">{t('description')}</p>
+              </div>
+
+              <ul
+                className="grid grid-cols-3 gap-2"
+                aria-busy={activate.isPending}
+                aria-label={activate.isPending ? t('switching') : undefined}
+              >
+                {all.map((photo) => {
+                  const blocked = photo.moderationState === 'BLOCKED';
+                  const inUse = photo.id === active.id;
+
+                  return (
+                    <li key={photo.id}>
+                      <button
+                        type="button"
+                        disabled={blocked || inUse || activate.isPending}
+                        aria-current={inUse}
+                        // The visible label is the photo's name, which says which one but not
+                        // what pressing it does. D-20: a control's accessible name is the action.
+                        aria-label={
+                          blocked || inUse ? undefined : `${t('use')} — ${nameOf(photo)}`
+                        }
+                        onClick={() => {
+                          activate.mutate(photo.id);
+                        }}
+                        className="group flex w-full flex-col gap-1 rounded-md text-start focus-visible:outline-none focus-visible:shadow-[var(--shadow-focus)] disabled:cursor-default"
+                      >
+                        <span
+                          className={`relative block aspect-card w-full overflow-hidden rounded-md border-2 bg-surface-sunken ${
+                            inUse
+                              ? 'border-brand'
+                              : 'border-transparent group-hover:border-line-strong'
+                          } ${blocked ? 'opacity-50' : ''}`}
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element -- short-lived signed URL. */}
+                          <img
+                            src={photo.url}
+                            alt=""
+                            className="size-full object-cover"
+                            loading="lazy"
+                          />
+                          {/* Badge stays `md`: `sm` is `text-2xs`, which §6.1 keeps admin-only. */}
+                          {inUse ? (
+                            <span className="absolute top-1 start-1">
+                              <Badge variant="brand">
+                                <Check aria-hidden="true" className="me-0.5 size-3" />
+                                {t('inUse')}
+                              </Badge>
+                            </span>
+                          ) : null}
+                        </span>
+
+                        <span className="truncate text-xs text-ink-muted">
+                          {blocked ? t('blocked') : nameOf(photo)}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+
+              {activate.isError ? <Callout tone="warning">{t('failed')}</Callout> : null}
+            </div>
+          </PopoverContent>
+        </Popover>
+
+        <ToolbarButton asChild>
+          <IconButton
+            variant="secondary"
+            size="sm"
+            label={t('addAnother')}
+            icon={<ImagePlus aria-hidden="true" />}
+            onClick={() => {
+              setAddOpen(true);
+            }}
+          />
+        </ToolbarButton>
+      </Toolbar>
+
       {/*
         A signed, 300-second, owner-scoped URL (§3.4). A plain <img> on purpose: the optimiser
         would cache a URL that expires, and the stale entry would 403.
@@ -140,7 +272,7 @@ export function TryOnPhotoPicker({ locale, returnTo }: TryOnPhotoPickerProps) {
       <img
         src={active.url}
         alt=""
-        className="size-12 shrink-0 rounded-lg object-cover"
+        className="size-8 shrink-0 rounded-sm object-cover"
         loading="lazy"
       />
 
@@ -148,90 +280,7 @@ export function TryOnPhotoPicker({ locale, returnTo }: TryOnPhotoPickerProps) {
         {tStart('usingPhoto', { label: nameOf(active) })}
       </p>
 
-      <Button variant="ghost" size="sm" onClick={() => setOpen(true)}>
-        {tStart('changePhoto')}
-      </Button>
-
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t('title')}</DialogTitle>
-            <DialogDescription>{t('description')}</DialogDescription>
-          </DialogHeader>
-
-          <DialogBody>
-            <ul
-              className="grid grid-cols-2 gap-3 sm:grid-cols-3"
-              aria-busy={activate.isPending}
-              aria-label={activate.isPending ? t('switching') : undefined}
-            >
-              {all.map((photo) => {
-                const blocked = photo.moderationState === 'BLOCKED';
-                const inUse = photo.id === active.id;
-
-                return (
-                  <li key={photo.id}>
-                    <button
-                      type="button"
-                      disabled={blocked || inUse || activate.isPending}
-                      aria-current={inUse}
-                      // The visible label is the photo's name, which says which one but not what
-                      // pressing it does. D-20: a control's accessible name is the action.
-                      aria-label={
-                        blocked || inUse ? undefined : `${t('use')} — ${nameOf(photo)}`
-                      }
-                      onClick={() => {
-                        activate.mutate(photo.id);
-                      }}
-                      className="group flex w-full flex-col gap-2 rounded-lg text-start focus-visible:outline-none focus-visible:shadow-[var(--shadow-focus)] disabled:cursor-default"
-                    >
-                      <span
-                        className={`relative block aspect-card w-full overflow-hidden rounded-lg border-2 bg-surface-sunken ${
-                          inUse ? 'border-brand' : 'border-transparent group-hover:border-line-strong'
-                        } ${blocked ? 'opacity-50' : ''}`}
-                      >
-                        {/* eslint-disable-next-line @next/next/no-img-element -- short-lived signed URL. */}
-                        <img
-                          src={photo.url}
-                          alt=""
-                          className="size-full object-cover"
-                          loading="lazy"
-                        />
-                        {inUse ? (
-                          <span className="absolute top-1.5 start-1.5">
-                            <Badge variant="brand">
-                              <Check aria-hidden="true" className="me-1 size-3" />
-                              {t('inUse')}
-                            </Badge>
-                          </span>
-                        ) : null}
-                      </span>
-
-                      <span className="truncate text-xs text-ink-muted">
-                        {blocked ? t('blocked') : nameOf(photo)}
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-
-            {activate.isError ? (
-              <Callout tone="warning" className="mt-3">
-                {t('failed')}
-              </Callout>
-            ) : null}
-          </DialogBody>
-
-          <DialogFooter>
-            <Button asChild variant="secondary" startIcon={<Camera aria-hidden="true" />}>
-              <Link href={`${routes.photoNew(locale)}?from=${encodeURIComponent(returnTo)}`}>
-                {t('addAnother')}
-              </Link>
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {addSheet}
     </div>
   );
 }

@@ -3,6 +3,7 @@
 import { useCallback, useState } from 'react';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 import { useTranslations } from 'next-intl';
 
@@ -11,6 +12,7 @@ import {
   ErrorState,
   PermissionDeniedState,
   Skeleton,
+  TypeToConfirmDialog,
   VisuallyHidden,
   toast,
 } from '@repo/ui';
@@ -20,21 +22,14 @@ import { AdminPage, AdminPageHeader } from '@/features/catalog/components/AdminP
 import { PublishStatePill, QualityPill } from '@/features/catalog/components/CatalogPills';
 import { GarmentForm } from '@/features/catalog/components/GarmentForm';
 import { GarmentImagesPanel } from '@/features/catalog/components/GarmentImagesPanel';
-import { PublishPanel } from '@/features/catalog/components/PublishPanel';
-import { QualityOverrideDialog } from '@/features/catalog/components/QualityOverrideDialog';
-import { QualityReport } from '@/features/catalog/components/QualityReport';
 import {
   isPermissionDenied,
   isSignedOut,
   useCatalogErrorCopy,
 } from '@/features/catalog/hooks/use-catalog-error';
 import {
-  useGarmentImages,
-  useRevalidateGarmentImage,
-} from '@/features/catalog/hooks/use-garment-images';
-import {
+  useDeleteGarment,
   useGarment,
-  useOverrideQuality,
   useUpdateGarment,
 } from '@/features/catalog/hooks/use-garments';
 import {
@@ -63,13 +58,14 @@ export interface GarmentEditorScreenProps {
 }
 
 /**
- * A-8 through A-11 for one piece: the record, its gallery, its A-10 report and its publish gate,
- * on one screen because they are one job.
+ * One piece: the record and its gallery, on one screen because they are one job.
  *
- * The form is optimistic (D-18) — a saved title lands immediately and rolls back with a reason if
- * the API refuses it. The publish gate deliberately is not: it is decided server-side, and
- * showing "Published" for a moment before snapping back would be the interface lying about the
- * one transition an admin most needs to trust.
+ * The one-step flow (2026-08) removed the publish/test-render/quality panels that used to sit
+ * beside the form — a piece is published the moment it is created, so there is no workflow left
+ * to draw. What remains is editing, the gallery, and deletion.
+ *
+ * The form is optimistic (D-18) — a saved title lands immediately and rolls back with a reason
+ * if the API refuses it.
  */
 export function GarmentEditorScreen({
   locale,
@@ -79,18 +75,18 @@ export function GarmentEditorScreen({
   initialImages,
 }: GarmentEditorScreenProps) {
   const t = useTranslations('admin.catalog.editor');
+  const tPublish = useTranslations('admin.catalog.publish');
   const errorCopy = useCatalogErrorCopy();
+  const router = useRouter();
 
   const query = useGarment(garmentId, initialGarment);
-  const imagesQuery = useGarmentImages(garmentId, initialImages);
   const updateGarment = useUpdateGarment();
-  const overrideQuality = useOverrideQuality();
-  const revalidate = useRevalidateGarmentImage();
+  const removeGarment = useDeleteGarment();
 
   const [values, setValues] = useState<GarmentFormValues | null>(
     initialGarment ? garmentToForm(initialGarment) : null,
   );
-  const [overrideOpen, setOverrideOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [liveQuality, setLiveQuality] = useState<ImageQualityReport | null>(null);
 
   const garment = query.data;
@@ -114,32 +110,17 @@ export function GarmentEditorScreen({
     }
   }, [errorCopy, garmentId, t, updateGarment, values]);
 
-  const handleOverride = useCallback(
-    async (reason: string): Promise<void> => {
-      try {
-        await overrideQuality.mutateAsync({ garmentId, reason });
-        setOverrideOpen(false);
-        toast.success(t('toast.overrideRecorded'));
-      } catch (error: unknown) {
-        toast.error(errorCopy.message(error));
-      }
-    },
-    [errorCopy, garmentId, overrideQuality, t],
-  );
-
-  const images = imagesQuery.data ?? [];
-  const tryOnSource = images.find((image) => image.isTryOnSource) ?? null;
-
-  const handleRevalidate = useCallback(async (): Promise<void> => {
-    if (!tryOnSource) return;
+  const handleDelete = useCallback(async (): Promise<void> => {
+    if (!garment) return;
     try {
-      const report = await revalidate.mutateAsync({ garmentId, imageId: tryOnSource.id });
-      setLiveQuality(report);
-      toast.success(t('toast.revalidated', { score: report.score }));
+      await removeGarment.mutateAsync({ garmentId: garment.id, confirmTitle: garment.title });
+      setDeleteOpen(false);
+      toast.success(tPublish('toast.deleted', { title: garment.title }));
+      router.push(routes.admin.catalog(locale));
     } catch (error: unknown) {
       toast.error(errorCopy.message(error));
     }
-  }, [errorCopy, garmentId, revalidate, t, tryOnSource]);
+  }, [errorCopy, garment, locale, removeGarment, router, tPublish]);
 
   /* ---------------------------------------------------------------- D-5 states */
 
@@ -184,7 +165,6 @@ export function GarmentEditorScreen({
 
   const score = liveQuality?.score ?? garment.qualityScore;
   const minScore = liveQuality?.minScore ?? DEFAULT_QUALITY_MIN_SCORE;
-  const checks = liveQuality?.checks ?? garment.qualityChecks;
 
   return (
     <AdminPage>
@@ -193,10 +173,8 @@ export function GarmentEditorScreen({
         description={t('description', { sku: garment.sku })}
         actions={
           <>
-            <Button asChild variant="secondary" size="sm">
-              <Link href={routes.admin.garmentTestRender(locale, garment.id)}>
-                {t('testRenderLink')}
-              </Link>
+            <Button variant="ghost" size="sm" onClick={() => setDeleteOpen(true)}>
+              {tPublish('actions.delete')}
             </Button>
             <Button asChild variant="ghost" size="sm">
               <Link href={routes.admin.catalog(locale)}>{t('backToList')}</Link>
@@ -211,54 +189,38 @@ export function GarmentEditorScreen({
         }
       />
 
-      <div className="grid gap-stack xl:grid-cols-3">
-        <div className="flex flex-col gap-stack xl:col-span-2">
-          <GarmentForm
-            values={values}
-            onChange={setValues}
-            categories={categories}
-            onSubmit={handleSave}
-            submitLabel={t('save')}
-            saving={updateGarment.isPending}
-          />
+      <div className="flex flex-col gap-stack">
+        <GarmentForm
+          values={values}
+          onChange={setValues}
+          categories={categories}
+          onSubmit={handleSave}
+          submitLabel={t('save')}
+          saving={updateGarment.isPending}
+        />
 
-          <GarmentImagesPanel
-            garmentId={garment.id}
-            garmentTitle={garment.title}
-            isPublished={garment.publishState === 'PUBLISHED'}
-            initialImages={initialImages}
-            onQualityReport={setLiveQuality}
-          />
-        </div>
-
-        <div className="flex flex-col gap-stack">
-          <PublishPanel locale={locale} garment={garment} hasTryOnSource={tryOnSource !== null} />
-
-          <QualityReport
-            score={score}
-            minScore={minScore}
-            checks={checks}
-            overridden={garment.qualityOverridden}
-            overriddenAt={garment.qualityOverriddenAt}
-            onOverride={() => setOverrideOpen(true)}
-            onRevalidate={tryOnSource ? () => void handleRevalidate() : undefined}
-            revalidating={revalidate.isPending}
-          />
-        </div>
+        <GarmentImagesPanel
+          garmentId={garment.id}
+          garmentTitle={garment.title}
+          isPublished={garment.publishState === 'PUBLISHED'}
+          initialImages={initialImages}
+          onQualityReport={setLiveQuality}
+        />
       </div>
 
-      {score !== null ? (
-        <QualityOverrideDialog
-          open={overrideOpen}
-          onOpenChange={setOverrideOpen}
-          garmentTitle={garment.title}
-          score={score}
-          minScore={minScore}
-          failedChecks={checks.filter((check) => !check.passed).length}
-          onConfirm={handleOverride}
-          saving={overrideQuality.isPending}
-        />
-      ) : null}
+      <TypeToConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title={tPublish('deleteDialog.title', { title: garment.title })}
+        description={tPublish('deleteDialog.body')}
+        confirmLabel={tPublish('deleteDialog.confirm')}
+        cancelLabel={tPublish('deleteDialog.cancel')}
+        confirmationText={garment.title}
+        confirmationPrompt={tPublish('deleteDialog.typePrompt')}
+        confirmationMismatchHint={tPublish('deleteDialog.mismatch')}
+        loading={removeGarment.isPending}
+        onConfirm={handleDelete}
+      />
     </AdminPage>
   );
 }

@@ -162,10 +162,10 @@ export function PhotoList({ photos }: PhotoListProps) {
                   })}
                 </p>
 
-                {photo.moderationState !== 'APPROVED' ? (
-                  <Callout tone={photo.moderationState === 'BLOCKED' ? 'warning' : 'info'}>
-                    {t(`moderation.${photo.moderationState}Hint`)}
-                  </Callout>
+                {/* Only a blocked photo warrants a notice — the pending check is invisible
+                    on purpose (2026-08): it neither blocks a try-on nor needs her attention. */}
+                {photo.moderationState === 'BLOCKED' ? (
+                  <Callout tone="warning">{t('moderation.BLOCKEDHint')}</Callout>
                 ) : null}
               </div>
 
