@@ -118,6 +118,7 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   transpilePackages: INTERNAL_PACKAGES,
+  devIndicators: false,
 
   images: {
     // Renders and catalog images are served by the API behind signed, expiring URLs (§3.4),

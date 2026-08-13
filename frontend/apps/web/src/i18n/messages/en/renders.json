@@ -6,8 +6,8 @@
     "detailDescription": "Compare it with the studio photo, look closer, and say what you think."
   },
   "list": {
-    "title": "Your try-ons",
-    "subtitle": "Everything you've tried on is kept here. Opening one never uses another try-on.",
+    "title": "Try-ons",
+    "subtitle": "Every result stays here — viewing costs nothing.",
     "count": "{count, plural, =0 {No try-ons yet} one {1 try-on} other {# try-ons}}",
     "search": {
       "label": "Search your try-ons",
@@ -37,6 +37,7 @@
       "renderAlt": "Your try-on of {garment}",
       "catalogAlt": "{garment}, studio photo",
       "triedOn": "Tried on {date}",
+      "noVerdict": "No verdict yet",
       "open": "Open",
       "unavailable": "No longer in the collection",
       "unavailableHint": "Your try-on stays here for good. The piece itself has been withdrawn.",

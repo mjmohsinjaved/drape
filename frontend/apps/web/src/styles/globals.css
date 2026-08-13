@@ -92,3 +92,31 @@
   max-block-size: var(--radix-popover-content-available-height);
   overflow-y: auto;
 }
+
+@utility topbar-lead {
+  --topbar-gutter: var(--space-5);
+
+  padding-inline-start: var(--topbar-gutter);
+  padding-inline-end: var(--space-6);
+  min-inline-size: max(
+    var(--topbar-gutter),
+    calc((100% - var(--container-consumer)) / 2 + var(--topbar-gutter))
+  );
+
+  @media (width >= 768px) {
+    --topbar-gutter: var(--space-8);
+  }
+
+  @media (width >= 1280px) {
+    --topbar-gutter: var(--space-12);
+  }
+}
+
+@utility scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}

@@ -1,6 +1,7 @@
 {
   "appName": "Drape",
   "tagline": "Try pieces on to shortlist them before you visit the studio.",
+  "quotaPill": "{remaining} try-ons left",
   "loading": "Loading",
   "navigating": "Loading the next page",
   "skipToContent": "Skip to content",
@@ -19,7 +20,7 @@
     "dashboard": "Dashboard",
     "browse": "Browse",
     "shortlist": "Shortlist",
-    "renders": "Your try-ons",
+    "renders": "Try-ons",
     "account": "Account",
     "photos": "Your photos",
     "enquiries": "Enquiries",

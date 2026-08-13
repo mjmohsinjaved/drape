@@ -57,7 +57,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
       // The theme class is written by `ThemeProvider` before paint; React must not object.
       suppressHydrationWarning
     >
-      <body className="min-h-dvh antialiased">
+      <body className="min-h-dvh antialiased" suppressHydrationWarning>
         <AppProviders direction={dir}>
           {children}
           <Toaster />

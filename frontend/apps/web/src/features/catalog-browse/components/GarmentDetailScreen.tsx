@@ -4,21 +4,14 @@ import { notFound } from 'next/navigation';
 import { ChevronLeft } from 'lucide-react';
 import { getTranslations } from 'next-intl/server';
 
-import {
-  Badge,
-  Button,
-  DescriptionItem,
-  DescriptionList,
-  DirectionalIcon,
-  ImageGallery,
-  ShortlistingCaption,
-} from '@repo/ui';
+import { Button, DirectionalIcon } from '@repo/ui';
 
 import { ScreenError } from '@/components/states';
 import { getCatalogGarment } from '@/features/catalog-browse/api/endpoints';
-import { facetLabel, formatMoney, imageAlt } from '@/features/catalog-browse/lib/format';
-import { TryOnButton } from '@/features/tryon/components/TryOnButton';
-import { TryOnPhotoPicker } from '@/features/tryon/components/TryOnPhotoPicker';
+import { GarmentSwitchRail } from '@/features/catalog-browse/components/GarmentSwitchRail';
+import { formatMoney, imageAlt } from '@/features/catalog-browse/lib/format';
+import { SavedTryOnsRail } from '@/features/renders/components/SavedTryOnsRail';
+import { TryOnCta } from '@/features/tryon/components/TryOnCta';
 import { TryOnTray } from '@/features/tryon/components/TryOnTray';
 import { isRetryableCode } from '@/features/tryon/lib/error-copy';
 import { routes } from '@/lib/routes';
@@ -31,16 +24,6 @@ export interface GarmentDetailScreenProps {
   isAuthenticated: boolean;
 }
 
-/**
- * Garment detail — C-18: gallery, price, fabric, sizes, and **one** prominent Try it on.
- *
- * Server-rendered, image-led and generous (§6.2). The gallery is a small client island because
- * it swaps images; everything else — the copy, the description list, the breadcrumb — is HTML.
- *
- * A garment that is unpublished, archived or has no approved test render is `GARMENT_NOT_FOUND`
- * and indistinguishable from one that never existed (E-10, S-9), so it renders the app's
- * not-found screen rather than leaking that it is merely hidden.
- */
 export async function GarmentDetailScreen({
   locale,
   slug,
@@ -70,26 +53,13 @@ export async function GarmentDetailScreen({
 
   const garment = result.data;
   const title = locale === 'ur' && garment.titleUr ? garment.titleUr : garment.title;
-  const description =
-    locale === 'ur' && garment.descriptionUr ? garment.descriptionUr : garment.description;
   const price = formatMoney(locale, garment.price, garment.currency);
-  const deposit = formatMoney(locale, garment.deposit, garment.currency);
 
-  // The gallery is ordered by `position` server-side; a garment with no images still renders,
-  // with the "photo coming soon" placeholder rather than an empty frame.
-  const gallery = garment.images.map((image, index) => ({
-    id: `${garment.id}-${String(image.position)}-${String(index)}`,
-    src: image.url,
-    alt: imageAlt(
-      image.altText,
-      t('detail.imageAlt', { title, index: index + 1, total: garment.images.length }),
-    ),
-    // Each thumbnail is a tab whose only accessible name comes from here. Built now, on the
-    // server, rather than handed to `ImageGallery` as a callback: that component is
-    // `'use client'`, so a function prop is a function crossing the server boundary and React
-    // refuses to serialise it — the whole screen threw before reaching the browser.
-    thumbnailLabel: t('detail.thumbnailLabel', { position: index + 1 }),
-  }));
+  const heroImage = garment.primaryImage ?? garment.images[0] ?? null;
+  const heroAlt = imageAlt(
+    heroImage?.altText ?? null,
+    t('detail.imageAlt', { title, index: 1, total: 1 }),
+  );
 
   return (
     <div className="flex flex-col gap-6 md:gap-8">
@@ -103,92 +73,46 @@ export async function GarmentDetailScreen({
         {t('detail.backToBrowse')}
       </Link>
 
-      {/*
-        Her photographs, at the start of the screen and above the piece they will be tried
-        against. The panels it opens are anchored here and never navigate — the garment stays
-        visible while she browses or adds a photo.
-      */}
-      {isAuthenticated ? (
-        <TryOnPhotoPicker locale={locale} returnTo={routes.garment(locale, garment.slug)} />
-      ) : null}
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] lg:gap-10">
+        <TryOnCta
+          locale={locale}
+          garmentId={garment.id}
+          garmentTitle={title}
+          catalogImageUrl={heroImage?.url ?? null}
+          catalogImageAlt={heroAlt}
+          garmentThumbnailUrl={garment.primaryImage?.thumbnailUrl ?? garment.primaryImage?.url}
+          isAuthenticated={isAuthenticated}
+          returnTo={routes.garment(locale, garment.slug)}
+        />
 
-      <div className="grid gap-6 lg:grid-cols-2 lg:gap-8">
-        {gallery.length === 0 ? (
-          <div className="flex aspect-card w-full items-center justify-center rounded-xl bg-surface-sunken px-4 text-center text-sm text-ink-subtle">
-            {t('card.noImage')}
-          </div>
-        ) : (
-          <ImageGallery
-            images={gallery}
-            ratio="garment"
-            label={t('detail.galleryLabel', { title })}
-          />
-        )}
-
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-5">
           <header className="flex flex-col gap-2">
-            <h1 className="font-display text-2xl text-balance md:text-3xl">{title}</h1>
+            <h1 className="font-display text-3xl text-balance md:text-4xl">{title}</h1>
 
-            <div className="flex flex-wrap items-center gap-3">
-              <p className="text-lg font-medium">{price ?? t('detail.priceOnRequest')}</p>
-              <Badge variant={garment.mode === 'RENTAL' ? 'gold' : 'neutral'}>
-                {t(`modes.${garment.mode}`)}
-              </Badge>
-            </div>
+            <p className="text-lg">
+              <span className="font-semibold">{price ?? t('detail.priceOnRequest')}</span>
+              <span className="text-ink-muted"> · {t(`modes.${garment.mode}`)}</span>
+            </p>
+
+            <p className="text-sm text-ink-muted">
+              {[
+                garment.fabric,
+                t(`weights.${garment.embellishmentWeight}`),
+                garment.sizes.length > 0
+                  ? `${t('detail.sizes')} ${garment.sizes.join(', ')}`
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+            </p>
           </header>
-
-          {/* The one primary action on this screen (§6.2). */}
-          <TryOnButton
-            locale={locale}
-            garmentId={garment.id}
-            garmentTitle={title}
-            garmentThumbnailUrl={garment.primaryImage?.thumbnailUrl ?? garment.primaryImage?.url}
-            isAuthenticated={isAuthenticated}
-            returnTo={routes.garment(locale, garment.slug)}
-          />
-
-          <ShortlistingCaption>{t('detail.tryOnNote')}</ShortlistingCaption>
-
-          {description ? (
-            <section className="flex flex-col gap-2">
-              <h2 className="text-lg font-medium">{t('detail.about')}</h2>
-              <p className="max-w-prose text-pretty text-ink-muted">{description}</p>
-            </section>
-          ) : null}
-
-          <DescriptionList>
-            {garment.fabric ? (
-              <DescriptionItem term={t('detail.fabric')}>{garment.fabric}</DescriptionItem>
-            ) : null}
-            {garment.sizes.length > 0 ? (
-              <DescriptionItem term={t('detail.sizes')}>{garment.sizes.join(', ')}</DescriptionItem>
-            ) : null}
-            {garment.categoryName ? (
-              <DescriptionItem term={t('detail.category')}>{garment.categoryName}</DescriptionItem>
-            ) : null}
-            <DescriptionItem term={t('detail.mode')}>{t(`modes.${garment.mode}`)}</DescriptionItem>
-            <DescriptionItem term={t('filters.weight')}>
-              {t(`weights.${garment.embellishmentWeight}`)}
-            </DescriptionItem>
-            {deposit === null ? null : (
-              <DescriptionItem term={t('detail.deposit')}>{deposit}</DescriptionItem>
-            )}
-          </DescriptionList>
-
-          {garment.colors.length > 0 || garment.styleTags.length > 0 ? (
-            <section className="flex flex-col gap-3">
-              <h2 className="text-lg font-medium">{t('detail.styleTags')}</h2>
-              <ul className="flex flex-wrap gap-2">
-                {[...garment.colors, ...garment.styleTags].map((tag) => (
-                  <li key={tag}>
-                    <Badge variant="outline">{facetLabel(tag, null)}</Badge>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
+          <GarmentSwitchRail locale={locale} currentGarmentId={garment.id} />
         </div>
       </div>
+
+      {isAuthenticated ? (
+        <SavedTryOnsRail locale={locale} currentGarmentId={garment.id} />
+      ) : null}
 
       <TryOnTray locale={locale} />
     </div>
