@@ -1,6 +1,7 @@
 {
   "appName": "Drape",
   "tagline": "اسٹوڈیو جانے سے پہلے ملبوسات آزما کر اپنی مختصر فہرست بنائیں۔",
+  "quotaPill": "{remaining} آزمائشیں باقی",
   "loading": "لوڈ ہو رہا ہے",
   "navigating": "اگلا صفحہ کھل رہا ہے",
   "skipToContent": "مواد پر جائیں",
@@ -19,7 +20,7 @@
     "dashboard": "ڈیش بورڈ",
     "browse": "مجموعہ دیکھیں",
     "shortlist": "مختصر فہرست",
-    "renders": "آپ کے آزمائے ہوئے",
+    "renders": "آزمائشیں",
     "account": "اکاؤنٹ",
     "photos": "آپ کی تصاویر",
     "enquiries": "استفسارات",

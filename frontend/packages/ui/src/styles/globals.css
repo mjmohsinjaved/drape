@@ -55,7 +55,7 @@
   h3,
   h4 {
     font-family: var(--font-display);
-    font-weight: 600;
+    font-weight: 700;
     text-wrap: balance;
   }
 
@@ -69,7 +69,6 @@
     text-wrap: pretty;
   }
 
-  /* SKUs, ids and audit metadata. Admin only. */
   code,
   kbd,
   samp,
@@ -109,13 +108,9 @@
     ):focus-visible {
     outline: none;
     box-shadow: var(--shadow-focus);
-    /* Keep the ring visible when the element is clipped by a scroll container. */
     z-index: 1;
     position: relative;
   }
-
-  /* Mouse users do not get the ring; keyboard users always do. The
-     :focus-visible rule above is the only source of truth. */
   :where(button, [role='button']):focus:not(:focus-visible) {
     outline: none;
   }
@@ -180,13 +175,10 @@
     padding-inline-start: 0;
   }
 
-  /* Numerals stay Latin in both locales — admin tables and prices depend on
-     it (§6.7). */
   [lang='ur'] {
     font-variant-numeric: lining-nums tabular-nums;
   }
 
-  /* Tabular figures wherever numbers must line up in a column. */
   table,
   [data-numeric] {
     font-variant-numeric: tabular-nums;
@@ -203,9 +195,6 @@
 }
 
 @layer components {
-  /* Nothing here yet. Atoms live in @repo/ui/src/components and style
-     themselves with utilities; this layer exists so an app can add a
-     composite without fighting utility specificity. */
 }
 
 /* ================================================================== *

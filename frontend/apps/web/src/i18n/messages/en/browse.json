@@ -6,8 +6,15 @@
     "garmentDescription": "Sizes, fabric and price, with the option to try it on."
   },
   "heading": {
-    "title": "The collection",
-    "subtitle": "Try a piece on to see how it sits, then keep the ones worth seeing in person."
+    "title": "Pieces for the big days",
+    "subtitle": "Browse, try pieces on your photo, and keep the ones worth a visit."
+  },
+  "switchRail": {
+    "title": "Switch the piece"
+  },
+  "savedTryOns": {
+    "title": "Saved try-ons",
+    "alt": "Your try-on of {title}"
   },
   "search": {
     "label": "Search the collection",
@@ -65,7 +72,7 @@
     "deposit": "Deposit {amount}"
   },
   "detail": {
-    "backToBrowse": "Back to the collection",
+    "backToBrowse": "Back to browse",
     "galleryLabel": "Studio photos of {title}",
     "imageAlt": "{title}, studio photo {index} of {total}",
     "about": "About this piece",

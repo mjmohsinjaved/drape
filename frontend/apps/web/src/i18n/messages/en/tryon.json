@@ -15,6 +15,37 @@
     "usingPhoto": "Using your photo “{label}”",
     "changePhoto": "Use a different photo"
   },
+  "cta": {
+    "note": "Uses your selected photo · takes about 20 seconds",
+    "applied": "Applied",
+    "appliedNote": "Saved to your try-ons · viewing again costs nothing",
+    "onYourPhoto": "On your photo",
+    "catalog": "Catalog",
+    "renderAlt": "Your try-on of {garment}",
+    "loveIt": "Love it",
+    "loved": "Loved — on your shortlist",
+    "loveFailed": "That didn't save. Try again."
+  },
+  "photoDialog": {
+    "title": "Which photo you want to use?",
+    "description": "Your try-on is generated from this photo. Pick a different one any time.",
+    "browseGallery": "Browse gallery",
+    "use": "Use this photo",
+    "inUse": "In use",
+    "hide": "Hide this photo",
+    "unhide": "Show this photo",
+    "hiddenCaption": "Hidden — only you can reveal it",
+    "blocked": "Not available",
+    "unnamed": "Photo from {date}",
+    "loading": "Loading your photos",
+    "loadFailed": "Your photos didn't load. The try-on will use your active photo.",
+    "switching": "Switching photo",
+    "failed": "That didn't switch. Try again.",
+    "none": "No photo yet",
+    "noneNote": "A try-on works from one full-length photo of you. It takes about a minute to add.",
+    "privacyNote": "Only you can see your photos. A hidden photo can't be picked here until you reveal it again.",
+    "close": "Close"
+  },
   "wait": {
     "title": "Putting {garment} on your photo",
     "titleGeneric": "Putting the piece on your photo",
@@ -140,7 +171,7 @@
     "INTERNAL_ERROR": "The try-on didn't finish. Nothing was used from your allowance — try again."
   },
   "photoPicker": {
-    "title": "Which photo should we use?",
+    "title": "Which photo you want to use?",
     "description": "Your try-on is generated from this photo. Pick a different one any time.",
     "loading": "Loading your photos",
     "none": "No photo yet",

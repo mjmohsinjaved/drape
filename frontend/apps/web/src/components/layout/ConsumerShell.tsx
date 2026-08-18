@@ -4,6 +4,7 @@ import { useTranslations } from 'next-intl';
 
 import { Button } from '@repo/ui';
 
+import { HeaderQuotaPill } from '@/components/layout/HeaderQuotaPill';
 import { LocaleSwitcher } from '@/components/layout/LocaleSwitcher';
 import { MobileNav } from '@/components/layout/MobileNav';
 import { consumerPrimaryNav, consumerSecondaryNav } from '@/components/layout/nav-items';
@@ -17,8 +18,7 @@ import { routes } from '@/lib/routes';
 import type { Locale } from '@/i18n/config';
 import type { ReactNode } from 'react';
 
-/** Everything the fitting room offers, in one bar. `PublicShell` shows a subset (C-9). */
-const CONSUMER_NAV = [...consumerPrimaryNav, ...consumerSecondaryNav];
+const CONSUMER_NAV = consumerPrimaryNav;
 
 export interface ConsumerShellProps {
   locale: Locale;
@@ -27,19 +27,6 @@ export interface ConsumerShellProps {
   children: ReactNode;
 }
 
-/**
- * The consumer fitting room shell — ARCHITECTURE §6.2, PRD D-4.
- *
- * Image-led and generous with space: a 1200 px centred container, gutters that open up as the
- * screen grows, and a vertical rhythm one and a half times the admin's for the same semantic
- * gap. Mobile-first — this is designed at 360 px and then allowed to breathe (D-9).
- *
- * Navigation is persistent and identical in both places (C-9): Browse, Shortlist, My try-ons,
- * Account — a bottom tab bar on a phone, the top bar from 768 px up.
- *
- * A Server Component. The tab bar, the top nav, the language and theme controls and the
- * account menu are the only client islands.
- */
 export function ConsumerShell({ locale, user, children }: ConsumerShellProps) {
   const t = useTranslations('common');
 
@@ -48,19 +35,23 @@ export function ConsumerShell({ locale, user, children }: ConsumerShellProps) {
       <SkipLink />
 
       <header className="sticky top-0 z-30 border-b border-line bg-canvas/95 backdrop-blur">
-        <div className="mx-auto flex h-16 w-full max-w-consumer items-center gap-4 px-5 md:px-8 xl:px-12">
-          <Link
-            href={routes.home(locale)}
-            className="inline-flex min-h-11 items-center text-xl font-semibold"
-          >
-            {APP_NAME}
-          </Link>
 
-          <div className="mx-auto">
+        <div className="flex h-16 w-full items-center">
+          <div className="topbar-lead flex shrink-0 items-center">
+            <Link
+              href={routes.home(locale)}
+              className="inline-flex min-h-11 items-center text-xl font-semibold"
+            >
+              {APP_NAME}
+            </Link>
+          </div>
+
+          <div className="-ms-3">
             <TopNav locale={locale} items={CONSUMER_NAV} />
           </div>
 
-          <div className="ms-auto flex items-center gap-1">
+          <div className="ms-auto flex items-center gap-1 pe-5 md:pe-8 xl:pe-12">
+            {user ? <span className="me-2"><HeaderQuotaPill /></span> : null}
             <LocaleSwitcher variant="icon" />
             <ThemeToggle />
             {user ? (
@@ -69,6 +60,11 @@ export function ConsumerShell({ locale, user, children }: ConsumerShellProps) {
                 name={user.name}
                 email={user.email}
                 initials={user.initials}
+                extraItems={consumerSecondaryNav.map((item) => ({
+                  key: item.key,
+                  label: t(`nav.${item.labelKey}`),
+                  href: item.href(locale),
+                }))}
               />
             ) : (
               <Button asChild variant="primary" size="sm">
@@ -79,10 +75,6 @@ export function ConsumerShell({ locale, user, children }: ConsumerShellProps) {
         </div>
       </header>
 
-      {/*
-        `pb-tabbar` reserves the height of the fixed tab bar plus the iOS safe area, so the last
-        card in a list is never trapped behind it.
-      */}
       <main
         id={MAIN_CONTENT_ID}
         className="pb-tabbar mx-auto w-full max-w-consumer flex-1 px-5 pt-6 md:px-8 md:pb-16 md:pt-10 xl:px-12"

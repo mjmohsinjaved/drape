@@ -5,7 +5,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
-import { ChevronDown, ChevronUp, GripVertical, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, GripVertical, Heart } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { moveWithin, useShortlistDraftActions, usePendingShortlistOrder } from '@repo/store';
@@ -29,25 +29,6 @@ export interface ShortlistBoardProps {
   items: ShortlistItem[];
 }
 
-/**
- * Drag-to-rank, with a keyboard path that is not a lesser one — PRD C-32, D-20.
- *
- * Three ways to reorder, all producing the same result:
- *
- * 1. **Pointer drag** on the handle. Works with a mouse and with a finger, because it is built on
- *    Pointer Events and row geometry rather than HTML5 drag-and-drop, which does not fire on
- *    touch at all — and this is a mobile-first product.
- * 2. **Keyboard grab.** Space picks the row up, the arrow keys move it, Space drops it, Escape
- *    puts it back. Every transition is announced through a live region, because a reorder nobody
- *    can see is a reorder nobody can verify.
- * 3. **Move up / Move down buttons**, always visible, each with an accessible name that includes
- *    the piece. The plainest path, and the one that needs no gesture vocabulary at all.
- *
- * The order is optimistic and rolls back on failure (D-18), which is what `useShortlistDraftStore`
- * exists for: it holds the on-screen order during the round trip and the baseline to restore.
- * `POST /shortlist/reorder` takes the **whole** list — a partial payload is refused, because
- * renumbering half a list is how two rows end up sharing a position.
- */
 export function ShortlistBoard({ locale, items }: ShortlistBoardProps) {
   const t = useTranslations('shortlist');
   const messageFor = useErrorMessage('shortlist');
@@ -66,8 +47,6 @@ export function ShortlistBoard({ locale, items }: ShortlistBoardProps) {
   const serverOrder = items.map((item) => item.id);
   const order = pendingOrder ?? serverOrder;
 
-  // Memoised because `move` closes over it: a fresh Map on every render would rebuild the
-  // callback on every render too, and with it every row's handlers.
   const byId = useMemo(
     () => new Map(items.map((item) => [item.id, item])),
     [items],
@@ -119,7 +98,6 @@ export function ShortlistBoard({ locale, items }: ShortlistBoardProps) {
     [byId, commit, order, setPendingOrder, t],
   );
 
-  /** Keyboard reordering. Space grabs and drops; the arrows move; Escape restores. */
   const onHandleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLButtonElement>, item: ShortlistItem): void => {
       const index = order.indexOf(item.id);
@@ -185,10 +163,6 @@ export function ShortlistBoard({ locale, items }: ShortlistBoardProps) {
     [beginReorder, commit, grabbedId, order, rollback, setPendingOrder, t],
   );
 
-  /**
-   * Pointer drag. The row under the pointer is found from the live row rectangles rather than
-   * from a drop target, so it works identically on touch, where there is no drag event at all.
-   */
   const onHandlePointerDown = useCallback(
     (event: React.PointerEvent<HTMLButtonElement>, item: ShortlistItem): void => {
       // Only a primary press starts a drag — a right-click or a second finger must not.
@@ -376,8 +350,7 @@ function ShortlistRow({
             {t('list.noRender')}
           </div>
         ) : (
-          // A signed, short-lived URL (§3.4): a plain <img>, never the image optimiser's cache.
-          // eslint-disable-next-line @next/next/no-img-element -- short-lived signed URL.
+          // eslint-disable-next-line @next/next/no-img-element -- short-lived signed URL, must not be cached by the image optimiser.
           <img
             src={item.renderThumbnailUrl}
             alt={t('list.renderAlt', { garment: item.garmentTitle })}
@@ -388,8 +361,10 @@ function ShortlistRow({
       </div>
 
       <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <p className="text-xs text-ink-subtle">{t('list.rank', { rank })}</p>
-        <h3 className="text-base font-medium">{item.garmentTitle}</h3>
+        <p className="w-fit rounded-full bg-overlay px-2.5 py-0.5 text-xs font-bold text-brand-fg">
+          {t('list.rank', { rank })}
+        </p>
+        <h3 className="font-display text-base font-semibold">{item.garmentTitle}</h3>
         {item.garmentCategory === null ? null : (
           <p className="text-sm text-ink-muted">{item.garmentCategory}</p>
         )}
@@ -483,7 +458,7 @@ function ShortlistRow({
             size="md"
             variant="ghost"
             label={t('list.remove')}
-            icon={<Trash2 />}
+            icon={<Heart className="fill-brand text-brand" />}
             onClick={onRemove}
           />
         </div>

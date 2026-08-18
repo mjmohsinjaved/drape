@@ -2,22 +2,15 @@ import Link from 'next/link';
 
 import { getTranslations } from 'next-intl/server';
 
-import { Button, EmptyState, ShortlistingCaption } from '@repo/ui';
+import { Button, EmptyState } from '@repo/ui';
 
-import { DeniedState, PartialDataNotice, ScreenError, SignedOutState } from '@/components/states';
-import { DeleteMyDataLink } from '@/features/consent/components/DeleteMyDataLink';
-import { listPhotosServer } from '@/features/photos/api/server';
-import {
-  listResultGroupsServer,
-  listResultsServer,
-} from '@/features/renders/api/server';
-import { HistoryFilters } from '@/features/renders/components/HistoryFilters';
+import { DeniedState, ScreenError, SignedOutState } from '@/components/states';
+import { listResultsServer } from '@/features/renders/api/server';
 import { RenderCard } from '@/features/renders/components/RenderCard';
 import {
   HISTORY_PAGE_SIZE,
   applyClientFilters,
   buildVerdictMap,
-  categoryOptions,
   hasHistoryFilter,
   toHistorySearchParams,
 type  HistoryFilters as Filters } from '@/features/renders/lib/filters';
@@ -38,20 +31,6 @@ export interface HistoryScreenProps {
   filters: Filters;
 }
 
-/**
- * Try-on history — PRD C-24 … C-31.
- *
- * > "Every successful generation is stored permanently against her account and appears in History
- * > automatically. She takes no action to save a result."
- *
- * Which is why there is no "save" anywhere on this screen and no empty-state instruction to
- * start saving. The empty state points at the collection, because the way to fill history is to
- * try something on.
- *
- * Four reads, in parallel: the results themselves, the same set grouped by photo (C-30), her
- * photos (so the grouping control only appears when it means something), and her shortlist —
- * which is the only place a verdict lives (§4.20).
- */
 export async function HistoryScreen({ locale, filters }: HistoryScreenProps) {
   const t = await getTranslations({ locale, namespace: 'renders' });
 
@@ -62,24 +41,16 @@ export async function HistoryScreen({ locale, filters }: HistoryScreenProps) {
     personPhotoId: filters.photoId,
   };
 
-  const [results, groups, photos, shortlist] = await Promise.all([
+  const [results, shortlist] = await Promise.all([
     listResultsServer(query),
-    filters.groupByPhoto
-      ? listResultGroupsServer(query)
-      : Promise.resolve({ ok: true as const, data: [] }),
-    listPhotosServer(),
     getShortlistServer(),
   ]);
 
   if (!results.ok) {
-    // D-5: a session that ended under an open screen is not an authorisation refusal. Signing
-    // in is what fixes it, and the return path brings her back to this exact screen.
     if (isAuthenticationRequired(results.error.errorCode)) {
       return <SignedOutState />;
     }
 
-    // S-9 / D-5: an authorisation refusal is the permission-denied state, never an error
-    // state and never a raw 403.
     if (isPermissionDenied(results.error.errorCode)) return <DeniedState locale={locale} />;
 
     const key = `errors.${results.error.errorCode}`;
@@ -102,14 +73,6 @@ export async function HistoryScreen({ locale, filters }: HistoryScreenProps) {
   const visible = applyClientFilters(results.data, filters, verdicts);
   const totalPages = results.meta?.totalPages ?? 1;
 
-  // Two of the four reads are secondary — her try-ons render without either. But both feed
-  // *filters*, and a filter built from a failed read quietly narrows the list: an empty verdict
-  // map makes every try-on look undecided, and an empty photo list removes grouping altogether.
-  // Neither may pass for the truth, so each one that failed is named.
-  const incomplete: string[] = [];
-  if (!photos.ok) incomplete.push(t('list.partial.photos'));
-  if (!shortlist.ok) incomplete.push(t('list.partial.verdicts'));
-
   return (
     <div className="flex flex-col gap-8">
       <header className="flex flex-col gap-2">
@@ -117,47 +80,10 @@ export async function HistoryScreen({ locale, filters }: HistoryScreenProps) {
         <p className="max-w-prose text-ink-muted">{t('list.subtitle')}</p>
       </header>
 
-      {incomplete.length === 0 ? null : (
-        <PartialDataNotice title={t('list.partial.title')} items={incomplete} />
-      )}
-
-      <HistoryFilters
-        filters={filters}
-        categories={categoryOptions(results.data)}
-        photos={photos.ok ? photos.data : []}
-        resultCount={visible.length}
-      />
-
       {results.data.length === 0 ? (
         <EmptyHistory locale={locale} filters={filters} />
       ) : visible.length === 0 ? (
         <EmptyHistory locale={locale} filters={filters} filteredOut />
-      ) : filters.groupByPhoto && groups.ok && groups.data.length > 0 ? (
-        <div className="flex flex-col gap-10">
-          {groups.data.map((group) => {
-            const items = applyClientFilters(group.items, filters, verdicts);
-            if (items.length === 0) return null;
-
-            return (
-              <section
-                key={group.personPhotoId ?? 'deleted-photo'}
-                className="flex flex-col gap-4"
-              >
-                <div className="flex flex-col gap-1">
-                  <h2 className="text-lg font-medium">
-                    {group.personPhotoLabel === null
-                      ? t('list.group.headingUnnamed')
-                      : t('list.group.heading', { label: group.personPhotoLabel })}
-                  </h2>
-                  <p className="text-sm text-ink-muted">
-                    {t('list.group.count', { count: group.count })}
-                  </p>
-                </div>
-                <RenderList locale={locale} results={items} verdicts={verdicts} />
-              </section>
-            );
-          })}
-        </div>
       ) : (
         <RenderList locale={locale} results={visible} verdicts={verdicts} />
       )}
@@ -166,11 +92,6 @@ export async function HistoryScreen({ locale, filters }: HistoryScreenProps) {
         <HistoryPagination locale={locale} filters={filters} totalPages={totalPages} />
       ) : null}
 
-      <ShortlistingCaption>{t('caption')}</ShortlistingCaption>
-
-      <DeleteMyDataLink locale={locale} />
-
-      {/* C-19: a try-on started elsewhere finishes and reports itself here too. */}
       <TryOnTray locale={locale} />
     </div>
   );
@@ -186,7 +107,7 @@ function RenderList({
   verdicts: Map<string, Verdict>;
 }) {
   return (
-    <ul className="flex flex-col gap-6">
+    <ul className="grid grid-cols-2 gap-4 md:grid-cols-3 md:gap-6 xl:grid-cols-4">
       {results.map((result) => (
         <li key={result.id}>
           <RenderCard
@@ -200,10 +121,6 @@ function RenderList({
   );
 }
 
-/**
- * Two empty states (D-6). A filtered-out list offers the filters back; a genuinely empty history
- * points at the collection, because trying something on is the only way to fill it.
- */
 async function EmptyHistory({
   locale,
   filters,

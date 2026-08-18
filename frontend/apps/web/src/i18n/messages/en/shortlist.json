@@ -4,10 +4,10 @@
     "description": "The pieces worth seeing in person, in the order you'd like to see them."
   },
   "list": {
-    "title": "Your shortlist",
-    "subtitle": "Put them in the order you'd like to see them in the studio. Your order travels with you across devices.",
+    "title": "Shortlist",
+    "subtitle": "Your favourites, ready for a studio visit.",
     "count": "{count, plural, =0 {Nothing here yet} one {1 piece} other {# pieces}}",
-    "rank": "Position {rank}",
+    "rank": "No. {rank}",
     "renderAlt": "Your try-on of {garment}",
     "noRender": "Not tried on yet",
     "tryOn": "Try it on",
@@ -51,7 +51,10 @@
     "cancel": "Cancel"
   },
   "budget": {
-    "heading": "Running total",
+    "heading": "Summary",
+    "pieces": "Pieces",
+    "totalLabel": "Total",
+    "budgetLabel": "Budget",
     "total": "{amount}",
     "itemCount": "{count, plural, one {across 1 piece} other {across # pieces}}",
     "band": "Your budget: {band}",
@@ -69,8 +72,8 @@
     }
   },
   "enquire": {
-    "action": "Send this to the studio",
-    "hint": "They'll come back to you with availability, fittings and anything close to a piece that's gone."
+    "action": "Send an enquiry",
+    "hint": "The studio replies within a day on WhatsApp."
   },
   "empty": {
     "title": "Start your shortlist",
