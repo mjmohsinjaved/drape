@@ -46,11 +46,12 @@ describe('buildTryOnCacheKey', () => {
     garmentSourceHash: 'a'.repeat(64),
     personPhotoHash: 'b'.repeat(64),
     tryOnApiVersion: '2026-08-01',
+    driver: 'gemini',
   };
 
-  it('is sha256 of the three components joined in the §3.7 order', () => {
+  it('is sha256 of the four components joined in the §3.7 order', () => {
     const expected = sha256Hex(
-      ['a'.repeat(64), 'b'.repeat(64), '2026-08-01'].join(TRYON_CACHE_KEY_SEPARATOR),
+      ['a'.repeat(64), 'b'.repeat(64), '2026-08-01', 'gemini'].join(TRYON_CACHE_KEY_SEPARATOR),
     );
     expect(buildTryOnCacheKey(input)).toBe(expected);
   });
@@ -75,6 +76,10 @@ describe('buildTryOnCacheKey', () => {
     expect(buildTryOnCacheKey({ ...input, tryOnApiVersion: '2026-09-01' })).not.toBe(
       buildTryOnCacheKey(input),
     );
+  });
+
+  it('changes when the driver changes, so an A-33 switch is not served the old renders', () => {
+    expect(buildTryOnCacheKey({ ...input, driver: 'openai' })).not.toBe(buildTryOnCacheKey(input));
   });
 
   it('is order-sensitive: swapping the two hashes yields a different key', () => {

@@ -22,7 +22,7 @@ doing a thing that already has one way.**
 | Storage | Local disk **outside the repository**, root `STORAGE_ROOT` (default `D:/drape-storage`). The database stores the **relative storage key** and never an absolute path. |
 | Frontend | Turborepo + **npm workspaces**. One Next.js app `apps/web` serving both roles (PRD S-2). |
 | Auth | Custom server-side sessions, httpOnly `SameSite=Lax` cookie, CSRF double-submit. **No NextAuth, no JWT.** |
-| TryOnCloud | Behind a `TryOnProvider` interface. `TRYON_DRIVER=mock` in local and CI — the upstream account has a 10-image budget and tests must never spend it. |
+| TryOnCloud / Gemini / OpenAI | Three interchangeable upstreams behind one `TryOnProvider` interface, selected per generation by `TryOnProviderResolver` (A-33: `tryon.driver` → `TRYON_DRIVER` → `mock`). `TRYON_DRIVER=mock` in local and CI, and no upstream credential exists there — the TryOnCloud account has a 10-image budget and neither Gemini nor OpenAI has a free image tier, so tests must never reach any of them. |
 | Language | TypeScript everywhere, `strict: true`. `any` is a review failure. |
 | Casing | camelCase for TS identifiers and entity columns; PascalCase for types; kebab-case for files, folders and URL segments; UPPER_SNAKE_CASE for constants, env vars and enum **values**; snake_case for table names only. |
 
@@ -596,7 +596,7 @@ that the true code appears in the log line.
 | `UPSTREAM_UNAVAILABLE` | 503 | `Taking longer than usual — hang tight.` | ✔︎ | Upstream 5xx. Same backoff policy as timeout. |
 | `UPSTREAM_RATE_LIMITED` | — | *(never surfaced)* | | **Silent. The job stays `RUNNING` and the SSE stream stays open.** Backoff and retry. Only once attempts are exhausted does the job fail as `UPSTREAM_UNAVAILABLE`. |
 | `UPSTREAM_INVALID_RESPONSE` | 502 | `We're having trouble with this piece — we've been notified. Try another for now.` | | Malformed upstream payload; treated as no-garment-detected for the consumer. |
-| `TRYON_PROVIDER_MISCONFIGURED` | 503 | `The fitting room is briefly unavailable. Try again shortly.` | | `TRYON_DRIVER=http` with no API key. Startup validation catches this first; this is the runtime backstop. |
+| `TRYON_PROVIDER_MISCONFIGURED` | 503 | `The fitting room is briefly unavailable. Try again shortly.` | | The selected driver has no usable credentials — `TRYON_DRIVER=http` with no API key, an unverified OpenAI organisation, an exhausted OpenAI balance (`insufficient_quota`, deliberately **not** read as a rate limit since retrying cannot buy credit). Startup validation catches the boot driver and the A-33 switch endpoint refuses an unconfigured one; this is the runtime backstop for a credential revoked after the fact. Note the resolver **never** silently substitutes another driver here: falling back to a paid one would spend on an upstream nobody chose, and falling back to the mock would serve synthetic images as real renders. |
 
 **Failed jobs never consume quota or budget** (PRD §8.3). Enforced in exactly one place:
 `QuotaService.commit()` is called only from the `SUCCEEDED` branch of `TryOnService.run()`.
@@ -1128,12 +1128,27 @@ string), so a download token can never be replayed as an upload token.
 ### 3.7 Content-hash cache (PRD §8.1 step 4, PRD §8.4)
 
 ```
-cacheKey = sha256(`${garmentSourceHash}:${personPhotoHash}:${TRYON_API_VERSION}`)
+cacheKey = sha256(`${garmentSourceHash}:${personPhotoHash}:${TRYON_API_VERSION}:${driver}`)
 ```
 
 `garmentSourceHash` is `garment_images.hash` of the try-on source. `personPhotoHash` is
 `person_photos.hash`. Both are the sha256 the driver returned on write. `TRYON_API_VERSION` is an env
 value; bumping it invalidates the whole cache without a migration.
+
+`driver` is the **live** try-on driver (`tryon_cache.driver`), resolved by
+`TryOnProviderResolver` for the generation the key belongs to. It is a component because A-33 makes
+the driver switchable from the admin console: two drivers given identical inputs return visibly
+different renders, so without it an admin who switches to OpenAI keeps being served the images
+Gemini produced for every pair either driver has already seen. `TRYON_API_VERSION` cannot carry that
+distinction — nobody restarts the API to change a dropdown.
+
+The key is built **once per generation, before the upstream call**, from the same resolution the call
+uses. Resolving twice could straddle a switch and file a render under a key nothing can hit.
+
+Adding `driver` invalidated the cache once, on the deploy that introduced it. Rows written before it
+carry a three-component key nothing can derive again: they are unreachable rather than wrong, they
+are the rows whose `driver` is `NULL`, and they are deliberately left in place — deleting them would
+orphan the canonical render files they point at.
 
 **On a hit the render file is copied into the requesting user's own namespace**
 (`renders/<userId>/<uuid>.png`) and a new `tryon_results` row is written for her. It is never shared
@@ -1655,6 +1670,7 @@ the history DTO joins them in. One verdict per garment, one source of truth (§4
 | `garmentSourceHash` | `string` | `char(64)` | no |
 | `personPhotoHash` | `string` | `char(64)` | no |
 | `apiVersion` | `string` | `varchar(32)` | no |
+| `driver` | `string \| null` | `varchar(16)` — the driver that produced the render; the fourth key component (A-33). `NULL` only on rows written before it joined the key, which are unreachable by construction | yes |
 | `garmentId` | `string \| null` | `uuid` | yes |
 | `storageKey` | `string` | `varchar(512)` — canonical render, copied per user on a hit (§3.7) | no |
 | `width` / `height` | `number` | `int` | no |
@@ -1881,6 +1897,8 @@ is `SETTINGS_KEY_UNKNOWN`, and each key declares a Zod-equivalent `class-validat
 | `photos.maxPerConsumer` | NUMBER | `5` | C-16 |
 | `quality.minScore` | NUMBER | `70` | A-10 |
 | `shortLink.slug` | STRING | `drape` | A-32 |
+| `tryon.driver` | STRING | `null` | A-33. The live upstream. **`null` means "follow `TRYON_DRIVER`"** — a concrete default would invert the precedence and make a box deployed with `TRYON_DRIVER=gemini` come up on the mock. |
+| `tryon.openaiQuality` | STRING | `medium` | A-33. `low \| medium \| high` — the OpenAI cost and latency dial. Never defaults to `high`, which is ~4× the price and an order of magnitude slower. |
 
 ### 4.29 `moderation_items` — module `moderation`, table `moderation_items`
 
@@ -2196,6 +2214,8 @@ Prices are omitted from every response when `catalog.showPricesPublicly` is fals
 | GET | `/tryon/jobs/:jobId/stream` | CONSUMER | **SSE.** `text/event-stream`, no envelope. Events below. |
 | POST | `/tryon/jobs/:jobId/cancel` | CONSUMER | Give up on a job; no quota is consumed either way. |
 | GET | `/admin/reference-models` | ADMIN | Reference model photos available for a test render (A-11). |
+| GET | `/admin/tryon/providers` | ADMIN | Every try-on driver, whether this deployment holds its credentials, which one is live, and the OpenAI quality dial (A-33). |
+| PUT | `/admin/tryon/provider` | ADMIN | Switch the live driver (A-33). Applies to the **next** generation — no restart; work in flight finishes on the driver it started on. Refuses a driver with no credentials (`SETTINGS_VALUE_INVALID`). Audited as `TRYON_DRIVER_CHANGED`. |
 | POST | `/admin/tryon/test-render` | ADMIN | Run one test render for a garment against a reference model (A-11). |
 | POST | `/admin/tryon/test-render/bulk` | ADMIN | Queue a batch; processed at concurrency 1 (A-12, §8.2). Returns `batchId`. |
 | GET | `/admin/tryon/batches/:batchId` | ADMIN | Per-item progress and a success/failure summary (D-16). |
@@ -2923,11 +2943,18 @@ request.
 | `STORAGE_UPLOAD_TICKET_TTL_SECONDS` | api | — | `900` | Upload ticket TTL. |
 | `STORAGE_MAX_UPLOAD_MB` | api | — | `25` | Hard per-file ceiling. |
 | `STORAGE_MIN_FREE_MB` | api | — | `2048` | Below this, `/health/ready` degrades and an alert fires (E-14). |
-| `TRYON_DRIVER` | api | ✔ | `mock` | `mock \| http`. **`mock` in local and CI** — the upstream account has a 10-image budget. |
+| `TRYON_DRIVER` | api | ✔ | `mock` | `mock \| http \| gemini \| openai`. The **boot default** only — A-33's `tryon.driver` setting overrides it at runtime. **`mock` in local and CI** — the TryOnCloud account has a 10-image budget and neither Gemini nor OpenAI has a free image tier. |
 | `TRYONCLOUD_BASE_URL` | api | if `http` | `https://api.tryoncloud.example/v1` | Upstream base URL. |
 | `TRYONCLOUD_API_KEY` | api | if `http` | — | **API-service-only secret** (B-1, §9.2). Rotated quarterly. |
-| `TRYON_API_VERSION` | api | ✔ | `2026-08-01` | Third component of the cache key. Bumping it invalidates the cache (§3.7). |
-| `TRYON_TIMEOUT_MS` | api | — | `20000` | Per-attempt upstream timeout (E-11). |
+| `GEMINI_BASE_URL` | api | if `gemini` | `https://generativelanguage.googleapis.com/v1beta` | The driver appends `/models/<model>:generateContent`. |
+| `GEMINI_API_KEY` | api | if `gemini` | — | **API-service-only secret** (B-1, §9.2). Sent as `x-goog-api-key`, never as `?key=` (E-12). The project needs **paid** image quota; a free-tier key answers every request `429 RESOURCE_EXHAUSTED`. |
+| `GEMINI_IMAGE_MODEL` | api | if `gemini` | `gemini-2.5-flash-image` | Must be image-capable; a text model answers 200 with no image part. |
+| `OPENAI_BASE_URL` | api | if `openai` | `https://api.openai.com/v1` | The driver posts `/images/edits` under it as multipart. |
+| `OPENAI_API_KEY` | api | if `openai` | — | **API-service-only secret** (B-1, §9.2). Sent as `Authorization: Bearer`. The org must have completed OpenAI **organisation verification** — every `gpt-image-*` model is gated behind it — and there is **no free image tier**, so a zero balance answers `429 insufficient_quota`. |
+| `OPENAI_IMAGE_MODEL` | api | if `openai` | `gpt-image-2` | Must be image-capable; a chat model 404s on `/images/edits`. |
+| `TRYON_OPENAI_TIMEOUT_MS` | api | — | `120000` | Per-attempt timeout for the **OpenAI driver alone**. Separate because `gpt-image-2` reasons before it draws: `medium` lands in tens of seconds, `high` between 145 s and 280 s. Genuinely optional — absence takes the default rather than failing the boot. |
+| `TRYON_API_VERSION` | api | ✔ | `2026-08-01` | A component of the cache key; bumping it invalidates the cache (§3.7). Versions the **prompt and the model** — the driver is its own component, so only prompt rewordings and model-id changes need a bump. |
+| `TRYON_TIMEOUT_MS` | api | — | `20000` | Per-attempt upstream timeout for every driver except OpenAI (E-11). |
 | `TRYON_MAX_ATTEMPTS` | api | — | `3` | Retry ceiling (§8.3). |
 | `TRYON_BACKOFF_BASE_MS` | api | — | `800` | Exponential backoff base. |
 | `TRYON_TEST_RENDER_CONCURRENCY` | api | — | `1` | Bulk test renders never compete with a live generation (§8.2). |

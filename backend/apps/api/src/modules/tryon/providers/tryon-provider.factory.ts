@@ -1,49 +1,74 @@
-import { Logger, type Provider } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 
-import { TryOnDriverName } from '@api/config/env.validation';
+import { OpenAiImageQuality, TryOnDriverName } from '@api/config/env.validation';
 
-import { TryOnConfig } from '../config/tryon.config';
+import { type TryOnConfig } from '../config/tryon.config';
 
+import { GeminiTryOnProvider } from './gemini-tryon.provider';
 import { HttpTryOnProvider } from './http-tryon.provider';
 import { MockTryOnProvider } from './mock-tryon.provider';
-import { TRYON_PROVIDER, type TryOnProvider } from './tryon-provider.interface';
+import { OpenAiTryOnProvider } from './openai-tryon.provider';
+import { type TryOnProvider } from './tryon-provider.interface';
 
 const logger = new Logger('TryOnProviderFactory');
 
-/**
- * **The one place a try-on driver is chosen.** ARCHITECTURE §7, PRD B-1.
- *
- * `TryOnService` injects `TRYON_PROVIDER` and has no idea which implementation it got.
- * That matters more here than in most seams, because the wrong answer costs real money
- * from a ten-image allowance — so the decision is made once, from one variable, and is
- * asserted by a test that runs on every CI build.
- *
- * `mock` is the default *and* the fallback: an unrecognised value selects the mock and
- * logs it loudly rather than guessing at the expensive option. `validateEnv()` already
- * rejects anything outside the enum before the container is built, so this branch is
- * unreachable in practice and exists so that it stays unreachable in the cheap
- * direction if it ever is not.
- */
-export function createTryOnProvider(config: TryOnConfig): TryOnProvider {
-  if (config.driver === TryOnDriverName.HTTP) {
-    logger.warn(
-      'TRYON_DRIVER=http — generations will call TryOnCloud and spend the upstream budget.',
-    );
-    return new HttpTryOnProvider(config);
-  }
+export type QualityReader = () => Promise<OpenAiImageQuality>;
 
-  if (config.driver !== TryOnDriverName.MOCK) {
-    logger.error(
-      `Unrecognised TRYON_DRIVER "${String(config.driver)}"; falling back to the mock driver.`,
-    );
-  }
+const DEFAULT_QUALITY: QualityReader = () => Promise.resolve(OpenAiImageQuality.MEDIUM);
 
-  return new MockTryOnProvider(config);
+export function buildTryOnProviders(
+  config: TryOnConfig,
+  readQuality: QualityReader = DEFAULT_QUALITY,
+): ReadonlyMap<TryOnDriverName, TryOnProvider> {
+  return new Map<TryOnDriverName, TryOnProvider>([
+    [TryOnDriverName.MOCK, new MockTryOnProvider(config)],
+    [TryOnDriverName.HTTP, new HttpTryOnProvider(config)],
+    [TryOnDriverName.GEMINI, new GeminiTryOnProvider(config)],
+    [TryOnDriverName.OPENAI, new OpenAiTryOnProvider(config, readQuality)],
+  ]);
 }
 
-/** The `TRYON_PROVIDER` binding, ready for `TryOnModule.providers`. */
-export const tryOnProviderFactory: Provider = {
-  provide: TRYON_PROVIDER,
-  inject: [TryOnConfig],
-  useFactory: createTryOnProvider,
-};
+export function selectTryOnProvider(
+  providers: ReadonlyMap<TryOnDriverName, TryOnProvider>,
+  driver: TryOnDriverName,
+): TryOnProvider {
+  const provider = providers.get(driver);
+  if (provider !== undefined) {
+    return provider;
+  }
+
+  logger.error(`Unrecognised try-on driver "${String(driver)}"; falling back to the mock driver.`);
+
+  return providers.get(TryOnDriverName.MOCK) as TryOnProvider;
+}
+
+export function createTryOnProvider(
+  config: TryOnConfig,
+  readQuality: QualityReader = DEFAULT_QUALITY,
+): TryOnProvider {
+  const provider = selectTryOnProvider(buildTryOnProviders(config, readQuality), config.driver);
+
+  switch (provider.name) {
+    case 'http':
+      logger.warn(
+        'TRYON_DRIVER=http — generations will call TryOnCloud and spend the upstream budget.',
+      );
+      break;
+    case 'gemini':
+      logger.warn(
+        `TRYON_DRIVER=gemini — generations will call the Gemini API ` +
+          `(${config.geminiModel ?? 'no model configured'}) and bill the Google project.`,
+      );
+      break;
+    case 'openai':
+      logger.warn(
+        `TRYON_DRIVER=openai — generations will call the OpenAI images API ` +
+          `(${config.openAiModel ?? 'no model configured'}) and bill the OpenAI account.`,
+      );
+      break;
+    default:
+      break;
+  }
+
+  return provider;
+}

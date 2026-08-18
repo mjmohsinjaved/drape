@@ -1,21 +1,3 @@
-/**
- * The `tryon` module's public surface.
- *
- * Two things other modules legitimately need:
- *
- *  - `TestRenderService` — `garments` reads the A-11 state for the publish screen.
- *  - the two **ports** below, which `TryOnModule` binds to adapters over
- *    `PersonPhotosService` and the `quota` services.
- *
- * C-16 cache retirement is **not** on this surface. `person-photos` does not call into
- * this module for it — it emits `PERSON_PHOTO_EVENTS.REMOVED` and
- * `PersonPhotoRemovedListener` here retires the rows (§3.7, §4.19). Renders already
- * produced stay in history (C-28).
- *
- * Nothing else is exported. In particular `TryOnRunnerService` is not: it is the only
- * code that may charge for a generation, and the fewer places that can reach it, the
- * easier "quota and budget decrement only on success" is to verify.
- */
 export { TryOnModule } from './tryon.module';
 
 export { TryOnConfig } from './config/tryon.config';
@@ -40,7 +22,6 @@ export {
   type FailureBehaviour,
 } from './services/tryon-failure.policy';
 
-// ── ports (the seams to `person-photos` and `quota`) ─────────────────────────────
 export {
   PERSON_PHOTO_PORT,
   type PersonPhotoPort,
@@ -54,7 +35,6 @@ export {
   type QuotaView,
 } from './ports/quota.port';
 
-// ── the upstream seam ────────────────────────────────────────────────────────────
 export {
   TRYON_PROVIDER,
   TRYON_PROVIDER_ERROR_CODES,
@@ -65,11 +45,29 @@ export {
   type TryOnProvider,
   type TryOnProviderErrorCode,
 } from './providers/tryon-provider.interface';
-export { createTryOnProvider, tryOnProviderFactory } from './providers/tryon-provider.factory';
+export {
+  buildTryOnProviders,
+  createTryOnProvider,
+  selectTryOnProvider,
+  type QualityReader,
+} from './providers/tryon-provider.factory';
+export {
+  TRYON_PROVIDER_RESOLVER,
+  TryOnProviderResolver,
+  type ResolvedTryOnProvider,
+} from './providers/tryon-provider.resolver';
 export { MockTryOnProvider } from './providers/mock-tryon.provider';
 export { HttpTryOnProvider } from './providers/http-tryon.provider';
+export { GeminiTryOnProvider } from './providers/gemini-tryon.provider';
+export { OpenAiTryOnProvider } from './providers/openai-tryon.provider';
 
-// ── the guard chain (E-5) ────────────────────────────────────────────────────────
+export { TryOnProviderAdminService } from './services/tryon-provider-admin.service';
+export {
+  SelectTryOnProviderDto,
+  TryOnProviderOptionDto,
+  TryOnProviderStateDto,
+} from './dto/tryon-provider.dto';
+
 export {
   TRYON_GUARD_ORDER,
   checkAccountStatus,
@@ -87,7 +85,6 @@ export {
   type RateWindow,
 } from './guards/tryon-guard.predicates';
 
-// ── enums and DTOs ───────────────────────────────────────────────────────────────
 export { JobOrigin } from './enums/job-origin.enum';
 export { JobStatus } from './enums/job-status.enum';
 export { CreateTryOnDto, MAX_IDEMPOTENCY_KEY_LENGTH } from './dto/create-tryon.dto';

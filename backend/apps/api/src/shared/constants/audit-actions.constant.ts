@@ -1,18 +1,4 @@
-/**
- * The closed registry of audit action codes (PRD A-3, ARCHITECTURE §4.30).
- *
- * Naming: UPPER_SNAKE_CASE, **verb last** (§2.2) — `GARMENT_PUBLISHED`,
- * `MODERATION_ITEM_VIEWED`.
- *
- * A-3 requires the log to cover: catalog changes, publishes, deletions, role
- * changes, quota changes, consumer suspensions, moderation-queue views and
- * settings changes — plus `SIGNUP_ROLE_IGNORED` (S-4) and every quality override
- * (A-10). Adding an action means adding it here in the same pull request; rows are
- * written only by the `audit` module's `@OnEvent` listener (§2.9 rule 4).
- */
 export const AUDIT_ACTIONS = {
-  // --- accounts, sessions and roles (A-2, S-4, S-5, S-6, S-8) ---
-  /** S-4: a `role` field in a signup payload was stripped, not rejected. */
   SIGNUP_ROLE_IGNORED: 'SIGNUP_ROLE_IGNORED',
   USER_INVITED: 'USER_INVITED',
   INVITE_RESENT: 'INVITE_RESENT',
@@ -33,7 +19,6 @@ export const AUDIT_ACTIONS = {
   TWOFA_DISABLED: 'TWOFA_DISABLED',
   TWOFA_RECOVERY_CODES_REGENERATED: 'TWOFA_RECOVERY_CODES_REGENERATED',
 
-  // --- categories (A-4 … A-7) ---
   CATEGORY_CREATED: 'CATEGORY_CREATED',
   CATEGORY_UPDATED: 'CATEGORY_UPDATED',
   CATEGORY_REORDERED: 'CATEGORY_REORDERED',
@@ -41,7 +26,6 @@ export const AUDIT_ACTIONS = {
   CATEGORY_RESTORED: 'CATEGORY_RESTORED',
   CATEGORY_DELETED: 'CATEGORY_DELETED',
 
-  // --- garments and images (A-8 … A-15) ---
   GARMENT_CREATED: 'GARMENT_CREATED',
   GARMENT_UPDATED: 'GARMENT_UPDATED',
   GARMENT_DELETED: 'GARMENT_DELETED',
@@ -55,7 +39,6 @@ export const AUDIT_ACTIONS = {
   GARMENT_IMAGE_REMOVED: 'GARMENT_IMAGE_REMOVED',
   GARMENT_IMAGE_REORDERED: 'GARMENT_IMAGE_REORDERED',
   GARMENT_TRYON_SOURCE_SET: 'GARMENT_TRYON_SOURCE_SET',
-  /** A-10 — publishing below `quality.minScore` behind an explicit override. */
   GARMENT_QUALITY_OVERRIDDEN: 'GARMENT_QUALITY_OVERRIDDEN',
   GARMENT_TEST_RENDER_RUN: 'GARMENT_TEST_RENDER_RUN',
   GARMENT_TEST_RENDER_APPROVED: 'GARMENT_TEST_RENDER_APPROVED',
@@ -63,43 +46,35 @@ export const AUDIT_ACTIONS = {
   GARMENT_FLAGGED_FOR_REVIEW: 'GARMENT_FLAGGED_FOR_REVIEW',
   GARMENT_REVIEW_FLAG_CLEARED: 'GARMENT_REVIEW_FLAG_CLEARED',
 
-  // --- reference models (E-4, A-11) ---
   REFERENCE_MODEL_CREATED: 'REFERENCE_MODEL_CREATED',
   REFERENCE_MODEL_UPDATED: 'REFERENCE_MODEL_UPDATED',
   REFERENCE_MODEL_DELETED: 'REFERENCE_MODEL_DELETED',
 
-  // --- quota and budget (A-18, A-28, A-29) ---
   QUOTA_ADJUSTED: 'QUOTA_ADJUSTED',
   QUOTA_OVERRIDE_SET: 'QUOTA_OVERRIDE_SET',
   QUOTA_OVERRIDE_CLEARED: 'QUOTA_OVERRIDE_CLEARED',
   QUOTA_DEFAULT_CHANGED: 'QUOTA_DEFAULT_CHANGED',
   BUDGET_LIMIT_CHANGED: 'BUDGET_LIMIT_CHANGED',
 
-  // --- enquiries (A-21 … A-26) ---
   ENQUIRY_STATUS_CHANGED: 'ENQUIRY_STATUS_CHANGED',
   ENQUIRY_ASSIGNED: 'ENQUIRY_ASSIGNED',
   ENQUIRY_NOTE_ADDED: 'ENQUIRY_NOTE_ADDED',
   ENQUIRY_EXPORTED: 'ENQUIRY_EXPORTED',
 
-  // --- moderation and abuse (A-34, A-35) ---
-  /** A-34 — every read of the queue list is audited. */
   MODERATION_QUEUE_VIEWED: 'MODERATION_QUEUE_VIEWED',
-  /** A-34 — every read of a blurred thumbnail is audited. */
   MODERATION_ITEM_VIEWED: 'MODERATION_ITEM_VIEWED',
   MODERATION_ITEM_APPROVED: 'MODERATION_ITEM_APPROVED',
   MODERATION_ITEM_REJECTED: 'MODERATION_ITEM_REJECTED',
   IP_BLOCK_CREATED: 'IP_BLOCK_CREATED',
   IP_BLOCK_REMOVED: 'IP_BLOCK_REMOVED',
 
-  // --- settings and branding (A-27 … A-32) ---
   SETTING_UPDATED: 'SETTING_UPDATED',
   BRAND_ASSET_UPLOADED: 'BRAND_ASSET_UPLOADED',
+  TRYON_DRIVER_CHANGED: 'TRYON_DRIVER_CHANGED',
 
-  // --- consent policy (C-11, C-12) ---
   POLICY_VERSION_CREATED: 'POLICY_VERSION_CREATED',
   POLICY_VERSION_PUBLISHED: 'POLICY_VERSION_PUBLISHED',
 
-  // --- retention and deletion (A-20, C-31, C-38, C-39, §9.3) ---
   ACCOUNT_DELETION_REQUESTED: 'ACCOUNT_DELETION_REQUESTED',
   ACCOUNT_DELETION_COMPLETED: 'ACCOUNT_DELETION_COMPLETED',
   CONSUMER_DATA_DELETED: 'CONSUMER_DATA_DELETED',
@@ -110,26 +85,15 @@ export const AUDIT_ACTIONS = {
   PURGE_JOB_COMPLETED: 'PURGE_JOB_COMPLETED',
   PURGE_JOB_FAILED: 'PURGE_JOB_FAILED',
 
-  // --- generation (§8.3) ---
-  /**
-   * A generation failed with a code the §8.3 taxonomy marks `alertAdmin`.
-   *
-   * `TRYON_PROVIDER_MISCONFIGURED` is the case with no other route to an operator —
-   * `BUDGET_EXHAUSTED` reaches one through the A-29 threshold event instead. See
-   * `TryOnRunnerService.raiseAdminAlert()`.
-   */
   TRYON_ALERT_RAISED: 'TRYON_ALERT_RAISED',
 
-  // --- audit itself (A-3) ---
   AUDIT_LOG_EXPORTED: 'AUDIT_LOG_EXPORTED',
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];
 
-/** Every registered action, for validation and for the A-3 filter dropdown. */
 export const AUDIT_ACTION_VALUES: readonly AuditAction[] = Object.values(AUDIT_ACTIONS);
 
-/** `audit_log.targetType` registry (§4.30). */
 export const AUDIT_TARGET_TYPES = {
   USER: 'USER',
   INVITE: 'INVITE',

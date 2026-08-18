@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Sse, type MessageEvent } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Put, Sse, type MessageEvent } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiProduces, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 
@@ -26,30 +26,58 @@ import {
   TestRenderEstimateDto,
 } from '../dto/test-render.dto';
 import { BatchIdParamDto } from '../dto/tryon-params.dto';
+import { SelectTryOnProviderDto, TryOnProviderStateDto } from '../dto/tryon-provider.dto';
 import { ReferenceModelsService } from '../services/reference-models.service';
 import { TestRenderService } from '../services/test-render.service';
+import { TryOnProviderAdminService } from '../services/tryon-provider-admin.service';
 
 import type { Observable } from 'rxjs';
 
-/**
- * The A-11 test-render gate and the A-12 bulk queue — ARCHITECTURE §5.11.
- *
- * **Every handler is `@Roles(Role.ADMIN)`.**
- *
- * The approve and reject routes are declared here rather than on `GarmentsController`
- * because they are the *test render's* state machine: they are what turns a rendered
- * image into an approved one, and `garments.testRenderState` is the column this module
- * writes. §5.11's route table puts them under `/admin/garments/:garmentId/test-render/*`
- * and this controller takes that prefix, so the URL still reads as a property of the
- * garment.
- */
 @ApiTags('Try-on (admin)')
 @Controller()
 export class AdminTryOnController {
   constructor(
     private readonly testRenders: TestRenderService,
     private readonly referenceModels: ReferenceModelsService,
+    private readonly providers: TryOnProviderAdminService,
   ) {}
+
+  @Get('admin/tryon/providers')
+  @Roles(Role.ADMIN)
+  @ResponseMessage('Try-on providers retrieved successfully')
+  @ApiOperation({
+    summary: 'The try-on upstreams and which one is live (A-33)',
+    description:
+      'Every driver, whether this deployment holds its credentials, and which one is ' +
+      'serving generations right now. An unconfigured driver is still listed — the screen ' +
+      'shows it disabled with the reason, which is more useful than hiding it.',
+  })
+  @ApiOkResponse({ type: TryOnProviderStateDto })
+  @ApiStandardResponses()
+  listProviders(): Promise<TryOnProviderStateDto> {
+    return this.providers.list();
+  }
+
+  @Put('admin/tryon/provider')
+  @Roles(Role.ADMIN)
+  @ResponseMessage('Try-on provider updated successfully')
+  @ApiOperation({
+    summary: 'Switch the live try-on upstream (A-33)',
+    description:
+      'Takes effect on the **next generation** — no restart and no deploy. Anything ' +
+      'already in flight finishes on the driver it started on, because a job that has ' +
+      'already been billed upstream cannot be moved to another vendor halfway through. ' +
+      'A driver with no credentials on this deployment is refused rather than accepted ' +
+      'and left to fail per-generation. Audited as `TRYON_DRIVER_CHANGED` (A-3).',
+  })
+  @ApiOkResponse({ type: TryOnProviderStateDto })
+  @ApiStandardResponses({ unprocessable: true })
+  selectProvider(
+    @Body() dto: SelectTryOnProviderDto,
+    @CurrentUser() admin: ICurrentUser,
+  ): Promise<TryOnProviderStateDto> {
+    return this.providers.select(dto, admin);
+  }
 
   @Get('admin/reference-models')
   @Roles(Role.ADMIN)
@@ -134,17 +162,6 @@ export class AdminTryOnController {
     return this.testRenders.batch(params.batchId);
   }
 
-  /**
-   * §5.11 — `text/event-stream`, **no envelope**.
-   *
-   * `ResponseTransformInterceptor` checks for Nest's `sse` metadata (which `@Sse()`
-   * sets) and returns the handler's observable untouched, so nothing here ends up
-   * inside `{ success, data, … }`. There is deliberately no `@ResponseMessage()` on
-   * this route: it would be metadata for an envelope that is never built.
-   *
-   * Client disconnect is handled by RxJS: Nest unsubscribes, which tears down both the
-   * batch channel subscription and the heartbeat interval inside it.
-   */
   @Sse('admin/tryon/batches/:batchId/stream')
   @Roles(Role.ADMIN)
   @ApiProduces('text/event-stream')

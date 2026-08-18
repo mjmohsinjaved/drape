@@ -1,16 +1,5 @@
 import { SettingsValueType } from '@api/modules/settings/enums/settings-value-type.enum';
 
-/**
- * The closed `settings` key registry (ARCHITECTURE §4.28).
- *
- * An unknown key is `SETTINGS_KEY_UNKNOWN`. Every key declares its value type, its
- * seed default and whether it is exposed by `GET /settings/brand`.
- *
- * Defaults are **product** defaults, not secrets. Three of them (`quota.defaultMonthly`,
- * `budget.monthlyGenerations`, `budget.warnThresholdPercent`) may be overridden at
- * seed time by `QUOTA_DEFAULT_MONTHLY`, `BUDGET_DEFAULT_MONTHLY` and
- * `BUDGET_WARN_PERCENT` (§7); the seeder, not this file, reads the environment.
- */
 export const SETTINGS_KEYS = {
   BRAND_NAME: 'brand.name',
   BRAND_LOGO_KEY: 'brand.logoKey',
@@ -29,6 +18,8 @@ export const SETTINGS_KEYS = {
   PHOTOS_MAX_PER_CONSUMER: 'photos.maxPerConsumer',
   QUALITY_MIN_SCORE: 'quality.minScore',
   SHORT_LINK_SLUG: 'shortLink.slug',
+  TRYON_DRIVER: 'tryon.driver',
+  TRYON_OPENAI_QUALITY: 'tryon.openaiQuality',
 } as const;
 
 export type SettingsKey = (typeof SETTINGS_KEYS)[keyof typeof SETTINGS_KEYS];
@@ -36,12 +27,9 @@ export type SettingsKey = (typeof SETTINGS_KEYS)[keyof typeof SETTINGS_KEYS];
 export interface SettingDefinition {
   key: SettingsKey;
   valueType: SettingsValueType;
-  /** Seed default. `null` means "no default — an admin must supply it" (A-27). */
   defaultValue: unknown;
   description: string;
-  /** Exposed by `GET /settings/brand`. */
   isPublic: boolean;
-  /** The PRD requirement this key serves. */
   requirement: string;
 }
 
@@ -113,9 +101,6 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = [
   {
     key: SETTINGS_KEYS.QUOTA_REQUIRE_EMAIL_VERIFICATION,
     valueType: SettingsValueType.BOOLEAN,
-    // Off by default since 2026-08: the studio does not want verification standing
-    // between sign-up and the first try-on. An admin can turn it back on via
-    // PATCH /settings without a deploy.
     defaultValue: false,
     description: 'Require a verified email address before the first generation.',
     isPublic: false,
@@ -184,6 +169,22 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = [
     description: 'Slug used by the in-store QR code and the Instagram bio link.',
     isPublic: true,
     requirement: 'A-32',
+  },
+  {
+    key: SETTINGS_KEYS.TRYON_DRIVER,
+    valueType: SettingsValueType.STRING,
+    defaultValue: null,
+    description: 'Live try-on upstream. Unset follows the TRYON_DRIVER environment default.',
+    isPublic: false,
+    requirement: 'A-33',
+  },
+  {
+    key: SETTINGS_KEYS.TRYON_OPENAI_QUALITY,
+    valueType: SettingsValueType.STRING,
+    defaultValue: 'medium',
+    description: 'Render quality for the OpenAI driver — the cost and latency dial.',
+    isPublic: false,
+    requirement: 'A-33',
   },
 ];
 

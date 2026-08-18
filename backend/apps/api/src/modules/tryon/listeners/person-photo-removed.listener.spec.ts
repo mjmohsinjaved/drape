@@ -27,15 +27,6 @@ function removedEvent(personPhotoHash: string): PersonPhotoRemovedEvent {
   };
 }
 
-/**
- * PRD C-16 · ARCHITECTURE §3.7, §4.19 — what the listener does once it is handed a
- * removal. **That it is handed one at all** is a wiring property and is proved
- * separately, against the real `ApiModule` graph, in
- * `apps/api/test/integration/person-photo-cache-retirement.spec.ts`.
- *
- * The cache service here is the real one over a real (in-memory) repository, so the
- * assertions are about rows disappearing rather than about a mock being called.
- */
 describe('PersonPhotoRemovedListener — C-16 retirement', () => {
   let context: TryOnTestContext;
   let listener: PersonPhotoRemovedListener;
@@ -53,13 +44,14 @@ describe('PersonPhotoRemovedListener — C-16 retirement', () => {
     const storageKey = `renders/${CONSUMER_ID}/${name}.png`;
     context.storage.objects.set(storageKey, Buffer.from('a-render'));
     await context.cache.remember({
-      cacheKey: context.cache.buildKey(GARMENT_SOURCE_HASH, personPhotoHash),
+      cacheKey: context.cache.buildKey(GARMENT_SOURCE_HASH, personPhotoHash, 'mock'),
       garmentSourceHash: GARMENT_SOURCE_HASH,
       personPhotoHash,
       garmentId: null,
       storageKey,
       width: 768,
       height: 1152,
+      driver: 'mock',
     });
     return storageKey;
   }
@@ -76,10 +68,6 @@ describe('PersonPhotoRemovedListener — C-16 retirement', () => {
   });
 
   it('leaves the render bytes on disk — the cache row is a pointer, not an owner', async () => {
-    // §3.7: `tryon_cache.storageKey` is the requesting user's own render, the same file
-    // her `tryon_results` row points at. Deleting it here would delete a live render
-    // out of her history (C-28, C-31). Retirement drops the row and nothing else, so a
-    // retired entry leaves nothing orphaned — it never owned an object.
     const storageKey = await rememberRender(PHOTO_HASH, 'hers');
 
     await listener.onPersonPhotoRemoved(removedEvent(PHOTO_HASH));
@@ -106,11 +94,6 @@ describe('PersonPhotoRemovedListener — C-16 retirement', () => {
   });
 
   it('swallows a failing retirement rather than raising an unhandled rejection', async () => {
-    // `EventEmitterModule` runs with `ignoreErrors: false`, and this listener is
-    // `async: true`, so an escaping rejection would surface as an unhandled rejection
-    // in the process that just served a successful deletion. A stale cache row is the
-    // cheaper failure: the §3.7 key means no later try-on can serve it against a
-    // different photograph.
     await rememberRender(PHOTO_HASH, 'hers');
     const cache = context.harness.repository<TryOnCache>(TryOnCache);
     (cache.delete as unknown as jest.Mock).mockRejectedValueOnce(new Error('tryon_cache is down'));

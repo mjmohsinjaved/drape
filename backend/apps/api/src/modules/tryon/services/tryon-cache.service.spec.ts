@@ -16,15 +16,8 @@ import {
 
 const GARMENT_SOURCE_HASH = 'a'.repeat(64);
 
-/**
- * The content-hash cache — ARCHITECTURE §3.7, PRD §8.1 step 4, §8.4, C-16, C-22.
- *
- * The end-to-end behaviour (a hit charges nothing, the bytes match) is asserted in
- * `tryon.service.spec.ts`, where it is a property of the real request path. This file
- * is about the two mechanics that path depends on: the **key**, whose component order
- * is part of the contract, and the **cross-user copy**, which is the whole reason a hit
- * is safe to serve to somebody other than the consumer who paid for it.
- */
+const DRIVER = 'mock';
+
 describe('TryOnCacheService', () => {
   let context: TryOnTestContext;
 
@@ -33,41 +26,50 @@ describe('TryOnCacheService', () => {
   });
 
   describe('the §3.7 key', () => {
-    it('is sha256(garmentSourceHash:personPhotoHash:TRYON_API_VERSION)', async () => {
+    it('is sha256(garmentSourceHash:personPhotoHash:TRYON_API_VERSION:driver)', async () => {
       context = await createTryOnContext();
 
-      expect(context.cache.buildKey(GARMENT_SOURCE_HASH, PHOTO_HASH)).toBe(
+      expect(context.cache.buildKey(GARMENT_SOURCE_HASH, PHOTO_HASH, DRIVER)).toBe(
         buildTryOnCacheKey({
           garmentSourceHash: GARMENT_SOURCE_HASH,
           personPhotoHash: PHOTO_HASH,
           tryOnApiVersion: 'test-0000-00-00',
+          driver: DRIVER,
         }),
+      );
+    });
+
+    it('changes when the A-33 driver changes, so a switch is not served the old renders', async () => {
+      context = await createTryOnContext();
+
+      expect(context.cache.buildKey(GARMENT_SOURCE_HASH, PHOTO_HASH, 'openai')).not.toBe(
+        context.cache.buildKey(GARMENT_SOURCE_HASH, PHOTO_HASH, 'gemini'),
       );
     });
 
     it('changes when the photo changes — C-16 retirement’s reason for existing', async () => {
       context = await createTryOnContext();
 
-      expect(context.cache.buildKey(GARMENT_SOURCE_HASH, REPLACEMENT_PHOTO_HASH)).not.toBe(
-        context.cache.buildKey(GARMENT_SOURCE_HASH, PHOTO_HASH),
+      expect(context.cache.buildKey(GARMENT_SOURCE_HASH, REPLACEMENT_PHOTO_HASH, DRIVER)).not.toBe(
+        context.cache.buildKey(GARMENT_SOURCE_HASH, PHOTO_HASH, DRIVER),
       );
     });
 
     it('changes when TRYON_API_VERSION is bumped, invalidating the cache with no migration', async () => {
       context = await createTryOnContext();
-      const before = context.cache.buildKey(GARMENT_SOURCE_HASH, PHOTO_HASH);
+      const before = context.cache.buildKey(GARMENT_SOURCE_HASH, PHOTO_HASH, DRIVER);
       await context.close();
 
       context = await createTryOnContext({ env: { TRYON_API_VERSION: 'test-9999-99-99' } });
 
-      expect(context.cache.buildKey(GARMENT_SOURCE_HASH, PHOTO_HASH)).not.toBe(before);
+      expect(context.cache.buildKey(GARMENT_SOURCE_HASH, PHOTO_HASH, DRIVER)).not.toBe(before);
     });
 
     it('is order-sensitive: swapping the two hashes is a different key', async () => {
       context = await createTryOnContext();
 
-      expect(context.cache.buildKey(PHOTO_HASH, GARMENT_SOURCE_HASH)).not.toBe(
-        context.cache.buildKey(GARMENT_SOURCE_HASH, PHOTO_HASH),
+      expect(context.cache.buildKey(PHOTO_HASH, GARMENT_SOURCE_HASH, DRIVER)).not.toBe(
+        context.cache.buildKey(GARMENT_SOURCE_HASH, PHOTO_HASH, DRIVER),
       );
     });
   });
@@ -76,7 +78,7 @@ describe('TryOnCacheService', () => {
     async function seedEntry(): Promise<TryOnCache> {
       const entry = Object.assign(new TryOnCache(), {
         id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
-        cacheKey: context.cache.buildKey(GARMENT_SOURCE_HASH, PHOTO_HASH),
+        cacheKey: context.cache.buildKey(GARMENT_SOURCE_HASH, PHOTO_HASH, DRIVER),
         garmentSourceHash: GARMENT_SOURCE_HASH,
         personPhotoHash: PHOTO_HASH,
         apiVersion: 'test-0000-00-00',
@@ -84,6 +86,7 @@ describe('TryOnCacheService', () => {
         storageKey: `renders/${CONSUMER_ID}/original.png`,
         width: 768,
         height: 1152,
+        driver: DRIVER,
         hitCount: 0,
         lastHitAt: null,
         deletedAt: null,
@@ -100,8 +103,6 @@ describe('TryOnCacheService', () => {
 
       const copied = await context.cache.copyForUser(entry, OTHER_CONSUMER_ID);
 
-      // Per-user deletion (C-31, C-38) and `sub`-scoped signed URLs (§3.4) both depend
-      // on the render living under the owner's prefix.
       expect(copied.storageKey).toContain(`renders/${OTHER_CONSUMER_ID}/`);
       expect(copied.storageKey).not.toBe(entry.storageKey);
     });
@@ -136,37 +137,38 @@ describe('TryOnCacheService', () => {
       const cache = context.harness.repository<TryOnCache>(TryOnCache);
 
       await context.cache.remember({
-        cacheKey: context.cache.buildKey(GARMENT_SOURCE_HASH, PHOTO_HASH),
+        cacheKey: context.cache.buildKey(GARMENT_SOURCE_HASH, PHOTO_HASH, DRIVER),
         garmentSourceHash: GARMENT_SOURCE_HASH,
         personPhotoHash: PHOTO_HASH,
         garmentId: null,
         storageKey: `renders/${CONSUMER_ID}/one.png`,
         width: 768,
         height: 1152,
+        driver: DRIVER,
       });
       await context.cache.remember({
-        cacheKey: context.cache.buildKey('e'.repeat(64), PHOTO_HASH),
+        cacheKey: context.cache.buildKey('e'.repeat(64), PHOTO_HASH, DRIVER),
         garmentSourceHash: 'e'.repeat(64),
         personPhotoHash: PHOTO_HASH,
         garmentId: null,
         storageKey: `renders/${CONSUMER_ID}/two.png`,
         width: 768,
         height: 1152,
+        driver: DRIVER,
       });
       await context.cache.remember({
-        cacheKey: context.cache.buildKey(GARMENT_SOURCE_HASH, REPLACEMENT_PHOTO_HASH),
+        cacheKey: context.cache.buildKey(GARMENT_SOURCE_HASH, REPLACEMENT_PHOTO_HASH, DRIVER),
         garmentSourceHash: GARMENT_SOURCE_HASH,
         personPhotoHash: REPLACEMENT_PHOTO_HASH,
         garmentId: null,
         storageKey: `renders/${CONSUMER_ID}/three.png`,
         width: 768,
         height: 1152,
+        driver: DRIVER,
       });
 
       const retired = await context.cache.retireByPersonPhotoHash(PHOTO_HASH);
 
-      // Both entries built from the removed photo go; the one built from the
-      // replacement stays.
       expect(retired).toBe(2);
       expect(cache.$rows).toHaveLength(1);
       expect(cache.$rows[0]?.personPhotoHash).toBe(REPLACEMENT_PHOTO_HASH);
@@ -175,7 +177,6 @@ describe('TryOnCacheService', () => {
     it('reports zero for a photo that was never tried on, rather than failing', async () => {
       context = await createTryOnContext();
 
-      // A deletion must never be blocked by there being nothing to retire (C-38).
       await expect(context.cache.retireByPersonPhotoHash('f'.repeat(64))).resolves.toBe(0);
     });
 
@@ -188,8 +189,6 @@ describe('TryOnCacheService', () => {
 
       await context.cache.retireByPersonPhotoHash(PHOTO_HASH);
 
-      // C-16 retires cache entries; C-28 keeps the render. The two are different tables
-      // for exactly this reason.
       expect(results.$rows).toHaveLength(1);
       expect(context.harness.repository<TryOnCache>(TryOnCache).$rows).toHaveLength(0);
     });
@@ -201,17 +200,16 @@ describe('TryOnCacheService', () => {
       const cache = context.harness.repository<TryOnCache>(TryOnCache);
       (cache.insert as unknown as jest.Mock).mockRejectedValueOnce(new Error('unique violation'));
 
-      // The consumer already has her render; losing the cache row costs the *next*
-      // generation, not this response.
       await expect(
         context.cache.remember({
-          cacheKey: context.cache.buildKey(GARMENT_SOURCE_HASH, PHOTO_HASH),
+          cacheKey: context.cache.buildKey(GARMENT_SOURCE_HASH, PHOTO_HASH, DRIVER),
           garmentSourceHash: GARMENT_SOURCE_HASH,
           personPhotoHash: PHOTO_HASH,
           garmentId: null,
           storageKey: `renders/${CONSUMER_ID}/one.png`,
           width: 768,
           height: 1152,
+          driver: DRIVER,
         }),
       ).resolves.toBeUndefined();
     });

@@ -19,28 +19,12 @@ import {
   type TryOnTestContext,
 } from '../testing/tryon-harness';
 
-/**
- * **The A-11 test-render gate, and the §8.4 accounting split.**
- *
- * > A-11: "No garment reaches the consumer catalog without an approved test render."
- * > E-10: "A test asserts that no garment lacking an approved test render can appear in
- * > the consumer catalog."
- *
- * Two properties, and they pull in opposite directions, which is why both are here:
- * the gate has to be **impossible to bypass** (a rendered garment is not an approved
- * one, and an approved one needs both columns), and admin catalogue work has to be
- * **invisible to consumer demand** (§8.4) — budget under `TEST_RENDER`, nobody's quota.
- */
 describe('TestRenderService — A-11, A-12, §8.4', () => {
   let context: TryOnTestContext;
 
   afterEach(async () => {
     await context.close();
   });
-
-  /* ---------------------------------------------------------------------------------------
-   * Running one (A-11)
-   * ------------------------------------------------------------------------------------ */
 
   describe('running a test render', () => {
     it('renders against a reference model — never a consumer photo (S-10, §4.15)', async () => {
@@ -53,8 +37,6 @@ describe('TestRenderService — A-11, A-12, §8.4', () => {
         origin: JobOrigin.TEST_RENDER,
         isTestRender: true,
         referenceModelId: REFERENCE_MODEL_ID,
-        // The column that would hold a consumer photo is null, and there is no code
-        // path in this service that could set it.
         personPhotoId: null,
       });
       expect(context.photos.resolveGenerationPhoto).not.toHaveBeenCalled();
@@ -98,10 +80,6 @@ describe('TestRenderService — A-11, A-12, §8.4', () => {
     });
   });
 
-  /* ---------------------------------------------------------------------------------------
-   * §8.4 — admin work is tracked separately from consumer demand
-   * ------------------------------------------------------------------------------------ */
-
   describe('the §8.4 accounting split', () => {
     it('charges platform budget under TEST_RENDER and nobody’s quota', async () => {
       context = await createTryOnContext();
@@ -111,7 +89,6 @@ describe('TestRenderService — A-11, A-12, §8.4', () => {
       expect(context.quota.testRenderCharges).toEqual([
         expect.objectContaining({ origin: 'TEST_RENDER', userId: null, actorId: ADMIN.id }),
       ]);
-      // A-33 splits the burn-rate chart on exactly this: no consumer quota moved.
       expect(context.quota.consumerCharges).toHaveLength(0);
     });
 
@@ -119,8 +96,6 @@ describe('TestRenderService — A-11, A-12, §8.4', () => {
       context = await createTryOnContext();
 
       await context.testRenders.run({ garmentId: GARMENT_ID }, ADMIN);
-      // Rendering sends the piece back to PENDING, so the consumer path is closed until
-      // an admin approves — which is the gate, working.
       await context.testRenders.approve(GARMENT_ID, ADMIN);
 
       await context.tryOn.create(
@@ -157,10 +132,6 @@ describe('TestRenderService — A-11, A-12, §8.4', () => {
       expect(context.quota.charges).toHaveLength(0);
     });
   });
-
-  /* ---------------------------------------------------------------------------------------
-   * Approval — the gate itself (A-11, E-10)
-   * ------------------------------------------------------------------------------------ */
 
   describe('approval unblocks publishing, and nothing else does (E-10)', () => {
     it('sets both columns, because the publish gate requires the pair', async () => {
@@ -210,8 +181,6 @@ describe('TestRenderService — A-11, A-12, §8.4', () => {
       const [garment] = context.harness.repository<Garment>(Garment).$rows;
       expect(response.testRenderState).toBe(TestRenderState.REJECTED);
       expect(response.publishable).toBe(false);
-      // The same function the garments module uses at publish time. It reports rather
-      // than refuses now, so this asserts the advisory is raised, not that publish fails.
       expect(
         evaluatePublishAdvisories({
           garment: garment,
@@ -230,29 +199,23 @@ describe('TestRenderService — A-11, A-12, §8.4', () => {
       });
       await context.testRenders.run({ garmentId: GARMENT_ID }, ADMIN);
 
-      // The inverse of what this asserted. Approval is advice to the studio about
-      // whether a piece is ready; it is no longer a precondition for a consumer, so a
-      // published garment is tryable whatever `testRenderState` says.
       await expect(
-        context.tryOn.create({ garmentId: GARMENT_ID, idempotencyKey: 'idem-unapproved' }, CONSUMER),
+        context.tryOn.create(
+          { garmentId: GARMENT_ID, idempotencyKey: 'idem-unapproved' },
+          CONSUMER,
+        ),
       ).resolves.toMatchObject({ jobId: expect.any(String) });
     });
 
     it('re-rendering an approved garment sends it back to PENDING', async () => {
       context = await createTryOnContext();
 
-      // The stored render changed, so the approval that described the old one no longer
-      // means anything.
       const response = await context.testRenders.run({ garmentId: GARMENT_ID }, ADMIN);
 
       expect(response.testRenderState).toBe(TestRenderState.PENDING);
       expect(response.publishable).toBe(false);
     });
   });
-
-  /* ---------------------------------------------------------------------------------------
-   * Bulk (A-12, §8.2)
-   * ------------------------------------------------------------------------------------ */
 
   describe('bulk test renders (A-12, §8.2)', () => {
     it('queues rows rather than running them, so the request returns immediately', async () => {
@@ -267,7 +230,6 @@ describe('TestRenderService — A-11, A-12, §8.4', () => {
         origin: JobOrigin.TEST_RENDER,
         batchId,
       });
-      // Nothing has been spent yet — the processor does that, one at a time.
       expect(context.quota.charges).toHaveLength(0);
     });
 
@@ -286,8 +248,6 @@ describe('TestRenderService — A-11, A-12, §8.4', () => {
 
       const estimate = await context.testRenders.estimate({ garmentIds: [GARMENT_ID] });
 
-      // The fixture garment already carries an approved render, so re-rendering it
-      // would spend budget to learn nothing.
       expect(estimate).toMatchObject({
         selected: 1,
         alreadyApproved: 1,
