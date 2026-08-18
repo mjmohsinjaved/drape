@@ -27,14 +27,15 @@ const AUTH_HEADER = 'Authorization';
 const IMAGE_FIELD = 'image[]';
 
 const PROMPT = [
-  'Replace only the clothing on the person in the first image with the garment shown in',
-  'the second image.',
-  'Do not change her or his face, facial features, skin tone, body shape, proportions,',
-  'pose, hair or the background in any way. Preserve the exact likeness and expression.',
-  'Reproduce the garment’s colour, fabric texture, print, embroidery and silhouette as',
-  'faithfully as the source allows, fitted naturally to the body.',
-  'Photorealistic. No text, watermarks, borders, collage panels or additional people.',
-  'Do not change the product design it should be exact same stuff and texture.',
+  'A person in the first image and garment shown in the second image.',
+  'TASK: Replace the person entire existing outfit in the first image with the exact outfit shown in second image.',
+  'PRESERVE FROM THE FIRST IMAGE (do not change): the person face, facial features, expression, skin tone, makeup, hairstyle, body shape, proportions, pose, hand positions, and the background style.',
+  'PRODUCT ACCURACY: reproduce the outfit from second image exactly — same colors, fabric, texture, prints, embroidery, embellishments, buttons, borders, and silhouette. Include every piece that is part of the product (top, bottom, jacket, dupatta, stole, drape, or headwear), styled the same way as on the product model. Fully remove all of the person original clothing, including any existing drapes or layers. Do not redesign, recolor, simplify, or omit any detail.',
+  'GARMENT COVERAGE: the outfit must cover the person body exactly as it covers the product model in second image — never as their original clothing did. Sleeves extend to the same endpoint as in second image on BOTH arms equally, regardless of arm position (raised, bent, or crossed): if the product has full-length sleeves, both sleeves reach the wrists with their cuffs and borders intact. The neckline, hemline, and all layers follow second image cut. Any skin that is covered on the product model must be covered on the person; ignore where the original outfit sleeves or hems ended.',
+  'FIT & PLACEMENT: the outfit fits the person body naturally in their current pose, with the same length, silhouette, and draping as shown in second image — the fabric folds realistically around the person posture without warping or smearing patterns or embroidery.',
+  'ACCESSORIES: keep the person own jewelry and accessories from the first image unchanged, except where a product piece from second image covers that area. Do not copy the product model jewelry, makeup, hairstyle, face, or body. FRAMING: if any part of the outfit extends beyond the first image visible area (e.g., a full-length garment in a cropped photo), extend the image naturally to show the complete outfit head to toe, continuing the existing background and adding a plausible floor consistent with the first image lighting. Otherwise, keep the original framing.',
+  'INTEGRATION: match the first image lighting direction, color temperature, shadows, and perspective so the outfit looks physically worn with correct scale — not pasted or floating. OUTPUT: photorealistic, high resolution, sharp focus, portrait orientation showing the complete outfit.',
+  'DO NOT: alter the face or hands, change the person identity, shorten sleeves, raise hemlines, leave any garment piece partially applied or any arm uncovered where the product covers it, add text, watermarks, borders, collage panels, or extra people, or change the background style.',
 ].join(' ');
 
 const IMAGE_SIZE = '1024x1536';
