@@ -1,5 +1,6 @@
 import { ErrorCode, ValidationException } from '@library/common';
 
+import { OPENAI_IMAGE_QUALITIES, TRYON_DRIVER_NAMES } from '@api/config/env.validation';
 import { SettingsValueType } from '@api/modules/settings/enums/settings-value-type.enum';
 import {
   SETTINGS_KEYS,
@@ -9,43 +10,22 @@ import {
   type SettingsKey,
 } from '@api/shared/constants/settings-keys.constant';
 
-/**
- * Registry-driven validation for `PATCH /api/v1/settings` (§4.28, §5.4).
- *
- * `SETTINGS_REGISTRY` is the single, closed list of keys — this file adds nothing to
- * it. It answers two questions the registry deliberately does not: *is this a real
- * key* (`SETTINGS_KEY_UNKNOWN`) and *is this a legal value for it*
- * (`SETTINGS_VALUE_INVALID`).
- *
- * Every rule below exists because the value is read somewhere that cannot cope with
- * nonsense: a `primaryColor` that is not a hex triple breaks the D-20 contrast check,
- * a `whatsappNumber` that is not E.164 produces a `wa.me` link that 404s, and a
- * negative `quota.defaultMonthly` would hand every consumer an unusable account.
- */
-
-/** `#rrggbb`. The D-20 contrast check runs against this, so the short form is out. */
 const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
 
-/** E.164: a leading `+`, a non-zero country code, 8–15 digits in total. */
 const E164_PATTERN = /^\+[1-9]\d{7,14}$/;
 
-/** An Instagram handle without the leading `@` (§4.28). */
 const INSTAGRAM_HANDLE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._]{0,29}$/;
 
-/** Deliberately loose. The address is displayed, not authenticated — see A-27. */
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[A-Za-z]{2,}$/;
 
-/** A URL-safe slug for the QR target and the Instagram bio link (A-32). */
 const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]{1,39}$/;
 
-/** `brand/<uuid>.<ext>` — the only prefix a brand asset may live under (§3.3). */
 const BRAND_KEY_PATTERN = /^brand\/[a-z0-9][a-z0-9\-/]*\.[a-z0-9]{2,5}$/;
 
 const MAX_BRAND_NAME_LENGTH = 80;
 const MAX_STORE_ADDRESSES = 20;
 const MAX_ADDRESS_FIELD_LENGTH = 200;
 
-/** One store address as A-27 stores it in `brand.storeAddresses`. */
 export interface BrandAddress {
   label: string;
   address: string;
@@ -54,21 +34,14 @@ export interface BrandAddress {
   mapUrl?: string;
 }
 
-/** Every registry definition, indexed. Built once — the registry is immutable. */
 const DEFINITION_BY_KEY: ReadonlyMap<SettingsKey, SettingDefinition> = new Map(
   SETTINGS_REGISTRY.map((definition) => [definition.key, definition]),
 );
 
-/** The public projection's source of truth: the registry, filtered. Never a second list. */
 export const PUBLIC_SETTING_DEFINITIONS: readonly SettingDefinition[] = SETTINGS_REGISTRY.filter(
   (definition) => definition.isPublic,
 );
 
-/**
- * Resolves a client-supplied key against the closed registry.
- *
- * @throws ValidationException `SETTINGS_KEY_UNKNOWN` — 400, "Unknown setting."
- */
 export function definitionFor(key: string): SettingDefinition {
   if (!isSettingsKey(key)) {
     throw new ValidationException(ErrorCode.SETTINGS_KEY_UNKNOWN, {
@@ -83,15 +56,6 @@ export function definitionFor(key: string): SettingDefinition {
   return definition;
 }
 
-/**
- * Validates a value against its registry definition and returns the value to store.
- *
- * `null` is accepted only for a key whose registry default is `null` — the A-27 keys
- * an admin must supply and may therefore also clear. Everything else must hold a
- * value, because the rest of the product reads it without a fallback.
- *
- * @throws ValidationException `SETTINGS_VALUE_INVALID`
- */
 export function validateSettingValue(definition: SettingDefinition, value: unknown): unknown {
   if (value === null || value === undefined) {
     if (definition.defaultValue !== null) {
@@ -147,7 +111,6 @@ function validateString(definition: SettingDefinition, value: unknown): string {
       return trimmed;
 
     case SETTINGS_KEYS.BRAND_INSTAGRAM_HANDLE: {
-      // An admin will paste `@drape` or the whole profile URL. Both mean the handle.
       const handle = trimmed
         .replace(/^@/, '')
         .replace(/^https?:\/\/(www\.)?instagram\.com\//i, '')
@@ -176,6 +139,22 @@ function validateString(definition: SettingDefinition, value: unknown): string {
       }
       return trimmed;
 
+    case SETTINGS_KEYS.TRYON_DRIVER: {
+      const driver = trimmed.toLowerCase();
+      if (!(TRYON_DRIVER_NAMES as readonly string[]).includes(driver)) {
+        throw invalid(definition, `Choose one of: ${TRYON_DRIVER_NAMES.join(', ')}.`);
+      }
+      return driver;
+    }
+
+    case SETTINGS_KEYS.TRYON_OPENAI_QUALITY: {
+      const quality = trimmed.toLowerCase();
+      if (!(OPENAI_IMAGE_QUALITIES as readonly string[]).includes(quality)) {
+        throw invalid(definition, `Choose one of: ${OPENAI_IMAGE_QUALITIES.join(', ')}.`);
+      }
+      return quality;
+    }
+
     default:
       if (trimmed.length === 0) {
         throw invalid(definition, 'Enter a value.');
@@ -199,13 +178,6 @@ function validateNumber(definition: SettingDefinition, value: unknown): number {
   return value;
 }
 
-/**
- * Per-key bounds.
- *
- * `budget.warnThresholdPercent` stops at 99 on purpose: A-29 pairs a **soft warning**
- * with a **hard stop at 100%**, and a warning that fires at the same moment as the
- * stop is not a warning.
- */
 function numericBounds(key: SettingsKey): readonly [number, number] {
   switch (key) {
     case SETTINGS_KEYS.QUOTA_DEFAULT_MONTHLY:
@@ -306,8 +278,6 @@ function optionalField(
 function invalid(definition: SettingDefinition, message: string): ValidationException {
   return new ValidationException(ErrorCode.SETTINGS_VALUE_INVALID, {
     message,
-    // `settingKey` rather than `key`: the redactor drops anything named `key`
-    // (redact.util.ts), and this one is a registry identifier, not a storage key.
     details: { settingKey: definition.key, valueType: definition.valueType },
   });
 }

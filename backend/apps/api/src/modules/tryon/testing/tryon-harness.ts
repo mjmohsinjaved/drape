@@ -13,6 +13,7 @@ import {
 import { ImageService, StorageService } from '@library/storage';
 import type { PutResult } from '@library/storage';
 
+import { TryOnDriverName } from '@api/config/env.validation';
 import { ConsentStatus, ConsentsService } from '@api/modules/consents';
 import { GarmentImage } from '@api/modules/garments/entities/garment-image.entity';
 import { Garment } from '@api/modules/garments/entities/garment.entity';
@@ -48,6 +49,10 @@ import {
 } from '../ports/quota.port';
 import { MockTryOnProvider } from '../providers/mock-tryon.provider';
 import { TRYON_PROVIDER } from '../providers/tryon-provider.interface';
+import {
+  TRYON_PROVIDER_RESOLVER,
+  type TryOnProviderResolver,
+} from '../providers/tryon-provider.resolver';
 import { ReferenceModelsService } from '../services/reference-models.service';
 import { TestRenderBatchEventsService } from '../services/test-render-batch-events.service';
 import { TestRenderService } from '../services/test-render.service';
@@ -58,29 +63,6 @@ import { TryOnJobsService } from '../services/tryon-jobs.service';
 import { TryOnRateLimitService } from '../services/tryon-rate-limit.service';
 import { TryOnRunnerService } from '../services/tryon-runner.service';
 import { TryOnService } from '../services/tryon.service';
-
-/**
- * The try-on module's test harness.
- *
- * E-6 asks for "integration tests for the try-on route covering every branch of the
- * failure taxonomy in 8.3", and the thing each of those tests has to prove is
- * negative: *nothing was charged*. That is only convincing if the object under test is
- * the real stack — the real guard chain, the real runner, the real cache, the real
- * provider — with only the edges faked. So this builds all of it, and fakes exactly
- * four things:
- *
- *  - **storage**, as an in-memory key → bytes map. Tests assert on keys and bytes, never
- *    on a file; there is no `STORAGE_ROOT` on the machine this suite runs on (CLAUDE.md);
- *  - **`ImageService.toWebpThumbnail`**, because `sharp` re-encoding a thumbnail per
- *    test buys nothing and costs seconds;
- *  - **the quota port**, as a spy. `chargeSuccess` calls are counted, and the count is
- *    the assertion in every §8.3 test;
- *  - **the person-photo port**, so the suite does not need `person-photos`' upload
- *    pipeline to exercise a generation.
- *
- * Everything else is production code, including `MockTryOnProvider` — which is also
- * what runs in CI, and `tryon-provider.factory.spec.ts` asserts as much.
- */
 
 export const CONSUMER_ID = '11111111-1111-4111-8111-111111111111';
 export const OTHER_CONSUMER_ID = '22222222-2222-4222-8222-222222222222';
@@ -114,17 +96,6 @@ export const ADMIN: ICurrentUser = {
   name: 'Studio Admin',
 };
 
-/* -------------------------------------------------------------------------------------------------
- * Doubles
- * ---------------------------------------------------------------------------------------------- */
-
-/**
- * An in-memory object store. Keys are real §3.3 keys; bytes are real bytes.
- *
- * The doubles below return `Promise.resolve`/`Promise.reject` rather than being `async`
- * with nothing to await — they exist to satisfy a promise-returning contract, and
- * `async` on a body with no `await` in it is noise the linter is right about.
- */
 export class FakeStorage {
   readonly objects = new Map<string, Buffer>();
 
@@ -147,7 +118,6 @@ export class FakeStorage {
 
   copy = jest.fn(async (source: string, destination: string): Promise<PutResult> => {
     const bytes = await this.getBuffer(source);
-    // A real copy: the destination gets its own entry, exactly as §3.7 requires.
     this.objects.set(destination, Buffer.from(bytes));
     return {
       key: destination,
@@ -167,23 +137,9 @@ export class FakeStorage {
   signToken = jest.fn((key: string): string => `token-for-${key}`);
 }
 
-/**
- * The quota port, as a spy.
- *
- * `charges` is the assertion in every §8.3 test: **"Failed jobs never consume quota or
- * budget"** is checkable by looking at whether this array is empty.
- */
 export class SpyQuotaPort implements QuotaPort {
   readonly charges: ChargeGenerationInput[] = [];
 
-  /**
-   * Every reversal, in order.
-   *
-   * `releaseOnFailure` was declared on `GenerationSpendService` and called from nowhere in
-   * production code, so "the compensating path exists" was true of the class and false of
-   * the system. It is now called from `TryOnRunnerService.fail()`, and this array is how a
-   * test proves a charge that should not stand was actually taken back.
-   */
   readonly releases: ReleaseGenerationInput[] = [];
 
   quotaRemaining = 10;
@@ -193,8 +149,6 @@ export class SpyQuotaPort implements QuotaPort {
   budgetLimit = 2000;
 
   assertQuotaAvailable = jest.fn((): Promise<QuotaView> => {
-    // The real `QuotaService` refuses from the ledger; the shape of the refusal is
-    // what the try-on path depends on, so the double raises the same exception.
     if (this.quotaRemaining <= 0) {
       return Promise.reject(new QuotaException(ErrorCode.QUOTA_EXHAUSTED));
     }
@@ -216,10 +170,6 @@ export class SpyQuotaPort implements QuotaPort {
 
   budgetSnapshot = jest.fn((): Promise<BudgetView> => Promise.resolve(this.snapshot()));
 
-  /**
-   * Set to have the charge refuse, exactly as the real ledger does when two generations
-   * race at `remaining = 1` and the loser's `SERIALIZABLE` retry re-derives zero.
-   */
   chargeFailsWith: Error | null = null;
 
   chargeSuccess = jest.fn((input: ChargeGenerationInput): Promise<void> => {
@@ -235,9 +185,6 @@ export class SpyQuotaPort implements QuotaPort {
   releaseOnFailure = jest.fn((input: ReleaseGenerationInput): Promise<void> => {
     this.releases.push(input);
 
-    // Idempotent, like the ledgers it stands for: a second release of the same job
-    // reverses nothing. Without this the double would hide exactly the defect that made
-    // `refundWithin` unsafe to call twice.
     const index = this.charges.findIndex((charge) => charge.jobId === input.jobId);
     if (index !== -1) {
       const [charge] = this.charges.splice(index, 1);
@@ -247,7 +194,6 @@ export class SpyQuotaPort implements QuotaPort {
     return Promise.resolve();
   });
 
-  /** Consumer-quota charges only — §8.4's split between demand and catalogue work. */
   get consumerCharges(): ChargeGenerationInput[] {
     return this.charges.filter((charge) => charge.origin === 'CONSUMER');
   }
@@ -269,14 +215,6 @@ export class SpyQuotaPort implements QuotaPort {
   }
 }
 
-/**
- * The moderation port, as a spy.
- *
- * §8.3 marks `MODERATION_REJECTED` with `queueModeration: true`, and until the runner
- * actually read the flag the row was decoration: no A-34 item, no block on the photograph,
- * and the same image failing upstream at cost on every retry. `queued` is how a test proves
- * the rejection reached the queue.
- */
 export class SpyModerationPort implements ModerationPort {
   readonly queued: QueueModerationInput[] = [];
 
@@ -286,7 +224,6 @@ export class SpyModerationPort implements ModerationPort {
   });
 }
 
-/** The person-photo port, over a single in-memory photo. */
 export class FakePersonPhotoPort implements PersonPhotoPort {
   photo: PersonPhotoRef = {
     id: PHOTO_ID,
@@ -298,7 +235,6 @@ export class FakePersonPhotoPort implements PersonPhotoPort {
     mimeType: 'image/jpeg',
   };
 
-  /** Set to have the port throw, exactly as `PersonPhotosService` would. */
   failWith: Error | null = null;
 
   resolveGenerationPhoto = jest.fn((): Promise<PersonPhotoRef> =>
@@ -306,11 +242,6 @@ export class FakePersonPhotoPort implements PersonPhotoPort {
   );
 }
 
-/* -------------------------------------------------------------------------------------------------
- * Fixtures
- * ---------------------------------------------------------------------------------------------- */
-
-/** A published garment with an **approved** test render — the only kind a consumer may try on. */
 export function buildTryableGarment(overrides: Partial<Garment> = {}): Garment {
   return Object.assign(new Garment(), {
     id: GARMENT_ID,
@@ -391,10 +322,6 @@ export function buildReferenceModel(overrides: Partial<ReferenceModel> = {}): Re
   });
 }
 
-/* -------------------------------------------------------------------------------------------------
- * The harness
- * ---------------------------------------------------------------------------------------------- */
-
 export interface TryOnTestContext {
   readonly harness: TestHarness;
   readonly tryOn: TryOnService;
@@ -404,17 +331,14 @@ export interface TryOnTestContext {
   readonly cache: TryOnCacheService;
   readonly testRenders: TestRenderService;
   readonly events: TryOnEventsService;
-  /** The A-12 batch SSE bus (§5.11), so a batch test can assert what a watcher was told. */
   readonly batchEvents: TestRenderBatchEventsService;
   readonly rateLimits: TryOnRateLimitService;
   readonly preview: PreviewModeService;
   readonly provider: MockTryOnProvider;
   readonly quota: SpyQuotaPort;
   readonly photos: FakePersonPhotoPort;
-  /** The A-34 intake spy — §8.3's `queueModeration` behaviour, observed. */
   readonly moderation: SpyModerationPort;
   readonly storage: FakeStorage;
-  /** The sharp double. A cache hit must never reach it — see PRD §9.1. */
   readonly images: { toWebpThumbnail: jest.Mock };
   readonly config: TryOnConfig;
   readonly consents: { resolveStatus: jest.Mock };
@@ -427,7 +351,6 @@ export interface TryOnTestOptions {
   readonly sourceImage?: GarmentImage | null;
   readonly consentStatus?: ConsentStatus;
   readonly requireEmailVerification?: boolean;
-  /** Overrides on top of the safe test defaults in `test-env.ts`. */
   readonly env?: Readonly<Record<string, string | number>>;
 }
 
@@ -444,7 +367,6 @@ const DEFAULT_ENV: Readonly<Record<string, string | number>> = {
   TRYON_RATE_PER_IP_HOUR: 1_000,
 };
 
-/** A `ConfigService`-shaped double over a plain map. Nothing reads `process.env`. */
 export function fakeConfigService(
   values: Readonly<Record<string, string | number>>,
 ): ConfigService {
@@ -474,6 +396,11 @@ export async function createTryOnContext(
   const config = new TryOnConfig(fakeConfigService({ ...DEFAULT_ENV, ...options.env }));
   const provider = new MockTryOnProvider(config);
 
+  const providerResolver = {
+    activeDriver: () => Promise.resolve(TryOnDriverName.MOCK),
+    resolve: () => Promise.resolve({ driver: TryOnDriverName.MOCK, provider }),
+  } as unknown as TryOnProviderResolver;
+
   const consents = {
     resolveStatus: jest.fn(() =>
       Promise.resolve({
@@ -490,7 +417,6 @@ export async function createTryOnContext(
     getString: jest.fn(() => Promise.resolve(null)),
   };
 
-  // Re-encoding a thumbnail with sharp per test buys nothing and costs seconds.
   const images = {
     toWebpThumbnail: jest.fn(() => Promise.resolve(Buffer.from('thumbnail-bytes'))),
   };
@@ -515,15 +441,6 @@ export async function createTryOnContext(
     repositories: [
       {
         entity: TryOnJob,
-        // `UQ_tryon_jobs_idem UNIQUE ("userId","idempotencyKey") WHERE "deletedAt" IS NULL`.
-        //
-        // §8.4 calls this index "the mechanism, not a safety net", and every branch of
-        // `openJob`'s duplicate handling hangs off the `23505` it raises. Without it
-        // modelled here, a spec could assert anything at all about idempotency and pass:
-        // the second insert simply succeeded and there was no duplicate to handle.
-        //
-        // The `WHERE "deletedAt" IS NULL` half matters just as much — soft-deleting a
-        // spent job is how a FAILED or CANCELLED key is released for a retry.
         uniqueIndexes: [{ name: 'UQ_tryon_jobs_idem', columns: ['userId', 'idempotencyKey'] }],
       },
       { entity: TryOnCache },
@@ -535,6 +452,7 @@ export async function createTryOnContext(
     overrides: [
       { token: TryOnConfig, value: config },
       { token: TRYON_PROVIDER, value: provider },
+      { token: TRYON_PROVIDER_RESOLVER, value: providerResolver },
       { token: QUOTA_PORT, value: quota },
       { token: PERSON_PHOTO_PORT, value: photos },
       { token: MODERATION_PORT, value: moderation },
@@ -545,7 +463,6 @@ export async function createTryOnContext(
     ],
   });
 
-  // Seed the two objects a generation reads. Real keys, real (tiny) bytes.
   if (sourceImage !== null) {
     storage.objects.set(sourceImage.storageKey, Buffer.from('garment-source-bytes'));
   }

@@ -748,7 +748,52 @@
     "title": "Settings",
     "description": "Brand, quotas, budget and the toggles that shape the storefront.",
     "next1": "The brand colour and logo, validated for contrast before they are accepted.",
-    "next2": "Quota and budget defaults, each with what it changes stated plainly."
+    "next2": "Quota and budget defaults, each with what it changes stated plainly.",
+    "tryonProvider": {
+      "title": "Try-on provider",
+      "description": "Which upstream renders every try-on. Switching applies to the next generation — no restart, and anything already running finishes on the provider it started on.",
+      "source": {
+        "environment": "{driver} is live, following the server default. No override is set.",
+        "override": "{driver} is live, set here. It overrides the server default."
+      },
+      "badges": {
+        "live": "Live",
+        "default": "Server default",
+        "billable": "Billed per render",
+        "notConfigured": "Not configured",
+        "notSelectable": "Not selectable"
+      },
+      "notConfiguredHint": "This provider has no credentials on this server yet. Add them to the API environment and restart before it can be selected.",
+      "quality": {
+        "label": "Render quality",
+        "save": "Save quality",
+        "options": {
+          "low": "Low — fastest, cheapest",
+          "medium": "Medium — recommended",
+          "high": "High — slowest, ~4× the cost"
+        }
+      },
+      "confirm": {
+        "title": "Switch to {driver}?",
+        "billableBody": "Every try-on from now on will be rendered by {driver} and charged to that account. Renders already made are kept, and you can switch back at any time.",
+        "mockBody": "Try-ons will return placeholder renders and nothing will be charged. Consumers will see images that are not real try-ons, so use this only while testing or while an upstream is down.",
+        "action": "Switch provider"
+      },
+      "saved": "Saved. {driver} is now live.",
+      "empty": {
+        "title": "No providers available",
+        "body": "The server did not offer any try-on providers. Check the API configuration and reload."
+      },
+      "errors": {
+        "loadTitle": "We could not load the provider settings",
+        "loadBody": "The list of try-on providers did not come back. Nothing has changed — try again in a moment.",
+        "switchTitle": "The provider was not changed",
+        "switchBody": "The switch did not go through, so the previous provider is still live. Try again in a moment.",
+        "notConfiguredTitle": "That provider is not configured",
+        "notConfiguredBody": "Its credentials are missing from this server, so it cannot be selected yet. The previous provider is still live."
+      },
+      "notSelectableHint": "This is a placeholder provider — it returns images that are not real try-ons. It is live because the server was configured that way, and it cannot be chosen here. Pick a real provider above, or change TRYON_DRIVER on the server."
+    }
   },
   "settingsPolicy": {
     "title": "Policy",

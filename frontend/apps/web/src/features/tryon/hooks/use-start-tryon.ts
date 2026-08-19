@@ -28,6 +28,13 @@ export interface UseStartTryOnResult {
   isStarting: boolean;
   /** An `ErrorCode`, never a message. The caller maps it through its own i18n namespace. */
   errorCode: string | null;
+  /**
+   * The job now running, when `stayOnPage` is set. The caller renders the wait against it in
+   * place, rather than being sent to `/tryon/:jobId`. Always `null` otherwise.
+   */
+  jobId: string | null;
+  /** Drops the in-place job once the caller has revealed the result or shown the failure. */
+  clearJob: () => void;
   reset: () => void;
 }
 
@@ -37,6 +44,19 @@ export interface UseStartTryOnOptions {
   returnTo: string;
   /** True when there is no session at all — then the button is a sign-in prompt, not a call. */
   isAuthenticated: boolean;
+  /**
+   * Keep her where she is. The wait and the reveal both happen on the calling screen: the job
+   * id comes back through `jobId` instead of a `router.push` to `/tryon/:jobId`, and a cache
+   * hit calls {@link UseStartTryOnOptions.onSucceeded} instead of pushing to the render.
+   *
+   * This is what the garment page uses (C-18). The try-on is an action *on* the piece she is
+   * looking at, so leaving the piece to watch a progress bar — and landing on a third screen
+   * afterwards — costs her the context she started with. C-19 is unaffected: the job is still
+   * in the tray, so she can walk away from it and it will still find her.
+   */
+  stayOnPage?: boolean;
+  /** Only fires under `stayOnPage`, and only for a cache hit — the render already exists. */
+  onSucceeded?: (resultId: string) => void;
 }
 
 /**
@@ -50,12 +70,15 @@ export interface UseStartTryOnOptions {
  * the shortlist and the enquiry rather than a dead end (§10.3).
  *
  * A cache hit returns the render inside the POST response (§8.1 step 4), so she goes straight to
- * the result and no quota is consumed (C-22). A miss goes to the staged wait.
+ * the result and no quota is consumed (C-22). A miss goes to the staged wait — on the calling
+ * screen under `stayOnPage`, otherwise at `/tryon/:jobId`.
  */
 export function useStartTryOn({
   locale,
   returnTo,
   isAuthenticated,
+  stayOnPage = false,
+  onSucceeded,
 }: UseStartTryOnOptions): UseStartTryOnResult {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -63,12 +86,21 @@ export function useStartTryOn({
 
   const [isStarting, setIsStarting] = useState(false);
   const [errorCode, setErrorCode] = useState<string | null>(null);
+  const [jobId, setJobId] = useState<string | null>(null);
+  // Kept in a ref so a caller that rebuilds the callback every render does not rebuild `start`,
+  // which would drop the idempotency key held across a retry of the same tap.
+  const succeededRef = useRef(onSucceeded);
+  succeededRef.current = onSucceeded;
   // One key per intent. Held across a retry of the same tap so a flaky network cannot charge
   // twice; regenerated once the intent has resolved.
   const keyRef = useRef<string | null>(null);
 
   const reset = useCallback((): void => {
     setErrorCode(null);
+  }, []);
+
+  const clearJob = useCallback((): void => {
+    setJobId(null);
   }, []);
 
   const start = useCallback(
@@ -79,6 +111,7 @@ export function useStartTryOn({
       }
 
       setErrorCode(null);
+      setJobId(null);
       setIsStarting(true);
       keyRef.current ??= newIdempotencyKey();
 
@@ -111,7 +144,16 @@ export function useStartTryOn({
               thumbnailUrl: job.result.thumbnailUrl,
               cacheHit: job.cacheHit,
             });
+            if (stayOnPage) {
+              succeededRef.current?.(job.result.id);
+              return;
+            }
             router.push(routes.render(locale, job.result.id));
+            return;
+          }
+
+          if (stayOnPage) {
+            setJobId(job.jobId);
             return;
           }
 
@@ -133,6 +175,10 @@ export function useStartTryOn({
           if (code === 'IDEMPOTENCY_IN_FLIGHT' && isApiError(error)) {
             const runningJobId = error.details?.jobId;
             if (typeof runningJobId === 'string') {
+              if (stayOnPage) {
+                setJobId(runningJobId);
+                return;
+              }
               router.push(routes.tryOnJob(locale, runningJobId));
               return;
             }
@@ -145,8 +191,8 @@ export function useStartTryOn({
         }
       })();
     },
-    [completeJob, isAuthenticated, locale, queryClient, returnTo, router, startJob],
+    [completeJob, isAuthenticated, locale, queryClient, returnTo, router, startJob, stayOnPage],
   );
 
-  return { start, isStarting, errorCode, reset };
+  return { start, isStarting, errorCode, jobId, clearJob, reset };
 }
