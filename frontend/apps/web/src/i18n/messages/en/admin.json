@@ -686,9 +686,92 @@
   },
   "consumers": {
     "title": "Customers",
-    "description": "Who has signed up, what they've tried on, and what they've asked about.",
-    "next1": "The table with signup date, last activity, generations and shortlist size.",
-    "next2": "Quota overrides and suspension, both audited and both reversible."
+    "description": "Who has signed up, what they have tried on, and what they have asked about.",
+    "resultCount": "{total} customers · page {page} of {pages}",
+    "loading": "Loading customers",
+    "tableCaption": "Customers, with their contact details, activity and account status",
+    "rowsLabel": "Customer rows",
+    "paginationLabel": "Customer pages",
+    "paginationSummary": "Showing {from}–{to} of {total}",
+    "noPhone": "No number",
+    "neverActive": "Never signed in",
+    "columns": {
+      "customer": "Customer",
+      "phone": "Phone",
+      "signedUp": "Signed up",
+      "lastActive": "Last active",
+      "generations": "Try-ons this month",
+      "shortlist": "Shortlist",
+      "enquiries": "Enquiries",
+      "status": "Status",
+      "actions": "Actions"
+    },
+    "filters": {
+      "searchLabel": "Search",
+      "searchPlaceholder": "Name, email or phone",
+      "status": "Status",
+      "anyStatus": "Any status",
+      "sort": "Sort",
+      "hasEnquiries": "Has enquired"
+    },
+    "sort": {
+      "newest": "Newest first",
+      "recentlyActive": "Recently active",
+      "name": "Name A–Z"
+    },
+    "status": {
+      "ACTIVE": "Active",
+      "SUSPENDED": "Suspended",
+      "DEACTIVATED": "Deactivated"
+    },
+    "empty": {
+      "title": "No one has signed up yet",
+      "body": "Customers arrive by using the fitting room. Publish a few pieces and they will appear here as they join.",
+      "action": "Go to the catalog"
+    },
+    "noMatches": {
+      "title": "No customer matches this view",
+      "body": "Try a different spelling, or widen the filters.",
+      "action": "Clear the filters"
+    },
+    "error": {
+      "title": "The customer list did not load",
+      "retry": "Try again"
+    },
+    "shortcuts": {
+      "intro": "Keys:",
+      "move": "move",
+      "open": "open",
+      "search": "search"
+    },
+    "actions": {
+      "suspend": "Suspend",
+      "unsuspend": "Lift the hold"
+    },
+    "suspend": {
+      "title": "Suspend {name}",
+      "body": "Suspension puts the account on hold. It is reversible, and it deletes nothing.",
+      "consequenceTitle": "What happens the moment you confirm",
+      "consequenceSignedOut": "She is signed out on every device straight away.",
+      "consequenceBlocked": "Her next sign-in is refused, and so is every try-on and enquiry.",
+      "consequenceEmailed": "The reason below is emailed to her, word for word.",
+      "consequenceDataKept": "Her photos, try-ons and shortlist are kept, pending review.",
+      "reasonLabel": "Why the account is on hold",
+      "reasonPlaceholder": "Write the sentence she should read.",
+      "reasonHint": "At least {min} characters. She will see this.",
+      "reasonTooShort": "Give a reason she can act on — a few words is not enough.",
+      "cancel": "Cancel",
+      "confirm": "Suspend the account",
+      "confirming": "Suspending",
+      "done": "{name} is suspended and signed out."
+    },
+    "unsuspend": {
+      "title": "Lift the hold on {name}?",
+      "body": "She can sign in again from her next attempt. Sessions revoked when the hold was placed stay revoked.",
+      "confirm": "Lift the hold",
+      "cancel": "Keep the hold",
+      "done": "The hold on {name} is lifted."
+    }
   },
   "consumer": {
     "title": "Customer",
@@ -882,6 +965,9 @@
     "UPSTREAM_TIMEOUT": "The render took too long to come back. Try it again.",
     "UPSTREAM_UNAVAILABLE": "The render service isn't answering right now. Try again in a few minutes.",
     "UPSTREAM_RATE_LIMITED": "The render service is busy. Wait a moment and try again.",
-    "MODERATION_REJECTED": "That image didn't pass the automatic content check. Use a different photograph."
+    "MODERATION_REJECTED": "That image didn't pass the automatic content check. Use a different photograph.",
+    "USER_NOT_FOUND": "That account is no longer here. Refresh the list to see who is.",
+    "RESOURCE_CONFLICT": "The account moved before this went through — someone else may have just changed it. Refresh the list and look again.",
+    "DELETION_IN_PROGRESS": "This account is being deleted, so nothing more about it can change. The purge finishes within 24 hours."
   }
 }
