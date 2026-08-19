@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 
 import Link from 'next/link';
 
@@ -15,6 +15,7 @@ import { listPhotos } from '@/features/photos/api/endpoints';
 import { recordVerdict } from '@/features/renders/api/endpoints';
 import { getShortlist } from '@/features/shortlist/api/endpoints';
 import { listTryOnJobs } from '@/features/tryon/api/endpoints';
+import { InlineTryOnProgress } from '@/features/tryon/components/InlineTryOnProgress';
 import { BudgetExhausted, QuotaExhausted } from '@/features/tryon/components/QuotaExhausted';
 import { TryOnPhotoDialog } from '@/features/tryon/components/TryOnPhotoDialog';
 import { useErrorMessage } from '@/features/tryon/hooks/use-error-message';
@@ -53,10 +54,56 @@ export function TryOnCta({
   const tCta = useTranslations('tryon.cta');
   const messageFor = useErrorMessage('tryon');
   const queryClient = useQueryClient();
-  const { start, isStarting, errorCode } = useStartTryOn({ locale, returnTo, isAuthenticated });
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [view, setView] = useState<'render' | 'catalog'>('render');
+  /** A job that failed here. Kept apart from the start error so both can be shown the same way. */
+  const [jobErrorCode, setJobErrorCode] = useState<string | null>(null);
+
+  /**
+   * The reveal. The applied-check query below is what draws the render on the piece, so a new
+   * result is revealed by refetching it — there is no second copy of the render to keep in sync
+   * and nothing to navigate to.
+   */
+  const revealApplied = useCallback(
+    async (): Promise<void> => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.tryon.all });
+    },
+    [queryClient],
+  );
+
+  const { start, isStarting, errorCode, jobId, clearJob } = useStartTryOn({
+    locale,
+    returnTo,
+    isAuthenticated,
+    // C-18: the try-on happens on the piece she is looking at, start to finish (§10.3).
+    stayOnPage: true,
+    // A cache hit has no job to watch — the render already exists, so reveal it straight away.
+    onSucceeded: () => {
+      void revealApplied();
+    },
+  });
+
+  const handleJobSucceeded = useCallback((): void => {
+    // `clearJob` only after the refetch has landed, so the finished progress panel hands over
+    // directly to the render instead of flashing the "Try it on" button in between.
+    void (async () => {
+      await revealApplied();
+      clearJob();
+    })();
+  }, [clearJob, revealApplied]);
+
+  const handleJobFailed = useCallback(
+    (code: string): void => {
+      setJobErrorCode(code);
+      clearJob();
+    },
+    [clearJob],
+  );
+
+  const handleJobCancelled = useCallback((): void => {
+    clearJob();
+  }, [clearJob]);
 
   const photos = useQuery({
     queryKey: queryKeys.photos.list(),
@@ -124,7 +171,10 @@ export function TryOnCta({
     );
   }
 
-  if (errorCode !== null && isQuotaExhausted(errorCode)) {
+  // A refusal at start and a job that failed mid-flight are the same thing to her.
+  const failureCode = errorCode ?? jobErrorCode;
+
+  if (failureCode !== null && isQuotaExhausted(failureCode)) {
     return (
       <div className="flex flex-col gap-3">
         {catalogHero}
@@ -132,7 +182,7 @@ export function TryOnCta({
       </div>
     );
   }
-  if (errorCode !== null && isBudgetExhausted(errorCode)) {
+  if (failureCode !== null && isBudgetExhausted(failureCode)) {
     return (
       <div className="flex flex-col gap-3">
         {catalogHero}
@@ -148,12 +198,25 @@ export function TryOnCta({
       locale={locale}
       returnTo={returnTo}
       onPicked={(photoId) => {
+        setJobErrorCode(null);
         start({ garmentId, garmentTitle, garmentThumbnailUrl, personPhotoId: photoId });
       }}
     />
   );
 
-  if (appliedResult !== undefined && !isStarting) {
+  const progressPanel =
+    jobId === null ? null : (
+      <InlineTryOnProgress
+        jobId={jobId}
+        onSucceeded={handleJobSucceeded}
+        onFailed={handleJobFailed}
+        onCancelled={handleJobCancelled}
+      />
+    );
+
+  // A try-on already in flight replaces the applied view: she asked for a new one, and showing
+  // the previous render as though it were the answer would be a lie for the next few seconds.
+  if (appliedResult !== undefined && !isStarting && jobId === null) {
     const showRender = view === 'render';
     const segment = (key: 'render' | 'catalog', label: string): React.JSX.Element => (
       <button
@@ -230,6 +293,11 @@ export function TryOnCta({
           {t('changePhoto')}
         </Button>
 
+        {/* A try-on that failed after a render was already applied — the old one stays visible. */}
+        {failureCode !== null ? (
+          <Callout tone="warning">{messageFor(failureCode)}</Callout>
+        ) : null}
+
         {love.isError ? <Callout tone="warning">{tCta('loveFailed')}</Callout> : null}
 
         {dialog}
@@ -241,27 +309,31 @@ export function TryOnCta({
     <div className="flex flex-col gap-2">
       {catalogHero}
 
-      <Button
-        type="button"
-        variant="primary"
-        fullWidth
-        loading={isStarting}
-        loadingLabel={t('starting')}
-        startIcon={<Sparkles aria-hidden="true" />}
-        onClick={() => {
-          setDialogOpen(true);
-        }}
-      >
-        {t('action')}
-      </Button>
+      {progressPanel ?? (
+        <>
+          <Button
+            type="button"
+            variant="primary"
+            fullWidth
+            loading={isStarting}
+            loadingLabel={t('starting')}
+            startIcon={<Sparkles aria-hidden="true" />}
+            onClick={() => {
+              setDialogOpen(true);
+            }}
+          >
+            {t('action')}
+          </Button>
 
-      <p className="text-center text-sm text-ink-muted">{tCta('note')}</p>
+          <p className="text-center text-sm text-ink-muted">{tCta('note')}</p>
+        </>
+      )}
 
-      {errorCode !== null ? (
+      {failureCode !== null ? (
         <Callout
           tone="warning"
           action={
-            needsAnotherPhoto(errorCode) ? (
+            needsAnotherPhoto(failureCode) ? (
               <Button asChild variant="secondary" size="sm">
                 <Link href={`${routes.photoNew(locale)}?from=${encodeURIComponent(returnTo)}`}>
                   {t('needsPhoto')}
@@ -270,7 +342,7 @@ export function TryOnCta({
             ) : undefined
           }
         >
-          {messageFor(errorCode)}
+          {messageFor(failureCode)}
         </Callout>
       ) : null}
 
