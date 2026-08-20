@@ -9,20 +9,10 @@ import {
 
 import { AdminConsumersController } from './admin-consumers.controller';
 
-/**
- * **PRD S-11 / E-7 — the authorisation test for every admin-only route on
- * `/admin/consumers`.**
- *
- * These are the routes that read another person's account, so the refusal matters
- * more here than anywhere else in the module: a consumer reaching
- * `GET /admin/consumers/:userId` would be reading a stranger's email, phone and
- * enquiry history. Every handler is asserted to refuse a consumer session and an
- * anonymous caller.
- */
 describe('AdminConsumersController — authorisation (S-11, E-7)', () => {
   const routes: RouteContract[] = readRouteContracts(AdminConsumersController);
 
-  it('declares the nine routes ARCHITECTURE §5.2 specifies', () => {
+  it('declares exactly the routes §5.2 specifies, plus the A-19 approval', () => {
     expect(routes.map((route) => route.label).sort()).toEqual([
       'DELETE /admin/consumers/:userId',
       'GET /admin/consumers',
@@ -30,6 +20,7 @@ describe('AdminConsumersController — authorisation (S-11, E-7)', () => {
       'GET /admin/consumers/:userId/renders',
       'GET /admin/consumers/:userId/shortlist',
       'PATCH /admin/consumers/:userId/quota',
+      'POST /admin/consumers/:userId/approve',
       'POST /admin/consumers/:userId/suspend',
       'POST /admin/consumers/:userId/unsuspend',
     ]);

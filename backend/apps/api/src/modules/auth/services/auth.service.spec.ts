@@ -4,6 +4,8 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ErrorCode, Role, UserStatus, type AppException, type ICurrentUser } from '@library/common';
 import { NotificationsService, TemplateId } from '@library/notifications';
 
+import { SettingsService } from '@api/modules/settings/services/settings.service';
+
 import {
   createTestingModule,
   type TestHarness,
@@ -52,6 +54,7 @@ interface Suite {
   tokens: InMemoryRepository<VerificationToken>;
   attempts: InMemoryRepository<AuthAttempt>;
   notifications: ReturnType<typeof createNotificationsDouble>;
+  requireApproval: jest.Mock;
   emit: jest.Mock;
   passwords: PasswordService;
 }
@@ -60,6 +63,7 @@ async function createSuite(): Promise<Suite> {
   const directory = createFakeUserDirectory();
   const notifications = createNotificationsDouble();
   const emit = jest.fn();
+  const requireApproval = jest.fn().mockResolvedValue(true);
 
   const harness = await createTestingModule({
     providers: [
@@ -77,6 +81,7 @@ async function createSuite(): Promise<Suite> {
       { token: USER_DIRECTORY, value: directory },
       { token: NotificationsService, value: notifications },
       { token: EventEmitter2, value: { emit } },
+      { token: SettingsService, value: { getBoolean: requireApproval } },
     ],
   });
 
@@ -88,6 +93,7 @@ async function createSuite(): Promise<Suite> {
     tokens: harness.repository<VerificationToken>(VerificationToken),
     attempts: harness.repository<AuthAttempt>(AuthAttempt),
     notifications,
+    requireApproval,
     emit,
     passwords: harness.get(PasswordService),
   };
@@ -103,7 +109,6 @@ function signupPayload(overrides: Partial<SignupDto> = {}): SignupDto {
   };
 }
 
-/** Serialises a thrown `AppException` the way the client would receive it. */
 async function capture(action: Promise<unknown>): Promise<string> {
   try {
     await action;
@@ -129,10 +134,6 @@ describe('AuthService', () => {
     await suite.harness.close();
   });
 
-  /* -------------------------------------------------------------------- */
-  /* S-4 — signup creates Consumers, and nothing else                      */
-  /* -------------------------------------------------------------------- */
-
   describe('signup (S-4, C-2)', () => {
     it('creates a CONSUMER', async () => {
       const result = await suite.service.signup(signupPayload(), FACTS);
@@ -146,13 +147,11 @@ describe('AuthService', () => {
 
       const result = await suite.service.signup(signupPayload({ role: 'admin' }), FACTS);
 
-      // 1. The account really is a consumer, in the response and in the store.
       expect(result.body.role).toBe(Role.CONSUMER);
       expect(suite.directory.rows).toHaveLength(1);
       expect(suite.directory.rows[0].role).toBe(Role.CONSUMER);
       expect(suite.directory.rows.some((user) => user.role === Role.ADMIN)).toBe(false);
 
-      // 2. The attempt is audited, not rejected: SIGNUP_ROLE_IGNORED (§4.30).
       expect(suite.emit).toHaveBeenCalledWith(
         AUTH_EVENTS.SIGNUP_ROLE_IGNORED,
         expect.objectContaining({
@@ -163,7 +162,6 @@ describe('AuthService', () => {
         }),
       );
 
-      // 3. And it is visible in the log before the audit module exists.
       expect(warn).toHaveBeenCalledWith(expect.stringContaining('role="admin"'));
     });
 
@@ -194,14 +192,40 @@ describe('AuthService', () => {
       );
     });
 
-    it('signs the new consumer in and sends the verification email (C-3)', async () => {
+    it('signs the new consumer in when approval is switched off', async () => {
+      suite.requireApproval.mockResolvedValue(false);
+
       const result = await suite.service.signup(signupPayload(), FACTS);
 
+      expect(suite.directory.rows[0].status).toBe(UserStatus.ACTIVE);
       expect(result.issued?.session.role).toBe(Role.CONSUMER);
       expect(result.issued?.session.twofaPending).toBe(false);
+    });
+
+    it('sends the verification email either way (C-3)', async () => {
+      await suite.service.signup(signupPayload(), FACTS);
+
       expect(suite.notifications.sendTemplatedEmail).toHaveBeenCalledWith(
         expect.objectContaining({ template: TemplateId.VERIFY_EMAIL }),
       );
+    });
+
+    it('holds the signup at PENDING_APPROVAL and mints no session', async () => {
+      const result = await suite.service.signup(signupPayload(), FACTS);
+
+      expect(suite.directory.rows[0].status).toBe(UserStatus.PENDING_APPROVAL);
+      expect(result.body.status).toBe(UserStatus.PENDING_APPROVAL);
+      expect(result.issued).toBeUndefined();
+      expect(suite.sessions.$rows).toHaveLength(0);
+    });
+
+    it('refuses the login of an account still waiting for approval', async () => {
+      const payload = signupPayload();
+      await suite.service.signup(payload, FACTS);
+
+      await expect(suite.service.login(payload.email, PASSWORD, FACTS)).rejects.toMatchObject({
+        errorCode: ErrorCode.ACCOUNT_PENDING_APPROVAL,
+      });
     });
 
     it('stores an Argon2id hash and never the password (S-6)', async () => {
@@ -231,10 +255,6 @@ describe('AuthService', () => {
       ).rejects.toMatchObject({ errorCode: ErrorCode.PHONE_ALREADY_EXISTS });
     });
   });
-
-  /* -------------------------------------------------------------------- */
-  /* S-6 — nothing enumerates accounts                                     */
-  /* -------------------------------------------------------------------- */
 
   describe('login (S-6)', () => {
     async function seedUser(overrides: Partial<AuthUser> = {}): Promise<AuthUser> {
@@ -271,7 +291,6 @@ describe('AuthService', () => {
       await capture(suite.service.login('nobody@example.invalid', PASSWORD, FACTS));
 
       expect(verifyDummy).toHaveBeenCalledTimes(1);
-      // `verifyDummy` delegates to `verify` with a genuine Argon2id hash.
       expect(verify).toHaveBeenCalledTimes(1);
       expect(verify.mock.calls[0][0].startsWith('$argon2id$')).toBe(true);
     });
@@ -313,11 +332,9 @@ describe('AuthService', () => {
     it('only discloses a suspension after the password is proved (A-19)', async () => {
       const user = await seedUser({ status: UserStatus.SUSPENDED });
 
-      // Wrong password: the generic answer, with no hint the account is on hold.
       const wrong = await capture(suite.service.login(user.email, 'wrong-one-1!', FACTS));
       expect(JSON.parse(wrong)).toMatchObject({ errorCode: ErrorCode.INVALID_CREDENTIALS });
 
-      // Right password: now it is safe to say.
       await expect(suite.service.login(user.email, PASSWORD, FACTS)).rejects.toMatchObject({
         errorCode: ErrorCode.ACCOUNT_SUSPENDED,
       });
@@ -331,15 +348,6 @@ describe('AuthService', () => {
       });
     });
 
-    /**
-     * **C-38 — a deletion-pending account cannot be signed back into (H7).**
-     *
-     * `login` checked only the *status*, and status is a column an admin can move: suspend
-     * takes a `DEACTIVATED` deletion-pending account to `SUSPENDED`, and unsuspend then
-     * sets it `ACTIVE`. `AdminConsumersService` now refuses both halves of that, and this is
-     * the second lock — `deletionRequestedAt` is the durable fact, and `changePassword` and
-     * `setupTwoFactor` were already checking it while the front door was not.
-     */
     it('refuses an account whose deletion has been requested, whatever its status', async () => {
       const user = await seedUser({
         status: UserStatus.ACTIVE,
@@ -368,9 +376,6 @@ describe('AuthService', () => {
         await capture(suite.service.login('ayesha@example.invalid', 'wrong-one-1!', FACTS));
       }
 
-      // `createdAt` is a @CreateDateColumn: PostgreSQL fills it, the in-memory
-      // repository does not (it emulates a repository, not a database). Stamping it
-      // is what the ORM would have done, and the lockout window is read from it.
       for (const row of suite.attempts.$rows) {
         row.createdAt ??= FIXED_NOW;
       }
@@ -429,7 +434,6 @@ describe('AuthService', () => {
         }),
       );
 
-      // Resolves while the send is still outstanding.
       await expect(
         suite.service.requestPasswordReset('ayesha@example.invalid', FACTS),
       ).resolves.toEqual({ accepted: true });
@@ -467,7 +471,6 @@ describe('AuthService', () => {
       };
       const token = new URL(emailed.props.resetUrl).searchParams.get('token') as string;
 
-      // Two live sessions, both of which must die (S-6).
       const first = await suite.service.login(user.email, PASSWORD, FACTS);
       const second = await suite.service.login(user.email, PASSWORD, FACTS);
 
@@ -482,7 +485,6 @@ describe('AuthService', () => {
         expect(row?.revokedReason).toBe(REVOKE_REASONS.PASSWORD_CHANGED);
       }
 
-      // Single use.
       await expect(
         suite.service.resetPassword(token, 'another-new-one-8!', FACTS),
       ).rejects.toMatchObject({ errorCode: ErrorCode.TOKEN_ALREADY_USED });
@@ -494,10 +496,6 @@ describe('AuthService', () => {
       });
     });
   });
-
-  /* -------------------------------------------------------------------- */
-  /* Privilege changes rotate the session                                  */
-  /* -------------------------------------------------------------------- */
 
   describe('changePassword (C-7)', () => {
     async function signedIn(): Promise<{ user: AuthUser; sessionId: string; token: string }> {
@@ -627,23 +625,7 @@ describe('AuthService', () => {
       );
     });
 
-    /* ---------------------------------------------------------------------------------------
-     * S-6 — the second factor is a credential, so it gets a credential's backoff
-     * ------------------------------------------------------------------------------------ */
-
-    /**
-     * `completeTwoFactorChallenge` recorded `TWOFA_FAILED` and never read it back, and
-     * `assertNotLockedOut` was called on exactly one path: password login. The only limiter
-     * left on the challenge was `@Throttle(5/60s)` — and because `UserThrottlerGuard` runs
-     * *before* `SessionAuthGuard` on a `@Public()` route, its tracker is the **IP**. TOTP
-     * tolerance is ±1 step, so three of a million codes are live at any instant; an attacker
-     * holding a stolen password sprayed from a proxy pool with no backoff, no account lock and
-     * nothing written anywhere a human would look, and the second factor fell inside a day.
-     *
-     * Two independent bounds now apply, and each of these tests fails without one of them.
-     */
     describe('the challenge is rate-limited per account, not per address', () => {
-      /** An enrolled admin, signed in as far as the pending session. */
       async function pendingAdmin(): Promise<{ user: AuthUser; token: string; sessionId: string }> {
         const totp = suite.harness.get<TotpService>(TotpService);
         const enrolment = totp.enrol('admin@example.invalid');
@@ -665,13 +647,6 @@ describe('AuthService', () => {
         };
       }
 
-      /**
-       * One wrong code, a second later.
-       *
-       * The clock moves because the lockout reads `auth_attempts.createdAt` newest-first;
-       * a run of attempts sharing one timestamp has no "newest", which is a property of a
-       * frozen clock and not of the code under test.
-       */
       async function guessWrong(token: string | undefined, ip = FACTS.ip): Promise<string> {
         jest.setSystemTime(new Date(Date.now() + 1_000));
         return capture(
@@ -703,7 +678,6 @@ describe('AuthService', () => {
           await guessWrong(token);
         }
 
-        // Same code and same copy on the attempt that locked as on the first one.
         expect(suite.emit).toHaveBeenCalledWith(
           AUTH_EVENTS.TWOFA_CHALLENGE_LOCKED,
           expect.objectContaining({
@@ -733,8 +707,6 @@ describe('AuthService', () => {
           await guessWrong(token);
         }
 
-        // A proxy rotation buys a new address and a new pending session. Neither helps:
-        // the S-6 counter is keyed by the account, which is the thing being attacked.
         const sessions = suite.harness.get<SessionService>(SessionService);
         const fresh = await sessions.issue({
           user,
@@ -795,7 +767,6 @@ describe('AuthService', () => {
   });
 
   describe('disableTwoFactor (S-8)', () => {
-
     function callerFor(user: AuthUser): ICurrentUser {
       return {
         id: user.id,
@@ -810,7 +781,6 @@ describe('AuthService', () => {
       };
     }
 
-    /** An enrolled admin, plus a live code for the secret they actually hold. */
     async function seedEnrolledAdmin(): Promise<{ user: AuthUser; code: string }> {
       const totp = suite.harness.get<TotpService>(TotpService);
       const enrolment = totp.enrol('admin@example.invalid');

@@ -19,34 +19,10 @@ import { routes } from '@/lib/routes';
 
 import type { Locale } from '@/i18n/config';
 
-/**
- * The S-1 sign-in form. One form for both roles.
- *
- * **Nothing here asks or reveals which kind of account the caller holds**, and nothing
- * distinguishes an unknown address from a wrong password: the API answers `INVALID_CREDENTIALS`
- * for both, and this screen renders the one sentence that code maps to (S-6). There is no
- * client-side "we don't know that email" branch, and there cannot be one — the response carries
- * no such fact.
- *
- * On success the caller lands on `/dashboard` (C-4), which resolves the role server-side and
- * renders the right experience behind the one URL (S-2).
- *
- * ### The six D-5 states
- * - **default** — the two fields below.
- * - **loading** — the busy submit button, plus the segment's `loading.tsx` skeleton.
- * - **empty** — not applicable: a sign-in form has no collection to be empty.
- * - **error** — `FormErrorFeedback`, resolved from the code, in the reader's language.
- * - **permission denied** — a suspended or deactivated account renders the S-9 shell.
- * - **success** — the navigation itself; the fitting room is the confirmation.
- */
 export interface LoginFormProps {
   locale: Locale;
 }
 
-/**
- * Only a same-site path is honoured as a return target. An absolute URL, or a protocol-relative
- * `//host`, would turn the sign-in screen into an open redirect.
- */
 function safeReturnTo(value: string | null): string | null {
   if (value === null) return null;
   if (!value.startsWith('/') || value.startsWith('//')) return null;
@@ -79,7 +55,6 @@ export function LoginForm({ locale }: LoginFormProps) {
     event.preventDefault();
     setTouched(true);
 
-    // No double submit: the button is disabled while busy and the handler refuses a second run.
     if (login.isPending) return;
     if (!looksLikeEmail(email) || password.length === 0) return;
 
@@ -88,8 +63,6 @@ export function LoginForm({ locale }: LoginFormProps) {
       {
         onSuccess: (result) => {
           if (result.twofaRequired) {
-            // The session exists but is `twofaPending`: nothing else is reachable until the
-            // second factor lands (S-8). The return target travels with it.
             const target = returnTo
               ? `${routes.twoFactor(locale)}?${RETURN_TO_PARAM}=${encodeURIComponent(returnTo)}`
               : routes.twoFactor(locale);
@@ -97,7 +70,6 @@ export function LoginForm({ locale }: LoginFormProps) {
             return;
           }
           router.replace(returnTo ?? routes.dashboard(locale));
-          // The session cookie is new, so every Server Component above resolves it again.
           router.refresh();
         },
       },
@@ -118,7 +90,7 @@ export function LoginForm({ locale }: LoginFormProps) {
           }
           deniedAction={
             <Button asChild variant="secondary">
-              <Link href={routes.home(locale)}>{tc('backToFittingRoom')}</Link>
+              <Link href={routes.home(locale)}>{tc('backToDrape')}</Link>
             </Button>
           }
         />

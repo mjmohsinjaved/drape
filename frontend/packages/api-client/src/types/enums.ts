@@ -1,19 +1,7 @@
-/**
- * ARCHITECTURE.md §4.1 enum registry, mirrored for the browser.
- *
- * §2.2: "Enum values are UPPER_SNAKE_CASE in TypeScript, in PostgreSQL, and on the wire. The API
- * never translates enum casing. The frontend receives `"PUBLISHED"` and maps it to display copy
- * through i18n." Nothing in this file is display copy — never render these values directly.
- *
- * Each enum is a `const` tuple so it can be iterated (select options, filter chips, exhaustive
- * tests) with the union type derived from the same list.
- */
-
-/** `role_enum`. `PUBLIC` is TS-only — it is used by `@Roles()` on the API and is never stored. */
 export const ROLES = ['ADMIN', 'CONSUMER'] as const;
 export type Role = (typeof ROLES)[number];
 
-export const USER_STATUSES = ['ACTIVE', 'SUSPENDED', 'DEACTIVATED'] as const;
+export const USER_STATUSES = ['PENDING_APPROVAL', 'ACTIVE', 'SUSPENDED', 'DEACTIVATED'] as const;
 export type UserStatus = (typeof USER_STATUSES)[number];
 
 export const LOCALES = ['EN', 'UR'] as const;
@@ -30,7 +18,6 @@ export const EVENT_TYPES = [
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 
-/** Bands are PKR. */
 export const BUDGET_BANDS = [
   'UNDER_100K',
   'BAND_100K_250K',
@@ -104,13 +91,7 @@ export type ModerationState = (typeof MODERATION_STATES)[number];
 export const NOTIFICATION_CHANNELS = ['EMAIL', 'SMS', 'IN_APP'] as const;
 export type NotificationChannel = (typeof NOTIFICATION_CHANNELS)[number];
 
-export const NOTIFICATION_STATUSES = [
-  'PENDING',
-  'SENDING',
-  'SENT',
-  'FAILED',
-  'CANCELLED',
-] as const;
+export const NOTIFICATION_STATUSES = ['PENDING', 'SENDING', 'SENT', 'FAILED', 'CANCELLED'] as const;
 export type NotificationStatus = (typeof NOTIFICATION_STATUSES)[number];
 
 export const VERIFICATION_PURPOSES = [
@@ -147,10 +128,8 @@ export type DeletionInitiator = (typeof DELETION_INITIATORS)[number];
 export const SETTINGS_VALUE_TYPES = ['STRING', 'NUMBER', 'BOOLEAN', 'JSON'] as const;
 export type SettingsValueType = (typeof SETTINGS_VALUE_TYPES)[number];
 
-/** §4.11 — derived consent state returned by `GET /consents/me` (§5.10). */
 export const CONSENT_STATUSES = ['GRANTED', 'REQUIRED', 'STALE'] as const;
 export type ConsentStatus = (typeof CONSENT_STATUSES)[number];
 
-/** §5.11 SSE — the four stages that drive the staged microcopy of the ~7 s wait (C-19, §10.3). */
 export const TRYON_STAGES = ['QUEUED', 'UPLOADING', 'GENERATING', 'FINISHING'] as const;
 export type TryOnStage = (typeof TRYON_STAGES)[number];

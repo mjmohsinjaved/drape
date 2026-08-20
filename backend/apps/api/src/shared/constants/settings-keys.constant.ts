@@ -8,6 +8,7 @@ export const SETTINGS_KEYS = {
   BRAND_INSTAGRAM_HANDLE: 'brand.instagramHandle',
   BRAND_CONTACT_EMAIL: 'brand.contactEmail',
   BRAND_STORE_ADDRESSES: 'brand.storeAddresses',
+  AUTH_REQUIRE_ADMIN_APPROVAL: 'auth.requireAdminApproval',
   QUOTA_DEFAULT_MONTHLY: 'quota.defaultMonthly',
   QUOTA_REQUIRE_EMAIL_VERIFICATION: 'quota.requireEmailVerification',
   BUDGET_MONTHLY_GENERATIONS: 'budget.monthlyGenerations',
@@ -89,6 +90,15 @@ export const SETTINGS_REGISTRY: readonly SettingDefinition[] = [
     description: 'Store addresses shown on the contact and enquiry screens.',
     isPublic: true,
     requirement: 'A-27',
+  },
+  {
+    key: SETTINGS_KEYS.AUTH_REQUIRE_ADMIN_APPROVAL,
+    valueType: SettingsValueType.BOOLEAN,
+    defaultValue: true,
+    description:
+      'Hold every new consumer signup at PENDING_APPROVAL until an admin approves it. While this is on, an unapproved account cannot sign in; once approved nothing else is withheld.',
+    isPublic: false,
+    requirement: 'A-19',
   },
   {
     key: SETTINGS_KEYS.QUOTA_DEFAULT_MONTHLY,

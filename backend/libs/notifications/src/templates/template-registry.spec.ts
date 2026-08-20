@@ -26,7 +26,6 @@ interface TemplateCase {
   readonly render: (ctx: TemplateContext) => RenderedTemplate;
 }
 
-/** Keeps each fixture typed against its own props interface. */
 function testCase<K extends TemplateId>(id: K, props: TemplatePropsMap[K]): TemplateCase {
   return { id, render: (ctx) => TEMPLATE_REGISTRY[id].render(props, ctx) };
 }
@@ -94,6 +93,10 @@ const CASES: readonly TemplateCase[] = [
     shortlistUrl: 'https://drape.test/shortlist',
     enquiryUrl: 'https://drape.test/enquiries/new',
   }),
+  testCase(TemplateId.ACCOUNT_APPROVED, {
+    consumerName: 'Hira',
+    signInUrl: 'https://drape.test/en/login',
+  }),
   testCase(TemplateId.ACCOUNT_SUSPENDED, {
     consumerName: 'Hira',
     suspendedAt: AT,
@@ -148,11 +151,6 @@ const CASES: readonly TemplateCase[] = [
   }),
 ];
 
-/**
- * PRD §9.4: Drape is a shortlisting tool, never a preview tool. These phrases, or anything close to
- * them, are a copy failure — so the check runs over every template in every locale rather than
- * relying on a reviewer noticing.
- */
 const BANNED_PHRASES = [
   'see yourself',
   'see exactly',
@@ -171,7 +169,7 @@ const BANNED_PHRASES = [
 
 describe('template registry', () => {
   it('registers every declared template id exactly once', () => {
-    expect(TEMPLATE_IDS).toHaveLength(17);
+    expect(TEMPLATE_IDS).toHaveLength(18);
     expect(new Set(TEMPLATE_IDS).size).toBe(TEMPLATE_IDS.length);
     expect(CASES.map((entry) => entry.id).sort()).toEqual([...TEMPLATE_IDS].sort());
   });

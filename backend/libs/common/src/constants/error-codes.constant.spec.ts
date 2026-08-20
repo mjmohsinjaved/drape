@@ -11,15 +11,7 @@ import {
   maskErrorCode,
 } from './error-codes.constant';
 
-/**
- * An independent transcription of the ARCHITECTURE.md §2.4 status column.
- *
- * This is deliberately a **second copy** of the table rather than a derivation of
- * `ERROR_CODE_SPECS` — a test that reads the implementation cannot catch a
- * transcription error, which is the failure mode that matters here.
- */
 const EXPECTED_STATUS: Readonly<Record<ErrorCode, number>> = {
-  // Authentication and session
   [ErrorCode.AUTH_REQUIRED]: 401,
   [ErrorCode.SESSION_EXPIRED]: 401,
   [ErrorCode.SESSION_INVALID]: 401,
@@ -27,6 +19,7 @@ const EXPECTED_STATUS: Readonly<Record<ErrorCode, number>> = {
   [ErrorCode.ACCOUNT_LOCKED]: 423,
   [ErrorCode.ACCOUNT_SUSPENDED]: 403,
   [ErrorCode.ACCOUNT_DEACTIVATED]: 403,
+  [ErrorCode.ACCOUNT_PENDING_APPROVAL]: 403,
   [ErrorCode.EMAIL_NOT_VERIFIED]: 403,
   [ErrorCode.PHONE_NOT_VERIFIED]: 403,
   [ErrorCode.TWOFA_REQUIRED]: 401,
@@ -46,7 +39,6 @@ const EXPECTED_STATUS: Readonly<Record<ErrorCode, number>> = {
   [ErrorCode.LAST_ADMIN_PROTECTED]: 409,
   [ErrorCode.BOT_CHECK_FAILED]: 403,
 
-  // Invites and accounts
   [ErrorCode.EMAIL_ALREADY_EXISTS]: 409,
   [ErrorCode.PHONE_ALREADY_EXISTS]: 409,
   [ErrorCode.USER_NOT_FOUND]: 404,
@@ -55,7 +47,6 @@ const EXPECTED_STATUS: Readonly<Record<ErrorCode, number>> = {
   [ErrorCode.INVITE_ALREADY_CONSUMED]: 409,
   [ErrorCode.DELETION_IN_PROGRESS]: 409,
 
-  // Try-on guard chain
   [ErrorCode.CONSENT_REQUIRED]: 403,
   [ErrorCode.CONSENT_STALE]: 403,
   [ErrorCode.QUOTA_EXHAUSTED]: 403,
@@ -66,14 +57,12 @@ const EXPECTED_STATUS: Readonly<Record<ErrorCode, number>> = {
   [ErrorCode.PHOTO_NOT_OWNED]: 403,
   [ErrorCode.IDEMPOTENCY_IN_FLIGHT]: 409,
 
-  // Ownership codes — masked
   [ErrorCode.RESULT_NOT_OWNED]: 403,
   [ErrorCode.JOB_NOT_OWNED]: 403,
   [ErrorCode.ENQUIRY_NOT_OWNED]: 403,
   [ErrorCode.SHORTLIST_ITEM_NOT_OWNED]: 403,
   [ErrorCode.SHARE_LINK_NOT_OWNED]: 403,
 
-  // Upstream
   [ErrorCode.UPSTREAM_NO_GARMENT_DETECTED]: 502,
   [ErrorCode.UPSTREAM_UNSUPPORTED_FORMAT]: 422,
   [ErrorCode.MODERATION_REJECTED]: 422,
@@ -83,7 +72,6 @@ const EXPECTED_STATUS: Readonly<Record<ErrorCode, number>> = {
   [ErrorCode.UPSTREAM_INVALID_RESPONSE]: 502,
   [ErrorCode.TRYON_PROVIDER_MISCONFIGURED]: 503,
 
-  // Catalog, garments, images
   [ErrorCode.CATEGORY_NOT_FOUND]: 404,
   [ErrorCode.CATEGORY_HAS_PUBLISHED_GARMENTS]: 409,
   [ErrorCode.CATEGORY_DEPTH_EXCEEDED]: 400,
@@ -101,7 +89,6 @@ const EXPECTED_STATUS: Readonly<Record<ErrorCode, number>> = {
   [ErrorCode.IMAGE_CORRUPT]: 422,
   [ErrorCode.BULK_OPERATION_PARTIAL_FAILURE]: 207,
 
-  // Photos, consent, results, engagement
   [ErrorCode.CONSENT_POLICY_NOT_FOUND]: 404,
   [ErrorCode.PHOTO_LIMIT_REACHED]: 409,
   [ErrorCode.PHOTO_VALIDATION_FAILED]: 422,
@@ -122,7 +109,6 @@ const EXPECTED_STATUS: Readonly<Record<ErrorCode, number>> = {
   [ErrorCode.ENQUIRY_LOST_REASON_REQUIRED]: 400,
   [ErrorCode.INVALID_ENQUIRY_TRANSITION]: 409,
 
-  // Quota, moderation, settings, files, platform
   [ErrorCode.QUOTA_ADJUSTMENT_INVALID]: 400,
   [ErrorCode.MODERATION_ITEM_NOT_FOUND]: 404,
   [ErrorCode.MODERATION_ALREADY_REVIEWED]: 409,
@@ -145,7 +131,6 @@ const EXPECTED_STATUS: Readonly<Record<ErrorCode, number>> = {
   [ErrorCode.SERVICE_UNAVAILABLE]: 503,
 };
 
-/** PRD §8.3 verbatim strings, marked ✔︎ in §2.4. These must match character for character. */
 const PRD_VERBATIM: Array<[ErrorCode, string]> = [
   [
     ErrorCode.QUOTA_EXHAUSTED,
@@ -187,7 +172,6 @@ describe('ErrorCode', () => {
     const withPlaceholders = ALL_ERROR_CODES.filter((code) =>
       /\{[a-zA-Z]+\}/.test(ERROR_CODE_SPECS[code].message),
     );
-    // §2.4 documents exactly these braced messages.
     expect(withPlaceholders.sort()).toEqual(
       [
         ErrorCode.INVALID_PUBLISH_TRANSITION,
@@ -299,7 +283,6 @@ describe('isErrorCode', () => {
     expect(isErrorCode('NOT_A_CODE')).toBe(false);
     expect(isErrorCode(undefined)).toBe(false);
     expect(isErrorCode(404)).toBe(false);
-    // Prototype keys must not be mistaken for members.
     expect(isErrorCode('toString')).toBe(false);
   });
 });

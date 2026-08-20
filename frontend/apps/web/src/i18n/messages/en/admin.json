@@ -720,9 +720,10 @@
       "name": "Name A–Z"
     },
     "status": {
+      "PENDING_APPROVAL": "Waiting for approval",
       "ACTIVE": "Active",
-      "SUSPENDED": "Suspended",
-      "DEACTIVATED": "Deactivated"
+      "SUSPENDED": "Inactive",
+      "DEACTIVATED": "Closed"
     },
     "empty": {
       "title": "No one has signed up yet",
@@ -745,32 +746,13 @@
       "search": "search"
     },
     "actions": {
-      "suspend": "Suspend",
-      "unsuspend": "Lift the hold"
+      "menu": "Actions for {name}",
+      "activate": "Activate",
+      "deactivate": "Deactivate"
     },
-    "suspend": {
-      "title": "Suspend {name}",
-      "body": "Suspension puts the account on hold. It is reversible, and it deletes nothing.",
-      "consequenceTitle": "What happens the moment you confirm",
-      "consequenceSignedOut": "She is signed out on every device straight away.",
-      "consequenceBlocked": "Her next sign-in is refused, and so is every try-on and enquiry.",
-      "consequenceEmailed": "The reason below is emailed to her, word for word.",
-      "consequenceDataKept": "Her photos, try-ons and shortlist are kept, pending review.",
-      "reasonLabel": "Why the account is on hold",
-      "reasonPlaceholder": "Write the sentence she should read.",
-      "reasonHint": "At least {min} characters. She will see this.",
-      "reasonTooShort": "Give a reason she can act on — a few words is not enough.",
-      "cancel": "Cancel",
-      "confirm": "Suspend the account",
-      "confirming": "Suspending",
-      "done": "{name} is suspended and signed out."
-    },
-    "unsuspend": {
-      "title": "Lift the hold on {name}?",
-      "body": "She can sign in again from her next attempt. Sessions revoked when the hold was placed stay revoked.",
-      "confirm": "Lift the hold",
-      "cancel": "Keep the hold",
-      "done": "The hold on {name} is lifted."
+    "toast": {
+      "activated": "{name} is active and can sign in.",
+      "deactivated": "{name} is deactivated and signed out."
     }
   },
   "consumer": {

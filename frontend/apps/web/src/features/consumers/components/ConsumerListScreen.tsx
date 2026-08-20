@@ -5,11 +5,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 
-import { Ban, RotateCcw, Search } from 'lucide-react';
+import { MoreVertical, Search } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import {
-  resolveErrorCode,
   USER_STATUSES,
   type AdminConsumerListItem,
   type Paginated,
@@ -19,9 +18,13 @@ import {
   Badge,
   Button,
   Checkbox,
-  ConfirmDialog,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
   EmptyState,
   ErrorState,
+  IconButton,
   Input,
   Kbd,
   Pagination,
@@ -51,8 +54,8 @@ import {
   isSignedOut,
   useCatalogErrorCopy,
 } from '@/features/catalog/hooks/use-catalog-error';
-import { SuspendConsumerDialog } from '@/features/consumers/components/SuspendConsumerDialog';
 import {
+  useApproveConsumer,
   useConsumerList,
   useSuspendConsumer,
   useUnsuspendConsumer,
@@ -74,16 +77,15 @@ import type { Locale } from '@/i18n/config';
 export interface ConsumerListScreenProps {
   locale: Locale;
   initialPage?: Paginated<AdminConsumerListItem>;
-  /** The list view `initialPage` was fetched for, as {@link listStateKey} spells it. */
   initialPageKey?: string;
 }
 
 const ANY_OPTION = '__any__';
 
-/** A stable empty page, so "no data yet" is not a new array identity on every render. */
 const EMPTY_ROWS: AdminConsumerListItem[] = [];
 
-const STATUS_VARIANT: Readonly<Record<UserStatus, 'success' | 'warning' | 'neutral'>> = {
+const STATUS_VARIANT: Readonly<Record<UserStatus, 'success' | 'warning' | 'neutral' | 'info'>> = {
+  PENDING_APPROVAL: 'info',
   ACTIVE: 'success',
   SUSPENDED: 'warning',
   DEACTIVATED: 'neutral',
@@ -103,26 +105,17 @@ export function ConsumerListScreen({
   const [searchDraft, setSearchDraft] = useState(state.search);
   const searchRef = useRef<HTMLInputElement>(null);
 
-  // Seed the query with the server's rows whenever they *are* the rows being asked for — which
-  // is every first render of a list URL, page 4 included, not only page 1.
   const seed =
     initialPageKey !== undefined && initialPageKey === listStateKey(state)
       ? initialPage
       : undefined;
 
   const query = useConsumerList(toApiQuery(state), seed);
+  const approve = useApproveConsumer();
   const suspend = useSuspendConsumer();
   const unsuspend = useUnsuspendConsumer();
 
   const [cursor, setCursor] = useState(0);
-  // Which row a hold is being placed on or lifted from. The whole row is kept, not just the id:
-  // both dialogs name her, and a list that refetches underneath them must not blank the name.
-  const [suspending, setSuspending] = useState<AdminConsumerListItem | null>(null);
-  const [unsuspending, setUnsuspending] = useState<AdminConsumerListItem | null>(null);
-  const [actionErrorCode, setActionErrorCode] = useState<string | null>(null);
-
-  // `?? []` inside the memo rather than beside it: a fresh literal on every render would make
-  // every memo that reads it recompute, which is what they exist to avoid.
   const items = query.data?.items;
   const rows = useMemo(() => items ?? EMPTY_ROWS, [items]);
   const meta = query.data?.meta;
@@ -142,13 +135,11 @@ export function ConsumerListScreen({
 
   const update = useCallback(
     (patch: Partial<ConsumerListState>): void => {
-      // Any filter change resets to the first page — page 4 of a different result set is nowhere.
       push({ ...state, ...patch, page: patch.page ?? 1 });
     },
     [push, state],
   );
 
-  // Keep the cursor inside the page after a filter change or a page turn.
   useEffect(() => {
     setCursor(0);
   }, [state.page, state.search, state.status, state.hasEnquiries, state.sort]);
@@ -159,7 +150,6 @@ export function ConsumerListScreen({
 
   const handleTableKeyDown = (event: React.KeyboardEvent<HTMLTableSectionElement>): void => {
     if (rows.length === 0) return;
-    // The D-19 row shortcuts belong to the table itself, never to a control inside it.
     if (event.target !== event.currentTarget) return;
 
     const consumer = rows[cursor];
@@ -186,7 +176,6 @@ export function ConsumerListScreen({
     }
   };
 
-  // `/` focuses search from anywhere on this screen, unless a control already has focus.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key !== '/' || event.metaKey || event.ctrlKey || event.altKey) return;
@@ -206,32 +195,39 @@ export function ConsumerListScreen({
     return () => document.removeEventListener('keydown', onKeyDown);
   }, []);
 
-  const confirmSuspend = useCallback(
-    async (reason: string): Promise<void> => {
-      if (suspending === null) return;
-      setActionErrorCode(null);
+  const activateRow = useCallback(
+    async (consumer: AdminConsumerListItem): Promise<void> => {
       try {
-        await suspend.mutateAsync({ userId: suspending.id, reason });
-        toast.success(t('suspend.done', { name: suspending.name }));
-        setSuspending(null);
+        if (consumer.status === 'PENDING_APPROVAL') {
+          await approve.mutateAsync(consumer.id);
+        } else {
+          await unsuspend.mutateAsync(consumer.id);
+        }
+        toast.success(t('toast.activated', { name: consumer.name }));
       } catch (error: unknown) {
-        setActionErrorCode(resolveErrorCode(error));
+        toast.error(errorCopy.message(error));
       }
     },
-    [suspend, suspending, t],
+    [approve, errorCopy, t, unsuspend],
   );
 
-  const confirmUnsuspend = useCallback(async (): Promise<void> => {
-    if (unsuspending === null) return;
-    try {
-      await unsuspend.mutateAsync(unsuspending.id);
-      toast.success(t('unsuspend.done', { name: unsuspending.name }));
-    } catch (error: unknown) {
-      toast.error(errorCopy.message(error));
-    } finally {
-      setUnsuspending(null);
-    }
-  }, [errorCopy, t, unsuspend, unsuspending]);
+  const deactivateRow = useCallback(
+    async (consumer: AdminConsumerListItem): Promise<void> => {
+      try {
+        await suspend.mutateAsync({ userId: consumer.id });
+        toast.success(t('toast.deactivated', { name: consumer.name }));
+      } catch (error: unknown) {
+        toast.error(errorCopy.message(error));
+      }
+    },
+    [errorCopy, suspend, t],
+  );
+
+  const pendingId =
+    (approve.isPending ? approve.variables : undefined) ??
+    (unsuspend.isPending ? unsuspend.variables : undefined) ??
+    (suspend.isPending ? suspend.variables?.userId : undefined) ??
+    null;
 
   const header = (
     <AdminPageHeader
@@ -326,8 +322,6 @@ export function ConsumerListScreen({
     </div>
   );
 
-  /* ---------------------------------------------------------------- D-5 states */
-
   if (query.isPending) {
     return (
       <AdminPage>
@@ -347,7 +341,7 @@ export function ConsumerListScreen({
     return (
       <AdminPage>
         {header}
-        {/* A session that ended is not an authorisation refusal — it has its own screen. */}
+        {}
         {isSignedOut(query.error) ? (
           <SignedOutState />
         ) : isPermissionDenied(query.error) ? (
@@ -468,9 +462,6 @@ export function ConsumerListScreen({
                     {consumer.name}
                     <LinkPending size="xs" placement="corner" />
                   </Link>
-                  {/* A-16 authorises the contact details. `dir="ltr"` so an address is not
-                      reordered under the Urdu locale, and `break-all` so a long one wraps
-                      inside its cell rather than widening the table. */}
                   <span dir="ltr" className="text-2xs break-all text-ink-subtle">
                     {consumer.email}
                   </span>
@@ -514,35 +505,35 @@ export function ConsumerListScreen({
                 </Badge>
               </TableCell>
 
-              {/*
-                A-19, at the row. The two states are the only two an admin can move between:
-                a DEACTIVATED account is either mid-deletion (C-38, A-20) or closed by its
-                owner, and neither is something to be reopened from a list — so it gets no
-                control rather than a disabled one that implies the action exists.
-              */}
               <TableCell>
-                {consumer.status === 'ACTIVE' ? (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    startIcon={<Ban aria-hidden="true" />}
-                    onClick={() => {
-                      setActionErrorCode(null);
-                      setSuspending(consumer);
-                    }}
-                  >
-                    {t('actions.suspend')}
-                  </Button>
-                ) : consumer.status === 'SUSPENDED' ? (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    startIcon={<RotateCcw aria-hidden="true" />}
-                    onClick={() => setUnsuspending(consumer)}
-                  >
-                    {t('actions.unsuspend')}
-                  </Button>
-                ) : null}
+                {consumer.status === 'DEACTIVATED' ? null : (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <IconButton
+                        variant="ghost"
+                        size="sm"
+                        label={t('actions.menu', { name: consumer.name })}
+                        icon={<MoreVertical aria-hidden="true" />}
+                        loading={pendingId === consumer.id}
+                      />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        disabled={consumer.status === 'ACTIVE'}
+                        onSelect={() => void activateRow(consumer)}
+                      >
+                        {t('actions.activate')}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        destructive
+                        disabled={consumer.status !== 'ACTIVE'}
+                        onSelect={() => void deactivateRow(consumer)}
+                      >
+                        {t('actions.deactivate')}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
               </TableCell>
             </TableRow>
           ))}
@@ -562,36 +553,6 @@ export function ConsumerListScreen({
           })}
         />
       ) : null}
-
-      <SuspendConsumerDialog
-        open={suspending !== null}
-        onOpenChange={(open) => {
-          if (!open) {
-            setSuspending(null);
-            setActionErrorCode(null);
-          }
-        }}
-        consumerName={suspending?.name ?? ''}
-        onConfirm={confirmSuspend}
-        saving={suspend.isPending}
-        errorMessage={actionErrorCode === null ? null : errorCopy.fromCode(actionErrorCode)}
-      />
-
-      <ConfirmDialog
-        open={unsuspending !== null}
-        onOpenChange={(open) => {
-          if (!open) setUnsuspending(null);
-        }}
-        title={t('unsuspend.title', { name: unsuspending?.name ?? '' })}
-        description={t('unsuspend.body')}
-        confirmLabel={t('unsuspend.confirm')}
-        cancelLabel={t('unsuspend.cancel')}
-        // Lifting a hold restores access; it destroys nothing, so this is the two-button
-        // form rather than the type-the-name one D-17 reserves for deletion.
-        tone="primary"
-        loading={unsuspend.isPending}
-        onConfirm={confirmUnsuspend}
-      />
     </AdminPage>
   );
 }

@@ -41,17 +41,6 @@ import { SuspendConsumerDto } from '../dto/suspend-consumer.dto';
 import { UserIdParamDto } from '../dto/user-id-param.dto';
 import { AdminConsumersService } from '../services/admin-consumers.service';
 
-/**
- * Consumer management — ARCHITECTURE §5.2, PRD A-16 … A-20.
- *
- * **Every handler is `@Roles(Role.ADMIN)`**, and the spec beside this file asserts
- * a consumer session is refused on each one (S-11, E-7).
- *
- * There is no route here that returns a person photo, because there is no service
- * method that can produce one: `ConsumerQueryService` holds no `person_photos`
- * repository (S-10). `GET :userId/renders` is the single admin path to a render and
- * it reaches them only through `enquiry_items`.
- */
 @ApiTags('Admin · Consumers')
 @Controller('admin/consumers')
 export class AdminConsumersController {
@@ -122,6 +111,25 @@ export class AdminConsumersController {
     @Body() dto: SetQuotaOverrideDto,
   ): Promise<ConsumerDetailResponseDto> {
     return this.consumers.setQuotaOverride(actor, params.userId, dto);
+  }
+
+  @Post(':userId/approve')
+  @HttpCode(HttpStatus.OK)
+  @Roles(Role.ADMIN)
+  @ResponseMessage('Account approved')
+  @ApiOperation({
+    summary: 'Admit a signup waiting at PENDING_APPROVAL (A-19)',
+    description:
+      "The gate behind settings['auth.requireAdminApproval']. Until this runs the account cannot " +
+      'sign in; once it has, the account is ordinary and nothing further is withheld.',
+  })
+  @ApiOkResponse({ type: ConsumerDetailResponseDto })
+  @ApiStandardResponses({ notFound: true, conflict: true })
+  approve(
+    @CurrentUser() actor: ICurrentUser,
+    @Param() params: UserIdParamDto,
+  ): Promise<ConsumerDetailResponseDto> {
+    return this.consumers.approve(actor, params.userId);
   }
 
   @Post(':userId/suspend')

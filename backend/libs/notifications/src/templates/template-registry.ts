@@ -1,5 +1,6 @@
 import { NotificationTemplateError } from '../exceptions/notification.exception';
 
+import { accountApprovedTemplate, type AccountApprovedProps } from './account-approved.template';
 import {
   accountDeletionConfirmedTemplate,
   type AccountDeletionConfirmedProps,
@@ -47,13 +48,6 @@ import {
 } from './shared/template-context';
 import { verifyEmailTemplate, type VerifyEmailProps } from './verify-email.template';
 
-/**
- * The closed template registry.
- *
- * The values are what `notifications_outbox.template` stores (`varchar(80)`, closed registry —
- * docs/ARCHITECTURE.md §4.32), so they follow the UPPER_SNAKE_CASE rule for enum values in §0. The
- * kebab-case names in the brief are the file names.
- */
 export enum TemplateId {
   VERIFY_EMAIL = 'VERIFY_EMAIL',
   PASSWORD_RESET = 'PASSWORD_RESET',
@@ -65,6 +59,7 @@ export enum TemplateId {
   BUDGET_WARNING_80 = 'BUDGET_WARNING_80',
   BUDGET_EXHAUSTED_ADMIN = 'BUDGET_EXHAUSTED_ADMIN',
   BUDGET_EXHAUSTED_CONSUMER = 'BUDGET_EXHAUSTED_CONSUMER',
+  ACCOUNT_APPROVED = 'ACCOUNT_APPROVED',
   ACCOUNT_SUSPENDED = 'ACCOUNT_SUSPENDED',
   ACCOUNT_DELETION_CONFIRMED = 'ACCOUNT_DELETION_CONFIRMED',
   RENDER_READY = 'RENDER_READY',
@@ -74,7 +69,6 @@ export enum TemplateId {
   PURGE_JOB_FAILED = 'PURGE_JOB_FAILED',
 }
 
-/** Template id → its props type. This is what makes `renderTemplate()` type-safe at the call site. */
 export interface TemplatePropsMap {
   [TemplateId.VERIFY_EMAIL]: VerifyEmailProps;
   [TemplateId.PASSWORD_RESET]: PasswordResetProps;
@@ -86,6 +80,7 @@ export interface TemplatePropsMap {
   [TemplateId.BUDGET_WARNING_80]: BudgetWarning80Props;
   [TemplateId.BUDGET_EXHAUSTED_ADMIN]: BudgetExhaustedAdminProps;
   [TemplateId.BUDGET_EXHAUSTED_CONSUMER]: BudgetExhaustedConsumerProps;
+  [TemplateId.ACCOUNT_APPROVED]: AccountApprovedProps;
   [TemplateId.ACCOUNT_SUSPENDED]: AccountSuspendedProps;
   [TemplateId.ACCOUNT_DELETION_CONFIRMED]: AccountDeletionConfirmedProps;
   [TemplateId.RENDER_READY]: RenderReadyProps;
@@ -110,6 +105,7 @@ export const TEMPLATE_REGISTRY: TemplateRegistry = {
   [TemplateId.BUDGET_WARNING_80]: budgetWarning80Template,
   [TemplateId.BUDGET_EXHAUSTED_ADMIN]: budgetExhaustedAdminTemplate,
   [TemplateId.BUDGET_EXHAUSTED_CONSUMER]: budgetExhaustedConsumerTemplate,
+  [TemplateId.ACCOUNT_APPROVED]: accountApprovedTemplate,
   [TemplateId.ACCOUNT_SUSPENDED]: accountSuspendedTemplate,
   [TemplateId.ACCOUNT_DELETION_CONFIRMED]: accountDeletionConfirmedTemplate,
   [TemplateId.RENDER_READY]: renderReadyTemplate,
@@ -121,15 +117,10 @@ export const TEMPLATE_REGISTRY: TemplateRegistry = {
 
 export const TEMPLATE_IDS: readonly TemplateId[] = Object.values(TemplateId);
 
-/**
- * Narrows a string read out of `notifications_outbox.template`. The outbox processor calls this
- * before rendering, so an unknown row fails loudly instead of silently sending nothing.
- */
 export function isTemplateId(value: string): value is TemplateId {
   return Object.prototype.hasOwnProperty.call(TEMPLATE_REGISTRY, value);
 }
 
-/** Renders one template. Throws `NotificationTemplateError` when the id is not in the registry. */
 export function renderTemplate<K extends TemplateId>(
   templateId: K,
   props: TemplatePropsMap[K],

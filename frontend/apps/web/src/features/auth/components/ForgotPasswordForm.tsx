@@ -17,26 +17,6 @@ import { routes } from '@/lib/routes';
 
 import type { Locale } from '@/i18n/config';
 
-/**
- * `POST /auth/password/forgot` — S-6.
- *
- * ═══════════════════════════════════════════════════════════════════════════════════════
- *  THE CONFIRMATION IS THE SAME WHETHER OR NOT THE ADDRESS HAS AN ACCOUNT.
- *
- *  The API returns 200 with an identical body either way, so there is no fact here to
- *  branch on — and the copy must not pretend otherwise. "Check your inbox" would tell a
- *  prober that the address exists; "if that address has an account" tells them nothing.
- *  The wording below is conditional on purpose and must stay conditional.
- * ═══════════════════════════════════════════════════════════════════════════════════════
- *
- * ### The six D-5 states
- * - **default** — one field.
- * - **loading** — the busy submit button, plus the segment's `loading.tsx`.
- * - **empty** — not applicable.
- * - **error** — only transport and rate-limit failures reach here; the account itself never does.
- * - **permission denied** — a deletion in progress renders the S-9 shell.
- * - **success** — the deliberately non-committal confirmation.
- */
 export interface ForgotPasswordFormProps {
   locale: Locale;
 }
@@ -90,7 +70,7 @@ export function ForgotPasswordForm({ locale }: ForgotPasswordFormProps) {
           }
           deniedAction={
             <Button asChild variant="secondary">
-              <Link href={routes.home(locale)}>{tc('backToFittingRoom')}</Link>
+              <Link href={routes.home(locale)}>{tc('backToDrape')}</Link>
             </Button>
           }
         />

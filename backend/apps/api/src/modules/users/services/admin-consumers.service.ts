@@ -8,6 +8,7 @@ import { DataSource, Repository, type EntityManager } from 'typeorm';
 import {
   ConflictException,
   ErrorCode,
+  Locale,
   MILLISECONDS_PER_HOUR,
   NotFoundException,
   sha256Hex,
@@ -63,28 +64,8 @@ import type { DeleteConsumerDto, DeletionReceiptResponseDto } from '../dto/delet
 import type { SetQuotaOverrideDto } from '../dto/set-quota-override.dto';
 import type { SuspendConsumerDto } from '../dto/suspend-consumer.dto';
 
-/**
- * `verification_hash` at request time.
- *
- * §4.31 defines it as "sha256 of the sorted deleted-key list". At the moment the
- * request is recorded that list is empty, and the column is `char(64)` NOT NULL —
- * so the digest of the empty list is the honest value. The retention module
- * overwrites it with the real digest when the purge completes.
- */
 const EMPTY_DELETION_MANIFEST_HASH = sha256Hex('');
 
-/**
- * Consumer management for the admin console — PRD A-16 … A-20, ARCHITECTURE §5.2.
- *
- * **Reads go through `ConsumerQueryService`, never through a repository here.** That
- * is where S-10 is enforced: no `person_photos` handle, renders reachable only
- * through `enquiry_items`, explicit column allow-lists. Routing every admin read
- * through one class is what makes "an admin can never see her photo" a property of
- * the code rather than a promise about it.
- *
- * Writes stay in this class, and every multi-table write runs inside
- * `runInTransaction` with its session revocation in the same unit of work.
- */
 @Injectable()
 export class AdminConsumersService {
   private readonly logger = new Logger(AdminConsumersService.name);
@@ -101,17 +82,11 @@ export class AdminConsumersService {
     @Inject(SESSION_REVOCATION) private readonly sessions: SessionRevocationPort,
   ) {}
 
-  /* -----------------------------------------------------------------------------------------
-   * Reads (A-16, A-17)
-   * -------------------------------------------------------------------------------------- */
-
-  /** `GET /admin/consumers` (A-16). */
   async list(query: ConsumerQueryDto): Promise<IPaginated<ConsumerListItemResponseDto>> {
     const page = await this.consumerQuery.listConsumers(query);
     return { items: page.items.map(toConsumerListItem), meta: page.meta };
   }
 
-  /** `GET /admin/consumers/:userId` (A-17). Carries no photo — see `ConsumerQueryService`. */
   async findOne(userId: string): Promise<ConsumerDetailResponseDto> {
     const row = await this.consumerQuery.findConsumerDetail(userId);
     if (row === null) {
@@ -120,14 +95,6 @@ export class AdminConsumersService {
     return toConsumerDetail(row);
   }
 
-  /**
-   * `GET /admin/consumers/:userId/renders` — renders attached to her enquiries only
-   * (A-17, S-10).
-   *
-   * Each URL is signed for the **requesting admin's** id, so it is unusable by
-   * anyone else and expires with `STORAGE_URL_TTL_RENDER_SECONDS` (§3.4). The
-   * storage key itself never leaves this method.
-   */
   async listRenders(
     actor: ICurrentUser,
     userId: string,
@@ -141,7 +108,6 @@ export class AdminConsumersService {
     return { items: page.items.map((row) => toConsumerRender(row, signUrl)), meta: page.meta };
   }
 
-  /** `GET /admin/consumers/:userId/shortlist` (A-17). No renders here, by design (S-10). */
   async listShortlist(
     userId: string,
     query: ConsumerShortlistQueryDto,
@@ -152,22 +118,6 @@ export class AdminConsumersService {
     return { items: page.items.map(toConsumerShortlistItem), meta: page.meta };
   }
 
-  /* -----------------------------------------------------------------------------------------
-   * A-18 — per-consumer quota override
-   * -------------------------------------------------------------------------------------- */
-
-  /**
-   * `PATCH /admin/consumers/:userId/quota` (A-18).
-   *
-   * Writes the field and nothing else. **Seam:** the arithmetic that turns an
-   * override into an actual allowance — the lazy `MONTHLY_GRANT`, and the
-   * mid-period `OVERRIDE_GRANT` for the difference when an override is raised —
-   * belongs to `QuotaModule` and its append-only ledger (§4.26). That module does
-   * not exist yet, so this endpoint writes through the entity and emits
-   * `user.quota_override_changed`; when `QuotaModule` lands it should listen for
-   * that event (or be called here) to append the balancing ledger row. Until then a
-   * mid-period raise takes effect at the next period boundary.
-   */
   async setQuotaOverride(
     actor: ICurrentUser,
     userId: string,
@@ -206,22 +156,6 @@ export class AdminConsumersService {
     return this.findOne(userId);
   }
 
-  /* -----------------------------------------------------------------------------------------
-   * A-19 — suspension
-   * -------------------------------------------------------------------------------------- */
-
-  /**
-   * `POST /admin/consumers/:userId/suspend` (A-19).
-   *
-   * > "Suspend an account with a required reason. Suspension blocks generation and
-   * > enquiry but preserves data pending review."
-   *
-   * Nothing is deleted and nothing is anonymised. The block is enforced by
-   * `ACCOUNT_SUSPENDED` at guard 3 and at step 2 of the try-on guard chain (§2.4);
-   * all this method does is set the status, record the reason, and cut the live
-   * sessions in the same transaction so the block starts now rather than at her next
-   * sign-in.
-   */
   async suspend(
     actor: ICurrentUser,
     userId: string,
@@ -235,15 +169,9 @@ export class AdminConsumersService {
       });
     }
 
-    // A-19 preserves data "pending review"; A-20 and C-38 are already destroying it.
-    // Suspending on top of a deletion request is the first half of a resurrection —
-    // suspend moves DEACTIVATED → SUSPENDED, and unsuspend then moves SUSPENDED →
-    // ACTIVE, handing back an account the consumer asked us to delete.
     this.assertNotBeingDeleted(target);
 
     const suspendedAt = new Date();
-    // Captured before the write: the loaded row is identity-mapped, so reading
-    // `target.status` after the update can report the value we just set.
     const previousStatus = target.status;
     const sessionsRevoked = await runInTransaction(
       this.dataSource,
@@ -252,7 +180,7 @@ export class AdminConsumersService {
           { id: userId },
           {
             status: UserStatus.SUSPENDED,
-            suspendedReason: dto.reason,
+            suspendedReason: dto.reason ?? null,
             suspendedAt,
           },
         );
@@ -267,17 +195,48 @@ export class AdminConsumersService {
       occurredAt: suspendedAt,
       from: previousStatus,
       to: UserStatus.SUSPENDED,
-      reason: dto.reason,
+      reason: dto.reason ?? null,
       sessionsRevoked,
     };
     this.events.emit(USER_EVENTS.SUSPENDED, event);
 
-    await this.notifySuspended(target, suspendedAt, dto.reason);
+    await this.notifySuspended(target, suspendedAt, dto.reason ?? null);
 
     return this.findOne(userId);
   }
 
-  /** `POST /admin/consumers/:userId/unsuspend` — lifts the hold and clears the reason. */
+  async approve(actor: ICurrentUser, userId: string): Promise<ConsumerDetailResponseDto> {
+    const target = await this.requireConsumer(userId);
+
+    if (target.status !== UserStatus.PENDING_APPROVAL) {
+      throw new ConflictException(ErrorCode.RESOURCE_CONFLICT, {
+        message: 'This account is not waiting for approval.',
+      });
+    }
+
+    this.assertNotBeingDeleted(target);
+
+    await this.users.update(
+      { id: userId },
+      { status: UserStatus.ACTIVE, suspendedReason: null, suspendedAt: null },
+    );
+
+    const event: UserStatusChangedEvent = {
+      userId,
+      actorId: actor.id,
+      occurredAt: new Date(),
+      from: UserStatus.PENDING_APPROVAL,
+      to: UserStatus.ACTIVE,
+      reason: null,
+      sessionsRevoked: 0,
+    };
+    this.events.emit(USER_EVENTS.APPROVED, event);
+
+    await this.notifyApproved(target);
+
+    return this.findOne(userId);
+  }
+
   async unsuspend(actor: ICurrentUser, userId: string): Promise<ConsumerDetailResponseDto> {
     const target = await this.requireConsumer(userId);
 
@@ -287,9 +246,6 @@ export class AdminConsumersService {
       });
     }
 
-    // The other half of the resurrection. Belt and braces with the check in `suspend`:
-    // an account that was already SUSPENDED when the deletion was requested reaches here
-    // without passing through that one, and lifting the hold would set it ACTIVE.
     this.assertNotBeingDeleted(target);
 
     await this.users.update(
@@ -311,33 +267,6 @@ export class AdminConsumersService {
     return this.findOne(userId);
   }
 
-  /* -----------------------------------------------------------------------------------------
-   * A-20 — deletion
-   * -------------------------------------------------------------------------------------- */
-
-  /**
-   * `DELETE /admin/consumers/:userId` (A-20, D-17).
-   *
-   * > "Delete a consumer and all associated photos, renders and shortlists.
-   * > Completes within 24 hours with a confirmation record."
-   *
-   * **This endpoint requests the deletion; it does not perform it.** The purge —
-   * cascading the rows, unlinking the storage keys, hashing the manifest — belongs
-   * to `RetentionModule`, which owns `deletion_log` and the §9.3 purge job. That
-   * module does not exist yet, so what happens here is:
-   *
-   * 1. the D-17 name confirmation is verified server-side;
-   * 2. `users.deletionRequestedAt` is stamped and the account is deactivated, so
-   *    nothing more can be created against it;
-   * 3. every live session is revoked;
-   * 4. a `deletion_log` row is appended with `completedAt = null` — the A-20
-   *    confirmation record, and the retention module's work queue;
-   * 5. `user.deletion_requested` is emitted after the commit.
-   *
-   * **Seam:** until `RetentionModule` lands, no purge runs. The row and the event
-   * are the durable request, so nothing is lost — but the 24-hour SLA is not met by
-   * this module alone, and `deletion_log.completedAt` stays null until it is.
-   */
   async requestDeletion(
     actor: ICurrentUser,
     userId: string,
@@ -373,7 +302,6 @@ export class AdminConsumersService {
           { id: userId },
           {
             deletionRequestedAt: requestedAt,
-            // Nothing more may be created against an account that is being deleted.
             status: UserStatus.DEACTIVATED,
           },
         );
@@ -428,17 +356,6 @@ export class AdminConsumersService {
     };
   }
 
-  /* -----------------------------------------------------------------------------------------
-   * Internals
-   * -------------------------------------------------------------------------------------- */
-
-  /**
-   * Loads a consumer or refuses with `USER_NOT_FOUND`.
-   *
-   * An admin's id addressed through `/admin/consumers/**` is a 404, not a 403:
-   * these routes are the consumer section, and confirming "that id exists, it just
-   * isn't a consumer" tells a caller something they did not ask for (S-9).
-   */
   private async requireConsumer(userId: string): Promise<User> {
     const user = await this.consumerQuery.findConsumer(userId);
     if (user === null) {
@@ -447,32 +364,36 @@ export class AdminConsumersService {
     return user;
   }
 
-  /**
-   * C-38 — once deletion is under way, the account's state is no longer anyone's to move.
-   *
-   * The pair `suspend` → `unsuspend` was a resurrection: the first took a
-   * deletion-pending consumer from `DEACTIVATED` to `SUSPENDED`, the second put her at
-   * `ACTIVE`. She could then sign in to an account she had asked us to delete, right up
-   * until the sweep caught up — and if the sweep had already written off her request,
-   * indefinitely.
-   */
   private assertNotBeingDeleted(target: User): void {
     if (target.deletionRequestedAt !== null) {
       throw new ConflictException(ErrorCode.DELETION_IN_PROGRESS);
     }
   }
 
-  /**
-   * A-19 / D-7: tell her what happened, what is safe, and who to ask.
-   *
-   * A failed send never fails the suspension — `NotificationsService` resolves
-   * rather than rejects, and the outcome is logged (E-11).
-   *
-   * **Seam:** once `NotificationsModule`'s outbox lands (§4.32) this becomes an
-   * outbox row written inside the transaction and delivered by the processor,
-   * which survives a crash between the commit and the send.
-   */
-  private async notifySuspended(target: User, suspendedAt: Date, reason: string): Promise<void> {
+  private async notifyApproved(target: User): Promise<void> {
+    const webUrl = stripTrailingSlashes(this.config.get<string>('APP_WEB_URL') ?? '');
+    const locale = target.locale === Locale.UR ? 'ur' : 'en';
+
+    const result = await this.notifications.sendTemplatedEmail({
+      to: target.email,
+      template: TemplateId.ACCOUNT_APPROVED,
+      props: { consumerName: target.name, signInUrl: `${webUrl}/${locale}/login` },
+      locale: target.locale,
+    });
+
+    if (!result.ok) {
+      this.logger.warn(
+        `Approval email for user ${target.id} was not delivered (${result.failure?.code ?? 'UNKNOWN'}). ` +
+          'The approval itself is committed.',
+      );
+    }
+  }
+
+  private async notifySuspended(
+    target: User,
+    suspendedAt: Date,
+    reason: string | null,
+  ): Promise<void> {
     const result = await this.notifications.sendTemplatedEmail({
       to: target.email,
       template: TemplateId.ACCOUNT_SUSPENDED,
@@ -489,11 +410,10 @@ export class AdminConsumersService {
   }
 }
 
-/**
- * D-17's confirmation, compared the way a person types rather than the way a
- * database stores: case-insensitive, and tolerant of the double space between
- * "Ayesha  Khan" that nobody can see.
- */
+function stripTrailingSlashes(value: string): string {
+  return value.replace(/\/+$/, '');
+}
+
 function namesMatch(typed: string, actual: string): boolean {
   const normalise = (value: string): string =>
     value.trim().replace(/\s+/g, ' ').toLocaleLowerCase();
