@@ -19,30 +19,6 @@ import { routes } from '@/lib/routes';
 
 import type { InviteTokenPreview } from '@repo/api-client';
 
-/**
- * Invitation acceptance — S-5, `POST /invites/token/:token/accept`.
- *
- * ═══════════════════════════════════════════════════════════════════════════════════════
- *  THE ROLE IS NEVER A FORM FIELD.
- *
- *  It comes from the invite row the token resolves to, and the request body has no field
- *  that could carry one — nor an email, for the same reason. This screen *displays* the
- *  role from the server-validated preview so the reader knows what they are accepting; it
- *  never submits it. There is no code path from this form to an admin account other than
- *  an admin having sent the invitation (S-4, S-5).
- * ═══════════════════════════════════════════════════════════════════════════════════════
- *
- * Acceptance signs the new admin in and S-8 then makes two-factor enrolment mandatory, so the
- * enrolment panel takes over this screen rather than sending them somewhere else to find it.
- *
- * ### The six D-5 states
- * - **default** — the preview, then name and password.
- * - **loading** — the busy submit button, plus the segment's `loading.tsx`.
- * - **empty** — not applicable; the invalid-token case is handled by the page above.
- * - **error** — the three invite codes, each saying to ask an admin for a new invitation.
- * - **permission denied** — handled by the page's server-side preview and the S-9 shell.
- * - **success** — the 2FA enrolment step, which is the actual next thing to do.
- */
 export interface InviteAcceptanceFormProps {
   locale: Locale;
   token: string;
@@ -118,13 +94,13 @@ export function InviteAcceptanceForm({ locale, token, preview }: InviteAcceptanc
           }
           deniedAction={
             <Button asChild variant="secondary">
-              <Link href={routes.home(locale)}>{tc('backToFittingRoom')}</Link>
+              <Link href={routes.home(locale)}>{tc('backToDrape')}</Link>
             </Button>
           }
         />
       ) : null}
 
-      {/* Read-only, straight from the server-validated preview. Not inputs — facts. */}
+      {}
       <DescriptionList>
         <DescriptionItem term={t('previewEmail')}>{preview.email}</DescriptionItem>
         <DescriptionItem term={t('previewRole')}>{t(`roles.${preview.role}`)}</DescriptionItem>

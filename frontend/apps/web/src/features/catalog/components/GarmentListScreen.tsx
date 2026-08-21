@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 
-import { Plus, Search, Stethoscope } from 'lucide-react';
+import { Plus, Search, SlidersHorizontal } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import {
@@ -14,9 +14,12 @@ import {
   Checkbox,
   EmptyState,
   ErrorState,
+  IconButton,
   Input,
-  Kbd,
   Pagination,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
   PermissionDeniedState,
   Select,
   SelectContent,
@@ -40,10 +43,7 @@ import { SignedOutState } from '@/components/states';
 import { AdminPage, AdminPageHeader } from '@/features/catalog/components/AdminPage';
 import { BulkActionBar, type BulkOperation } from '@/features/catalog/components/BulkActionBar';
 import { BulkRunDialog } from '@/features/catalog/components/BulkRunDialog';
-import {
-  PublishStatePill,
-  QualityPill,
-} from '@/features/catalog/components/CatalogPills';
+import { PublishStatePill, QualityPill } from '@/features/catalog/components/CatalogPills';
 import { FirstRunGuide } from '@/features/catalog/components/FirstRunGuide';
 import {
   isPermissionDenied,
@@ -53,6 +53,7 @@ import {
 import { useGarmentList, useGarmentStateChange } from '@/features/catalog/hooks/use-garments';
 import {
   CATALOG_PAGE_SIZE,
+  DEFAULT_LIST_STATE,
   isUnfiltered,
   listStateKey,
   parseListState,
@@ -78,37 +79,14 @@ import type { Paginated, PublishState, Uuid } from '@repo/api-client';
 export interface GarmentListScreenProps {
   locale: Locale;
   initialPage?: Paginated<AdminGarment>;
-  /**
-   * The list view `initialPage` was fetched for, as {@link listStateKey} spells it.
-   *
-   * Without it the island can only guess, and it used to guess "page 1" — so every page turn
-   * discarded rows the server had already fetched and asked for them again. With it, the seed is
-   * used whenever it matches what the island is about to request, and ignored the moment the
-   * two diverge.
-   */
   initialPageKey?: string;
-  /** The tree, for the category filter and the bulk re-categorise picker. */
   categories: AdminCategory[];
 }
 
 const ANY_OPTION = '__any__';
 
-/** A stable empty page, so "no data yet" is not a new array identity on every render. */
 const EMPTY_ROWS: AdminGarment[] = [];
 
-/**
- * A-14 — the catalog list.
- *
- * Dense and tabular, with server-driven pagination and the filter state in the URL so a filtered
- * view is linkable and survives a reload.
- *
- * **D-19, keyboard shortcuts for repetitive work.** The table owns a cursor rather than relying
- * on tab order: `j`/`k` (or the arrows) move it, `Enter` opens, `x` selects, `p` publishes, `a`
- * goes to the test-render approval, `/` returns to the search box. Shortcuts are bound to the
- * table body, not to the document, so nothing is stolen from a field the admin is typing in —
- * except `/`, which is the one shortcut that has to work from anywhere on the screen and is
- * therefore ignored whenever a control already has focus.
- */
 export function GarmentListScreen({
   locale,
   initialPage,
@@ -123,12 +101,10 @@ export function GarmentListScreen({
   const state = useMemo(() => parseListState(searchParams), [searchParams]);
   const [searchDraft, setSearchDraft] = useState(state.search);
   const searchRef = useRef<HTMLInputElement>(null);
-
-  // Seed the query with the server's rows whenever they *are* the rows being asked for — which
-  // is every first render of a list URL, page 4 included, not only page 1.
-  const seed = initialPageKey !== undefined && initialPageKey === listStateKey(state)
-    ? initialPage
-    : undefined;
+  const seed =
+    initialPageKey !== undefined && initialPageKey === listStateKey(state)
+      ? initialPage
+      : undefined;
 
   const query = useGarmentList(toApiQuery(state), seed);
   const stateChange = useGarmentStateChange();
@@ -136,9 +112,6 @@ export function GarmentListScreen({
   const [selectedIds, setSelectedIds] = useState<Uuid[]>([]);
   const [cursor, setCursor] = useState(0);
   const [bulkOperation, setBulkOperation] = useState<BulkOperation | null>(null);
-
-  // `?? []` inside the memo rather than beside it: a fresh literal on every render would make
-  // every memo that reads it recompute, which is what they exist to avoid.
   const items = query.data?.items;
   const rows = useMemo(() => items ?? EMPTY_ROWS, [items]);
   const meta = query.data?.meta;
@@ -157,13 +130,11 @@ export function GarmentListScreen({
 
   const update = useCallback(
     (patch: Partial<CatalogListState>): void => {
-      // Any filter change resets to the first page — page 4 of a different result set is nowhere.
       push({ ...state, ...patch, page: patch.page ?? 1 });
     },
     [push, state],
   );
 
-  // Keep the cursor inside the page after a filter change or a page turn.
   useEffect(() => {
     setCursor(0);
   }, [state.page, state.search, state.categoryId, state.publishState, state.sort]);
@@ -196,7 +167,6 @@ export function GarmentListScreen({
             : t('toast.unpublished', { title: garment.title }),
         );
       } catch (error: unknown) {
-        // The gates live server-side; the refusal explains which one and where to fix it (A-11).
         toast.error(errorCopy.message(error), {
           description: t('toast.publishBlockedHint'),
         });
@@ -207,12 +177,6 @@ export function GarmentListScreen({
 
   const handleTableKeyDown = (event: React.KeyboardEvent<HTMLTableSectionElement>): void => {
     if (rows.length === 0) return;
-
-    // The D-19 row shortcuts belong to the table itself, never to a control inside it. The
-    // guard has to name every focusable thing this tbody contains, not just native form fields:
-    // the row checkbox is a Radix `<button role="checkbox">` and the garment title is an `<a>`,
-    // so a tag-name-only guard let `p` publish the *cursor* row while the checkbox had focus,
-    // and let `Enter` open the cursor row while a different row's link was focused.
     if (event.target !== event.currentTarget) return;
 
     const garment = rows[cursor];
@@ -251,7 +215,6 @@ export function GarmentListScreen({
     }
   };
 
-  // `/` focuses search from anywhere on this screen, unless a control already has focus.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key !== '/' || event.metaKey || event.ctrlKey || event.altKey) return;
@@ -263,10 +226,6 @@ export function GarmentListScreen({
         return;
       }
       event.preventDefault();
-      // `AdminShortcuts` also listens for `/` on `window` and opens the command palette. Both
-      // listeners are live on this screen, so without this the single keypress opened the
-      // palette *and* focused the search box underneath it. `document` fires before `window`,
-      // so stopping propagation here lets the screen's own search win where one exists.
       event.stopPropagation();
       searchRef.current?.focus();
     };
@@ -283,125 +242,153 @@ export function GarmentListScreen({
   const header = (
     <AdminPageHeader
       title={t('title')}
-      description={t('description')}
       actions={
-        <>
-          <Button asChild variant="secondary" size="sm">
-            <Link href={routes.admin.catalogHealth(locale)}>
-              <Stethoscope aria-hidden="true" className="size-4" />
-              {t('healthLink')}
-            </Link>
-          </Button>
-          <Button asChild size="sm">
-            <Link href={routes.admin.catalogNew(locale)}>
-              <Plus aria-hidden="true" className="size-4" />
-              {t('addGarment')}
-            </Link>
-          </Button>
-        </>
-      }
-      meta={
-        meta ? (
-          <span>
-            {t('resultCount', { total: meta.total, page: meta.page, pages: meta.totalPages })}
-          </span>
-        ) : null
+        <Button asChild size="sm">
+          <Link href={routes.admin.catalogNew(locale)}>
+            <Plus aria-hidden="true" className="size-4" />
+            {t('addGarment')}
+          </Link>
+        </Button>
       }
     />
   );
 
+  const appliedFilterCount =
+    (state.categoryId === null ? 0 : 1) +
+    (state.publishState === null ? 0 : 1) +
+    (state.sort === DEFAULT_LIST_STATE.sort ? 0 : 1);
+
   const filters = (
-    <div className="flex flex-wrap items-end gap-2">
-      <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <label htmlFor="catalog-search" className="text-xs font-medium text-ink-muted">
-          {t('filters.searchLabel')}
-        </label>
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            update({ search: searchDraft.trim() });
-          }}
-        >
-          <Input
-            id="catalog-search"
-            ref={searchRef}
-            value={searchDraft}
-            onChange={(event) => setSearchDraft(event.target.value)}
-            placeholder={t('filters.searchPlaceholder')}
-            startAdornment={<Search aria-hidden="true" className="size-4" />}
-            type="search"
-          />
-        </form>
-      </div>
+    <div className="flex flex-wrap items-center justify-end gap-2">
+      <form
+        className="w-full min-w-0 sm:w-1/4 sm:min-w-64"
+        onSubmit={(event) => {
+          event.preventDefault();
+          update({ search: searchDraft.trim() });
+        }}
+      >
+        <Input
+          id="catalog-search"
+          ref={searchRef}
+          value={searchDraft}
+          onChange={(event) => setSearchDraft(event.target.value)}
+          placeholder={t('filters.searchPlaceholder')}
+          aria-label={t('filters.searchLabel')}
+          startAdornment={<Search aria-hidden="true" className="size-4" />}
+          type="search"
+        />
+      </form>
 
-      <div className="flex flex-col gap-1">
-        <label htmlFor="catalog-category" className="text-xs font-medium text-ink-muted">
-          {t('filters.category')}
-        </label>
-        <Select
-          value={state.categoryId ?? ANY_OPTION}
-          onValueChange={(value) => update({ categoryId: value === ANY_OPTION ? null : value })}
-        >
-          <SelectTrigger id="catalog-category" size="sm" className="min-w-40">
-            <SelectValue placeholder={t('filters.anyCategory')} />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ANY_OPTION}>{t('filters.anyCategory')}</SelectItem>
-            {flatCategories.map((category) => (
-              <SelectItem key={category.id} value={category.id}>
-                {category.parentId === null ? category.name : `— ${category.name}`}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      <Popover>
+        <span className="relative inline-flex">
+          <PopoverTrigger asChild>
+            <IconButton
+              variant="secondary"
+              label={t('filters.open', { count: appliedFilterCount })}
+              icon={<SlidersHorizontal aria-hidden="true" />}
+            />
+          </PopoverTrigger>
+          {appliedFilterCount === 0 ? null : (
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute -top-1 -end-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-brand px-1 text-xs font-semibold text-brand-fg"
+            >
+              {appliedFilterCount}
+            </span>
+          )}
+        </span>
 
-      <div className="flex flex-col gap-1">
-        <label htmlFor="catalog-state" className="text-xs font-medium text-ink-muted">
-          {t('filters.state')}
-        </label>
-        <Select
-          value={state.publishState ?? ANY_OPTION}
-          onValueChange={(value) =>
-            update({ publishState: value === ANY_OPTION ? null : (value as PublishState) })
-          }
-        >
-          <SelectTrigger id="catalog-state" size="sm" className="min-w-36">
-            <SelectValue placeholder={t('filters.anyState')} />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ANY_OPTION}>{t('filters.anyState')}</SelectItem>
-            <SelectItem value="DRAFT">{t('publishState.DRAFT')}</SelectItem>
-            <SelectItem value="PUBLISHED">{t('publishState.PUBLISHED')}</SelectItem>
-            <SelectItem value="ARCHIVED">{t('publishState.ARCHIVED')}</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+        <PopoverContent align="end" className="panel-scroll w-80">
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1">
+              <label htmlFor="catalog-category" className="text-xs font-medium text-ink-muted">
+                {t('filters.category')}
+              </label>
+              <Select
+                value={state.categoryId ?? ANY_OPTION}
+                onValueChange={(value) =>
+                  update({ categoryId: value === ANY_OPTION ? null : value })
+                }
+              >
+                <SelectTrigger id="catalog-category" size="sm">
+                  <SelectValue placeholder={t('filters.anyCategory')} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ANY_OPTION}>{t('filters.anyCategory')}</SelectItem>
+                  {flatCategories.map((category) => (
+                    <SelectItem key={category.id} value={category.id}>
+                      {category.parentId === null ? category.name : `— ${category.name}`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-      <div className="flex flex-col gap-1">
-        <label htmlFor="catalog-sort" className="text-xs font-medium text-ink-muted">
-          {t('filters.sort')}
-        </label>
-        <Select
-          value={state.sort}
-          onValueChange={(value) => update({ sort: value as CatalogListState['sort'] })}
-        >
-          <SelectTrigger id="catalog-sort" size="sm" className="min-w-44">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {GARMENT_SORT_PRESETS.map((preset) => (
-              <SelectItem key={preset} value={preset}>
-                {t(`sort.${preset}`)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+            <div className="flex flex-col gap-1">
+              <label htmlFor="catalog-state" className="text-xs font-medium text-ink-muted">
+                {t('filters.state')}
+              </label>
+              <Select
+                value={state.publishState ?? ANY_OPTION}
+                onValueChange={(value) =>
+                  update({ publishState: value === ANY_OPTION ? null : (value as PublishState) })
+                }
+              >
+                <SelectTrigger id="catalog-state" size="sm">
+                  <SelectValue placeholder={t('filters.anyState')} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ANY_OPTION}>{t('filters.anyState')}</SelectItem>
+                  <SelectItem value="DRAFT">{t('publishState.DRAFT')}</SelectItem>
+                  <SelectItem value="PUBLISHED">{t('publishState.PUBLISHED')}</SelectItem>
+                  <SelectItem value="ARCHIVED">{t('publishState.ARCHIVED')}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label htmlFor="catalog-sort" className="text-xs font-medium text-ink-muted">
+                {t('filters.sort')}
+              </label>
+              <Select
+                value={state.sort}
+                onValueChange={(value) => update({ sort: value as CatalogListState['sort'] })}
+              >
+                <SelectTrigger id="catalog-sort" size="sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {GARMENT_SORT_PRESETS.map((preset) => (
+                    <SelectItem key={preset} value={preset}>
+                      {t(`sort.${preset}`)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {appliedFilterCount === 0 ? null : (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() =>
+                  push({
+                    ...state,
+                    categoryId: null,
+                    publishState: null,
+                    sort: DEFAULT_LIST_STATE.sort,
+                    page: 1,
+                  })
+                }
+              >
+                {t('filters.clear')}
+              </Button>
+            )}
+          </div>
+        </PopoverContent>
+      </Popover>
     </div>
   );
-
-  /* ---------------------------------------------------------------- D-5 states */
 
   if (query.isPending) {
     return (
@@ -422,7 +409,7 @@ export function GarmentListScreen({
     return (
       <AdminPage>
         {header}
-        {/* A session that ended is not an authorisation refusal — it has its own screen. */}
+        {}
         {isSignedOut(query.error) ? (
           <SignedOutState />
         ) : isPermissionDenied(query.error) ? (
@@ -504,21 +491,6 @@ export function GarmentListScreen({
         />
       ) : null}
 
-      <p className="flex flex-wrap items-center gap-2 text-xs text-ink-subtle">
-        <span>{t('shortcuts.intro')}</span>
-        <Kbd>j</Kbd>
-        <Kbd>k</Kbd>
-        <span>{t('shortcuts.move')}</span>
-        <Kbd>Enter</Kbd>
-        <span>{t('shortcuts.open')}</span>
-        <Kbd>x</Kbd>
-        <span>{t('shortcuts.select')}</span>
-        <Kbd>p</Kbd>
-        <span>{t('shortcuts.publish')}</span>
-        <Kbd>/</Kbd>
-        <span>{t('shortcuts.search')}</span>
-      </p>
-
       <Table caption={t('tableCaption')}>
         <TableHeader>
           <TableRow>
@@ -550,9 +522,6 @@ export function GarmentListScreen({
           tabIndex={0}
           onKeyDown={handleTableKeyDown}
           aria-label={t('rowsLabel')}
-          // The tbody is the only thing that takes focus for the j/k cursor, so its focus
-          // indicator is the only one a keyboard user gets on this table. `focus-ring` redraws
-          // the §6.1 ring; it must never be removed outright (D-10, D-20 / WCAG 2.4.7).
           className="focus-ring"
         >
           {rows.map((garment, index) => (
@@ -572,20 +541,10 @@ export function GarmentListScreen({
                 />
               </TableCell>
 
-              {/*
-                §6.2 wants a 40px thumbnail here. `GarmentResponseDto` carries no image URL and
-                there is no batch image endpoint, so a thumbnail column would be one extra request
-                per row. The SKU carries the identity instead until the list DTO gains a
-                `thumbnailUrl` — a column that can never show data is worse than no column.
-              */}
+              {}
               <TableCell>
                 <div className="flex flex-col">
-                  {/*
-                    A row link in a dense console list: the admin opens dozens of these in a
-                    sitting, and repeated clicks on an unresponsive row are how duplicate work
-                    gets started. The spinner is placed absolutely so no row changes height and
-                    the table does not reflow mid-scan (D-8).
-                  */}
+                  {}
                   <Link
                     href={routes.admin.garment(locale, garment.id)}
                     className="pending-dim relative font-medium text-ink hover:text-brand"
@@ -607,9 +566,7 @@ export function GarmentListScreen({
               </TableCell>
 
               <TableCell numeric className="hidden md:table-cell">
-                {/* `exact` is the console's convention: a price here is a value being edited,
-                    and a hidden 50 paisa is a data-entry trap. The consumer grid quotes the
-                    same figure in whole rupees — one formatter, two stated conventions. */}
+                {}
                 {formatCurrency(garment.price, {
                   currency: garment.currency,
                   locale,

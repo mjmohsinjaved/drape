@@ -4,6 +4,8 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { CSRF_HEADER_NAME, Role } from '@library/common';
 import { NotificationsService } from '@library/notifications';
 
+import { SettingsService } from '@api/modules/settings/services/settings.service';
+
 import { createTestingModule, type TestHarness } from '../../../../test/fixtures';
 import { FIXED_NOW, freezeClock } from '../../../../test/setup/time';
 import { AUTH_CONFIG, USER_DIRECTORY } from '../auth.constants';
@@ -43,13 +45,6 @@ function signupPayload(overrides: Partial<SignupDto> = {}): SignupDto {
   };
 }
 
-/**
- * `POST /auth/signup` and `GET /auth/csrf` through the controller — ARCHITECTURE §5.1.
- *
- * The service tests cover the rules; this covers the wiring, and in particular the
- * S-4 acceptance criterion stated the way the PRD states it: *the signup endpoint*,
- * given `role: 'admin'` in the body, creates a Consumer and logs the attempt.
- */
 describe('AuthController', () => {
   let harness: TestHarness;
   let controller: AuthController;
@@ -80,6 +75,7 @@ describe('AuthController', () => {
         { token: USER_DIRECTORY, value: directory },
         { token: NotificationsService, value: createNotificationsDouble() },
         { token: EventEmitter2, value: { emit } },
+        { token: SettingsService, value: { getBoolean: jest.fn().mockResolvedValue(false) } },
       ],
     });
     controller = harness.get(AuthController);

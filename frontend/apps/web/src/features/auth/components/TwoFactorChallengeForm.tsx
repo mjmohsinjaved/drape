@@ -22,24 +22,6 @@ import { routes } from '@/lib/routes';
 
 import type { Locale } from '@/i18n/config';
 
-/**
- * The S-8 two-factor challenge — `POST /auth/2fa/challenge`, with the recovery-code route out.
- *
- * The session that reaches this screen is `twofaPending`: it exists, and nothing else in the
- * app is reachable through it until a code lands. The screen therefore says nothing about the
- * account behind it — not the name, not the role, not the address.
- *
- * The recovery path is offered plainly rather than hidden behind "having trouble?". Someone
- * whose phone is lost or wiped is already having a bad day.
- *
- * ### The six D-5 states
- * - **default** — the six-digit field, or the recovery-code field.
- * - **loading** — the busy submit button, plus the segment's `loading.tsx`.
- * - **empty** — not applicable.
- * - **error** — `TWOFA_INVALID` says to try the next code, which is what actually works.
- * - **permission denied** — a suspended account renders the S-9 shell.
- * - **success** — the navigation into the fitting room.
- */
 export interface TwoFactorChallengeFormProps {
   locale: Locale;
 }
@@ -115,7 +97,7 @@ export function TwoFactorChallengeForm({ locale }: TwoFactorChallengeFormProps) 
           }
           deniedAction={
             <Button asChild variant="secondary">
-              <Link href={routes.home(locale)}>{tc('backToFittingRoom')}</Link>
+              <Link href={routes.home(locale)}>{tc('backToDrape')}</Link>
             </Button>
           }
         />

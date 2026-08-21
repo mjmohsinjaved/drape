@@ -16,34 +16,13 @@ import { routes } from '@/lib/routes';
 
 import type { Locale } from '@/i18n/config';
 
-/**
- * Email confirmation — C-3, in its two forms.
- *
- * The API splits the job across two routes and so does the UI: `/verify-email` asks for a fresh
- * link and needs a session; `/verify-email/[token]` consumes the emailed one and does not.
- */
-
 export interface RequestEmailVerificationProps {
   locale: Locale;
-  /** Resolved server-side. Presentation only — the API is the authority on the session (S-3). */
   isSignedIn: boolean;
-  /** Already confirmed, so the screen has nothing to ask for. */
   alreadyVerified: boolean;
-  /** Shown so she can check we have the right address before asking for another link. */
   email: string | null;
 }
 
-/**
- * The token-less `/verify-email` screen: "send me another link".
- *
- * ### The six D-5 states
- * - **default** — the address we would send to, and the send control.
- * - **loading** — the busy button, plus the segment's `loading.tsx`.
- * - **empty** — the signed-out case: nothing to send to, so the screen points at signing in.
- * - **error** — rate limits and transport failures.
- * - **permission denied** — a suspended account renders the S-9 shell.
- * - **success** — sent, with what to do next.
- */
 export function RequestEmailVerification({
   locale,
   isSignedIn,
@@ -112,7 +91,7 @@ export function RequestEmailVerification({
           }
           deniedAction={
             <Button asChild variant="secondary">
-              <Link href={routes.home(locale)}>{tc('backToFittingRoom')}</Link>
+              <Link href={routes.home(locale)}>{tc('backToDrape')}</Link>
             </Button>
           }
         />
@@ -145,22 +124,6 @@ export interface ConfirmEmailTokenProps {
   token: string;
 }
 
-/**
- * The `/verify-email/[token]` screen.
- *
- * **The token is confirmed on a press, not on page load.** Mail clients and link scanners
- * fetch every URL in a message; a token consumed by a render would be spent before the reader
- * ever saw the page, and it is single-use. One deliberate press is the difference between a
- * link that works and one that is already burnt on arrival.
- *
- * ### The six D-5 states
- * - **default** — the confirm control.
- * - **loading** — the busy button, plus the segment's `loading.tsx`.
- * - **empty** — not applicable.
- * - **error** — the three token codes, each offering a fresh link.
- * - **permission denied** — a deletion in progress renders the S-9 shell.
- * - **success** — confirmed, with the fitting room as the next step.
- */
 export function ConfirmEmailToken({ locale, token }: ConfirmEmailTokenProps) {
   const t = useTranslations('auth.verifyEmailToken');
   const tc = useTranslations('auth.common');
@@ -206,7 +169,7 @@ export function ConfirmEmailToken({ locale, token }: ConfirmEmailTokenProps) {
           }
           deniedAction={
             <Button asChild variant="secondary">
-              <Link href={routes.home(locale)}>{tc('backToFittingRoom')}</Link>
+              <Link href={routes.home(locale)}>{tc('backToDrape')}</Link>
             </Button>
           }
         />

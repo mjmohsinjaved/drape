@@ -15,6 +15,9 @@ import {
 import { NotificationsService, TemplateId } from '@library/notifications';
 import type { SendResult } from '@library/notifications';
 
+import { SettingsService } from '@api/modules/settings/services/settings.service';
+import { SETTINGS_KEYS } from '@api/shared/constants/settings-keys.constant';
+
 import {
   AUTH_CONFIG,
   AUTH_ROUTES,
@@ -48,18 +51,14 @@ import type { DisableTwoFactorDto } from '../dto/two-factor.dto';
 import type { Session } from '../entities/session.entity';
 import type { AuthUser, UserDirectory } from '../interfaces/user-directory.interface';
 
-/** Facts about the request, taken from Express — never from the body (S-3). */
 export interface RequestFacts {
   readonly ip: string;
   readonly userAgent: string | null;
 }
 
-/** A response that also has to set or clear cookies. */
 export interface AuthResult<T> {
   readonly body: T;
-  /** Present when a new session was minted: the controller writes both cookies. */
   readonly issued?: IssuedSession;
-  /** True when the controller should clear both cookies. */
   readonly clearCookies?: boolean;
 }
 
@@ -84,6 +83,7 @@ export class AuthService {
     private readonly attempts: AuthAttemptService,
     private readonly notifications: NotificationsService,
     private readonly events: EventEmitter2,
+    private readonly settings: SettingsService,
   ) {}
 
   async signup(dto: SignupDto, facts: RequestFacts): Promise<AuthResult<AuthUserDto>> {
@@ -109,12 +109,17 @@ export class AuthService {
       throw new ConflictException(ErrorCode.PHONE_ALREADY_EXISTS);
     }
 
+    const requiresApproval = await this.settings.getBoolean(
+      SETTINGS_KEYS.AUTH_REQUIRE_ADMIN_APPROVAL,
+    );
+
     const user = await this.users.createConsumer({
       email,
       name: dto.name.trim(),
       passwordHash: await this.passwordService.hash(dto.password),
       phone: dto.phone,
       locale: dto.locale ?? Locale.EN,
+      status: requiresApproval ? UserStatus.PENDING_APPROVAL : UserStatus.ACTIVE,
     });
 
     if (typeof dto.role === 'string' && dto.role.trim().length > 0) {
@@ -141,6 +146,10 @@ export class AuthService {
 
     await this.dispatchEmailVerification(user, facts, now);
 
+    if (requiresApproval) {
+      return { body: toAuthUserDto(user) };
+    }
+
     const issued = await this.sessionService.issue({
       user,
       ip: facts.ip,
@@ -160,8 +169,6 @@ export class AuthService {
     const now = new Date();
     const normalisedEmail = email.trim().toLowerCase();
 
-    // Lockout is checked first and its copy is identical for a real and an unknown
-    // address, so it cannot be used as an oracle either.
     await this.attempts.assertNotLockedOut(
       normalisedEmail,
       facts.ip,
@@ -222,17 +229,11 @@ export class AuthService {
     });
 
     return {
-      // Nothing about the account is returned until the second factor is done.
       body: { user: twofaRequired ? null : toAuthUserDto(user), twofaRequired },
       issued,
     };
   }
 
-  /* ---------------------------------------------------------------------- */
-  /* Two-factor challenge (S-8)                                              */
-  /* ---------------------------------------------------------------------- */
-
-  /** Completes a `twofaPending` session with a TOTP code. */
   async completeTwoFactorChallenge(
     sessionToken: string | undefined,
     code: string,
@@ -248,7 +249,6 @@ export class AuthService {
     return this.completePendingSession(session, user, facts, now);
   }
 
-  /** Completes a `twofaPending` session with a single-use recovery code. */
   async completeRecovery(
     sessionToken: string | undefined,
     recoveryCode: string,
@@ -264,25 +264,17 @@ export class AuthService {
       throw new AuthException(ErrorCode.TWOFA_INVALID);
     }
 
-    // Single use: the hash is dropped before the session is completed, so a replay
-    // of the same code cannot win a race with the first use.
     const remaining = stored.filter((_hash, position) => position !== index);
     await this.users.update(user.id, { twofaRecoveryCodes: remaining });
 
     return this.completePendingSession(session, user, facts, now);
   }
 
-  /* ---------------------------------------------------------------------- */
-  /* Session lifecycle                                                       */
-  /* ---------------------------------------------------------------------- */
-
-  /** `GET /auth/me` — PRD B-10. The single role-resolution call. */
   async me(caller: ICurrentUser): Promise<AuthUserDto> {
     const user = await this.requireUser(caller.id);
     return toAuthUserDto(user);
   }
 
-  /** `POST /auth/logout` — revokes this session only. */
   async logout(caller: ICurrentUser): Promise<AuthResult<AuthAcknowledgementDto>> {
     const now = new Date();
     const session = await this.sessionService.findById(caller.sessionId);
@@ -292,19 +284,11 @@ export class AuthService {
     return { body: GENERIC_ACKNOWLEDGEMENT, clearCookies: true };
   }
 
-  /** `GET /auth/sessions` — the caller's live sessions. */
   async listSessions(caller: ICurrentUser): Promise<SessionSummaryDto[]> {
     const sessions = await this.sessionService.listActive(caller.id, new Date());
     return sessions.map((session) => toSessionSummaryDto(session, caller.sessionId));
   }
 
-  /**
-   * `DELETE /auth/sessions/:sessionId` — revokes one of the caller's own sessions.
-   *
-   * Ownership is checked here, in the service, on the row (§2.7, §9.2). A session
-   * belonging to someone else is reported as not found, never as forbidden, so the
-   * endpoint cannot be used to probe for session ids.
-   */
   async revokeSession(
     caller: ICurrentUser,
     sessionId: string,
@@ -320,12 +304,10 @@ export class AuthService {
 
     return {
       body: GENERIC_ACKNOWLEDGEMENT,
-      // Revoking the session you are holding is a logout.
       clearCookies: session.id === caller.sessionId,
     };
   }
 
-  /** `DELETE /auth/sessions` — revokes every session except this one (§5.1). */
   async revokeOtherSessions(
     caller: ICurrentUser,
     facts: RequestFacts,
@@ -351,16 +333,6 @@ export class AuthService {
     return GENERIC_ACKNOWLEDGEMENT;
   }
 
-  /* ---------------------------------------------------------------------- */
-  /* Passwords (S-6, C-7)                                                    */
-  /* ---------------------------------------------------------------------- */
-
-  /**
-   * `POST /auth/password/forgot`.
-   *
-   * **Always 200, always the same body.** Whether the address has an account decides
-   * only whether an email leaves the building — never what the caller is told (S-6).
-   */
   async requestPasswordReset(email: string, facts: RequestFacts): Promise<AuthAcknowledgementDto> {
     const now = new Date();
     const normalisedEmail = email.trim().toLowerCase();
@@ -406,16 +378,9 @@ export class AuthService {
       });
     }
 
-    // The send is deliberately *not* awaited: waiting for SMTP only when the account
-    // exists would reintroduce, as latency, exactly the oracle the identical body
-    // closes (S-6).
     return GENERIC_ACKNOWLEDGEMENT;
   }
 
-  /**
-   * `POST /auth/password/reset` — consumes the single-use 30-minute token, sets the
-   * new password and revokes **every** session (S-6).
-   */
   async resetPassword(
     token: string,
     newPassword: string,
@@ -451,13 +416,6 @@ export class AuthService {
     return GENERIC_ACKNOWLEDGEMENT;
   }
 
-  /**
-   * `POST /auth/password/change` — C-7.
-   *
-   * Rotates the caller's session (a password change is a privilege change) and
-   * revokes every other one, so a device that learned the old password loses access
-   * immediately.
-   */
   async changePassword(
     caller: ICurrentUser,
     dto: ChangePasswordDto,
@@ -511,11 +469,6 @@ export class AuthService {
     return { body: GENERIC_ACKNOWLEDGEMENT, issued };
   }
 
-  /* ---------------------------------------------------------------------- */
-  /* Email and phone verification (C-3)                                      */
-  /* ---------------------------------------------------------------------- */
-
-  /** `POST /auth/email/verify/request` — re-sends the verification link. */
   async requestEmailVerification(
     caller: ICurrentUser,
     facts: RequestFacts,
@@ -527,12 +480,9 @@ export class AuthService {
       await this.dispatchEmailVerification(user, facts, now);
     }
 
-    // Identical either way: whether the address is already confirmed is not
-    // something this endpoint needs to disclose.
     return GENERIC_ACKNOWLEDGEMENT;
   }
 
-  /** `POST /auth/email/verify/confirm` — consumes the token and stamps the column. */
   async confirmEmailVerification(
     token: string,
     facts: RequestFacts,
@@ -558,7 +508,6 @@ export class AuthService {
     return GENERIC_ACKNOWLEDGEMENT;
   }
 
-  /** `POST /auth/phone/otp/request` — C-3, required before an enquiry. */
   async requestPhoneOtp(
     caller: ICurrentUser,
     phone: string | undefined,
@@ -579,7 +528,6 @@ export class AuthService {
       if (await this.users.existsByPhone(destination)) {
         throw new ConflictException(ErrorCode.PHONE_ALREADY_EXISTS);
       }
-      // Changing the number un-verifies it: the new one has proved nothing yet.
       await this.users.update(user.id, { phone: destination, phoneVerifiedAt: null });
     }
 
@@ -619,7 +567,6 @@ export class AuthService {
     return GENERIC_ACKNOWLEDGEMENT;
   }
 
-  /** `POST /auth/phone/otp/verify` — stamps `phoneVerifiedAt` (C-3). */
   async verifyPhoneOtp(
     caller: ICurrentUser,
     code: string,
@@ -656,17 +603,6 @@ export class AuthService {
     return GENERIC_ACKNOWLEDGEMENT;
   }
 
-  /* ---------------------------------------------------------------------- */
-  /* Two-factor enrolment (S-8, C-7)                                         */
-  /* ---------------------------------------------------------------------- */
-
-  /**
-   * `POST /auth/2fa/setup` — mints a secret and the provisioning URI.
-   *
-   * The ciphertext is stored immediately but `twofaEnabledAt` stays null, so 2FA is
-   * not in force until a live code confirms the phone actually holds the secret.
-   * Re-running setup before confirming simply replaces the pending secret.
-   */
   async setupTwoFactor(caller: ICurrentUser): Promise<TwoFactorSetupDto> {
     const user = await this.requireUser(caller.id);
     this.assertAccountUsable(user);
@@ -682,7 +618,6 @@ export class AuthService {
     return { secret: enrolment.secret, provisioningUri: enrolment.provisioningUri };
   }
 
-  /** `POST /auth/2fa/enable` — confirms a code and returns the recovery codes once. */
   async enableTwoFactor(
     caller: ICurrentUser,
     code: string,
@@ -721,19 +656,9 @@ export class AuthService {
       occurredAt: now,
     });
 
-    // Returned exactly once. Only the hashes were stored, so there is no second
-    // chance to see these and no way for an operator to recover them later.
     return { recoveryCodes: [...recovery.codes] };
   }
 
-  /**
-   * `POST /auth/2fa/disable` — available to **every** role.
-   *
-   * A second factor is opt-in, so turning it back off is the account's own decision
-   * whatever its role. What still has to hold is that the person asking is the account
-   * holder: the current password *and* a live code are both checked below, because a
-   * security downgrade is exactly what a hijacked session would attempt.
-   */
   async disableTwoFactor(
     caller: ICurrentUser,
     dto: DisableTwoFactorDto,
@@ -768,23 +693,6 @@ export class AuthService {
     return GENERIC_ACKNOWLEDGEMENT;
   }
 
-  /* ---------------------------------------------------------------------- */
-  /* Internals                                                               */
-  /* ---------------------------------------------------------------------- */
-
-  /**
-   * Loads the `twofaPending` session a challenge refers to.
-   *
-   * The route is `@Public()`, so `SessionAuthGuard` has deliberately *not* populated
-   * `request.user` — a pending session is not an authenticated caller. The cookie is
-   * read here instead.
-   *
-   * **The S-6 lockout is asserted here, keyed by the account.** It used to be checked
-   * on exactly one path — password login — which left the second factor as the only
-   * credential in the product with no backoff at all: `@Throttle` keys on the IP
-   * before the session is resolved, so rotating egress addresses defeated it
-   * completely.
-   */
   private async loadPendingSession(
     sessionToken: string | undefined,
     facts: RequestFacts,
@@ -802,8 +710,6 @@ export class AuthService {
       throw new AuthException(ErrorCode.SESSION_EXPIRED);
     }
     if (!session.twofaPending) {
-      // Nothing to complete. Reported as an invalid session rather than "already
-      // done", so a replayed challenge reveals nothing.
       throw new AuthException(ErrorCode.SESSION_INVALID);
     }
 
@@ -821,14 +727,6 @@ export class AuthService {
     return { session, user, now };
   }
 
-  /**
-   * Records one wrong second-factor code and, past the cap, kills the pending session.
-   *
-   * The ledger row is what the S-6 backoff reads on the next attempt; revoking the
-   * session is what bounds the total guessing budget, because the attacker then has to
-   * present the password again to get another `twofaPending` session — and that path
-   * has its own lockout.
-   */
   private async recordChallengeFailure(
     session: Session,
     user: AuthUser,
@@ -851,9 +749,6 @@ export class AuthService {
 
     await this.sessionService.revoke(session, REVOKE_REASONS.TWOFA_FAILED, now);
 
-    // Logged and emitted, never returned: the client is told `TWOFA_INVALID` either
-    // way, so a caller cannot use the response to learn that the cap exists or where
-    // it sits.
     this.logger.warn(
       `two-factor challenge failed ${failures} times for user ${user.id}; pending session revoked (S-6, S-8)`,
     );
@@ -868,7 +763,6 @@ export class AuthService {
     });
   }
 
-  /** Rotates a completed pending session — the second privilege change of a login. */
   private async completePendingSession(
     session: Session,
     user: AuthUser,
@@ -912,18 +806,14 @@ export class AuthService {
     });
 
     if (user !== null) {
-      // `users.failedLoginCount` mirrors the append-only ledger so an admin can see
-      // the state on the account row (A-2). The ledger stays authoritative.
       await this.users.update(user.id, { failedLoginCount: user.failedLoginCount + 1 });
     }
   }
 
-  /**
-   * @throws `ACCOUNT_SUSPENDED` (A-19) or `ACCOUNT_DEACTIVATED` (A-2).
-   *
-   * Never called before a credential has been verified — see `login`.
-   */
   private assertAccountUsable(user: AuthUser): void {
+    if (user.status === UserStatus.PENDING_APPROVAL) {
+      throw new ForbiddenException(ErrorCode.ACCOUNT_PENDING_APPROVAL);
+    }
     if (user.status === UserStatus.SUSPENDED) {
       throw new ForbiddenException(ErrorCode.ACCOUNT_SUSPENDED);
     }
@@ -932,7 +822,6 @@ export class AuthService {
     }
   }
 
-  /** C-38: once deletion is under way nothing more about the account changes. */
   private assertNotBeingDeleted(user: AuthUser): void {
     if (user.deletionRequestedAt !== null) {
       throw new ConflictException(ErrorCode.DELETION_IN_PROGRESS);
@@ -974,14 +863,6 @@ export class AuthService {
     );
   }
 
-  /**
-   * Fire-and-forget delivery.
-   *
-   * `NotificationsService` never rejects — a provider outage resolves to a failed
-   * `SendResult` — so this cannot become an unhandled rejection. Not awaiting it is
-   * the point: no endpoint's latency may depend on whether a message was sent, and
-   * no sign-in may fail because a mail server was slow (E-11).
-   */
   private dispatchEmail(sending: Promise<SendResult>, description: string): void {
     void sending.then((result) => {
       if (!result.ok) {
@@ -990,17 +871,10 @@ export class AuthService {
     });
   }
 
-  /** Builds a link into the web app. Never a bare token in a query the logs would keep. */
   private buildWebUrl(path: string, token: string): string {
     return `${this.config.webUrl}${path}?token=${encodeURIComponent(token)}`;
   }
 
-  /**
-   * S-4. Emitted so the `audit` module writes `SIGNUP_ROLE_IGNORED`, and logged at
-   * `warn` so the attempt is visible even before that listener exists. The value is
-   * echoed verbatim — it is a client-supplied string, and the audit trail is worth
-   * more than tidiness — but it is never used to decide anything.
-   */
   private recordIgnoredSignupRole(
     user: AuthUser,
     requestedRole: string,

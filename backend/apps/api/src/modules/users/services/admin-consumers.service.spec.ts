@@ -36,14 +36,6 @@ import type { ConsumerDetailRow } from '../interfaces/consumer-rows.interface';
 import type { SessionRevocationPort } from '../interfaces/session-revocation.interface';
 import type { Repository } from 'typeorm';
 
-/**
- * Consumer management — PRD A-16 … A-20.
- *
- * The S-10 assertions here are the **outward** half of the pair: the query-layer
- * spec proves the database is never asked for a photo, and this one proves nothing
- * photo-shaped can appear in a serialised admin response either — including the
- * storage keys that renders legitimately need internally in order to be signed.
- */
 describe('AdminConsumersService — A-16 … A-20', () => {
   const adminId = 'a0000000-0000-4000-8000-00000000000a';
   const consumerId = 'c0000000-0000-4000-8000-00000000000c';
@@ -209,10 +201,6 @@ describe('AdminConsumersService — A-16 … A-20', () => {
     }
   }
 
-  /* ---------------------------------------------------------------------------------------
-   * S-10 — the serialised response
-   * ------------------------------------------------------------------------------------ */
-
   describe('consumer detail (A-17, S-10)', () => {
     it('carries no photo field and no storage key of any kind', async () => {
       const detail = await service.findOne(consumerId);
@@ -375,10 +363,6 @@ describe('AdminConsumersService — A-16 … A-20', () => {
     });
   });
 
-  /* ---------------------------------------------------------------------------------------
-   * A-18 — quota override
-   * ------------------------------------------------------------------------------------ */
-
   describe('quota override (A-18)', () => {
     it('creates the profile row lazily and writes only the override field', async () => {
       await service.setQuotaOverride(actor, consumerId, { monthlyQuotaOverride: 40 });
@@ -436,10 +420,6 @@ describe('AdminConsumersService — A-16 … A-20', () => {
     });
   });
 
-  /* ---------------------------------------------------------------------------------------
-   * A-19 — suspension
-   * ------------------------------------------------------------------------------------ */
-
   describe('suspend (A-19)', () => {
     const reason = 'Repeated uploads failing moderation review.';
 
@@ -465,6 +445,17 @@ describe('AdminConsumersService — A-16 … A-20', () => {
       expect(users.remove).not.toHaveBeenCalled();
       expect(users.$rows[0].email).toBe('farida@example.invalid');
       expect(users.$rows[0].phone).toBe('+923001234567');
+    });
+
+    it('deactivates with no reason at all, and the email simply omits it', async () => {
+      await service.suspend(actor, consumerId, {});
+
+      const row = users.$rows[0];
+      expect(row.status).toBe(UserStatus.SUSPENDED);
+      expect(row.suspendedReason).toBeNull();
+      expect(notifications.sendTemplatedEmail).toHaveBeenCalledWith(
+        expect.objectContaining({ props: expect.objectContaining({ reason: null }) }),
+      );
     });
 
     it('tells her what happened, with the reason the admin actually wrote (D-7)', async () => {
@@ -537,15 +528,6 @@ describe('AdminConsumersService — A-16 … A-20', () => {
       );
     });
 
-    /**
-     * **suspend → unsuspend was a resurrection (H7).**
-     *
-     * Requesting deletion sets `status = DEACTIVATED` and stamps `deletionRequestedAt`.
-     * `suspend` only refused an account already `SUSPENDED`, so it happily took the
-     * deletion-pending account to `SUSPENDED`; `unsuspend` then only checked that it *was*
-     * `SUSPENDED`, and set it `ACTIVE`. The consumer could sign back into an account she had
-     * asked us to delete — and if the sweep had already written the request off, for good.
-     */
     it('refuses to suspend an account whose deletion has been requested (C-38)', async () => {
       users.$rows[0].status = UserStatus.DEACTIVATED;
       users.$rows[0].deletionRequestedAt = now;
@@ -557,8 +539,6 @@ describe('AdminConsumersService — A-16 … A-20', () => {
     });
 
     it('refuses to lift a hold on an account whose deletion has been requested', async () => {
-      // The account was already on hold when the deletion was requested, so it never
-      // passed through `suspend` — this is the other half of the same door.
       users.$rows[0].status = UserStatus.SUSPENDED;
       users.$rows[0].deletionRequestedAt = now;
 
@@ -568,10 +548,6 @@ describe('AdminConsumersService — A-16 … A-20', () => {
       expect(users.$rows[0].status).toBe(UserStatus.SUSPENDED);
     });
   });
-
-  /* ---------------------------------------------------------------------------------------
-   * A-20 — deletion
-   * ------------------------------------------------------------------------------------ */
 
   describe('requestDeletion (A-20, D-17)', () => {
     it('refuses when the typed name does not match, and writes nothing', async () => {

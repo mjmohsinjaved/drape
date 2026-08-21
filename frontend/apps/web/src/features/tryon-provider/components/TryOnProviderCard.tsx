@@ -17,7 +17,6 @@ import {
   Callout,
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
   ConfirmDialog,
@@ -61,7 +60,6 @@ export function TryOnProviderCard({ locale }: TryOnProviderCardProps): React.JSX
       <Card>
         <CardHeader>
           <CardTitle>{t('title')}</CardTitle>
-          <CardDescription>{t('description')}</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           {[0, 1, 2, 3].map((row) => (
@@ -132,7 +130,6 @@ export function TryOnProviderCard({ locale }: TryOnProviderCardProps): React.JSX
     <Card>
       <CardHeader>
         <CardTitle>{t('title')}</CardTitle>
-        <CardDescription>{t('description')}</CardDescription>
       </CardHeader>
 
       <CardContent className="flex flex-col gap-4">

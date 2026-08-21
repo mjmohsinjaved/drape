@@ -3,11 +3,8 @@
     "title": "Categories",
     "description": "The tree customers browse. Reorder or archive it without breaking a link.",
     "addCategory": "Add a category",
-    "showArchived": "Show archived categories",
     "loading": "Loading the category tree",
     "tableCaption": "Categories, in the order customers see them",
-    "reorderHelpTitle": "Reordering",
-    "reorderHelpBody": "Drag a row by its handle, or use the up and down buttons on any row. Both save the whole order for that group.",
     "coverUnavailable": "Cover image unavailable",
     "noCover": "No cover",
     "columns": {
@@ -99,14 +96,12 @@
   "catalog": {
     "title": "Catalog",
     "description": "Every piece, its publish state and its photo health.",
-    "healthLink": "Catalog health",
     "addGarment": "Add a piece",
     "loading": "Loading the catalog",
     "tableCaption": "Every piece in the catalog",
     "rowsLabel": "Catalog rows. Press j and k to move, Enter to open.",
     "selectAll": "Select every piece on this page",
     "selectRow": "Select {title}",
-    "resultCount": "{total, plural, one {# piece} other {# pieces}} · page {page} of {pages}",
     "flagged": "Flagged for review",
     "uncategorised": "No category",
     "noStarRate": "No verdicts yet",
@@ -130,7 +125,9 @@
       "anyCategory": "Every category",
       "state": "State",
       "anyState": "Every state",
-      "sort": "Sort by"
+      "sort": "Sort by",
+      "open": "Filters ({count} applied)",
+      "clear": "Clear filters"
     },
     "sort": {
       "newest": "Newest first",
@@ -149,15 +146,6 @@
       "PENDING": "Waiting for approval",
       "APPROVED": "Approved",
       "REJECTED": "Sent back"
-    },
-    "shortcuts": {
-      "intro": "Keyboard:",
-      "move": "move",
-      "open": "open",
-      "select": "select",
-      "publish": "publish or take down",
-      "approve": "test render",
-      "search": "search"
     },
     "error": {
       "title": "The catalog didn't load",
@@ -686,9 +674,69 @@
   },
   "consumers": {
     "title": "Customers",
-    "description": "Who has signed up, what they've tried on, and what they've asked about.",
-    "next1": "The table with signup date, last activity, generations and shortlist size.",
-    "next2": "Quota overrides and suspension, both audited and both reversible."
+    "description": "Who has signed up, what they have tried on, and what they have asked about.",
+    "loading": "Loading customers",
+    "tableCaption": "Customers, with their contact details, activity and account status",
+    "rowsLabel": "Customer rows",
+    "paginationLabel": "Customer pages",
+    "paginationSummary": "Showing {from}–{to} of {total}",
+    "noPhone": "No number",
+    "neverActive": "Never signed in",
+    "columns": {
+      "customer": "Customer",
+      "phone": "Phone",
+      "signedUp": "Signed up",
+      "lastActive": "Last active",
+      "generations": "Try-ons this month",
+      "shortlist": "Shortlist",
+      "enquiries": "Enquiries",
+      "status": "Status",
+      "actions": "Actions"
+    },
+    "filters": {
+      "searchLabel": "Search",
+      "searchPlaceholder": "Name, email or phone",
+      "status": "Status",
+      "anyStatus": "Any status",
+      "sort": "Sort",
+      "hasEnquiries": "Has enquired",
+      "open": "Filters ({count} applied)",
+      "clear": "Clear filters"
+    },
+    "sort": {
+      "newest": "Newest first",
+      "recentlyActive": "Recently active",
+      "name": "Name A–Z"
+    },
+    "status": {
+      "PENDING_APPROVAL": "Waiting for approval",
+      "ACTIVE": "Active",
+      "SUSPENDED": "Inactive",
+      "DEACTIVATED": "Closed"
+    },
+    "empty": {
+      "title": "No one has signed up yet",
+      "body": "Customers arrive by using the fitting room. Publish a few pieces and they will appear here as they join.",
+      "action": "Go to the catalog"
+    },
+    "noMatches": {
+      "title": "No customer matches this view",
+      "body": "Try a different spelling, or widen the filters.",
+      "action": "Clear the filters"
+    },
+    "error": {
+      "title": "The customer list did not load",
+      "retry": "Try again"
+    },
+    "actions": {
+      "menu": "Actions for {name}",
+      "activate": "Activate",
+      "deactivate": "Deactivate"
+    },
+    "toast": {
+      "activated": "{name} is active and can sign in.",
+      "deactivated": "{name} is deactivated and signed out."
+    }
   },
   "consumer": {
     "title": "Customer",
@@ -747,11 +795,8 @@
   "settings": {
     "title": "Settings",
     "description": "Brand, quotas, budget and the toggles that shape the storefront.",
-    "next1": "The brand colour and logo, validated for contrast before they are accepted.",
-    "next2": "Quota and budget defaults, each with what it changes stated plainly.",
     "tryonProvider": {
       "title": "Try-on provider",
-      "description": "Which upstream renders every try-on. Switching applies to the next generation — no restart, and anything already running finishes on the provider it started on.",
       "source": {
         "environment": "{driver} is live, following the server default. No override is set.",
         "override": "{driver} is live, set here. It overrides the server default."
@@ -837,7 +882,6 @@
     "moderation": "Moderation",
     "categories": "Categories",
     "catalog": "Catalog",
-    "catalogHealth": "Catalog health",
     "health": "Health",
     "new": "New",
     "test-render": "Test render",
@@ -882,6 +926,9 @@
     "UPSTREAM_TIMEOUT": "The render took too long to come back. Try it again.",
     "UPSTREAM_UNAVAILABLE": "The render service isn't answering right now. Try again in a few minutes.",
     "UPSTREAM_RATE_LIMITED": "The render service is busy. Wait a moment and try again.",
-    "MODERATION_REJECTED": "That image didn't pass the automatic content check. Use a different photograph."
+    "MODERATION_REJECTED": "That image didn't pass the automatic content check. Use a different photograph.",
+    "USER_NOT_FOUND": "That account is no longer here. Refresh the list to see who is.",
+    "RESOURCE_CONFLICT": "The account moved before this went through — someone else may have just changed it. Refresh the list and look again.",
+    "DELETION_IN_PROGRESS": "This account is being deleted, so nothing more about it can change. The purge finishes within 24 hours."
   }
 }
