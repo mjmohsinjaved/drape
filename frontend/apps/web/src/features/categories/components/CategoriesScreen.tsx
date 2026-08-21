@@ -17,8 +17,6 @@ import { useTranslations } from 'next-intl';
 import {
   Badge,
   Button,
-  Callout,
-  Checkbox,
   EmptyState,
   ErrorState,
   IconButton,
@@ -65,30 +63,16 @@ import {
 import type { Uuid } from '@repo/api-client';
 
 export interface CategoriesScreenProps {
-  /** Fetched server-side so the first paint is the real tree, not a skeleton. */
   initialTree?: AdminCategory[];
 }
 
-/** A stable empty tree, so "no data yet" is not a new array identity on every render. */
 const EMPTY_TREE: AdminCategory[] = [];
 
-/**
- * The A-4 … A-7 category manager.
- *
- * **Reorder is not mouse-only.** The grip is draggable for a pointer, and every row also carries
- * real Move up / Move down buttons that perform the identical mutation. Both write the complete
- * sibling set, which is what the API expects and what makes the result unambiguous when two
- * admins reorder at once. Nothing here is reachable only by dragging.
- *
- * Deleting is guarded by A-7 and the guard is explained rather than reported: `CategoryDeleteDialog`
- * reads the API's own `deletable` flag and offers archiving in its place.
- */
 export function CategoriesScreen({ initialTree }: CategoriesScreenProps) {
   const t = useTranslations('admin.categories');
   const errorCopy = useCatalogErrorCopy();
 
-  const [showArchived, setShowArchived] = useState(true);
-  const query = useAdminCategories({ includeArchived: showArchived, initialData: initialTree });
+  const query = useAdminCategories({ includeArchived: true, initialData: initialTree });
 
   const createCategory = useCreateCategory();
   const updateCategory = useUpdateCategory();
@@ -102,8 +86,6 @@ export function CategoriesScreen({ initialTree }: CategoriesScreenProps) {
   const [deleting, setDeleting] = useState<AdminCategory | undefined>(undefined);
   const [dragId, setDragId] = useState<Uuid | null>(null);
 
-  // `?? []` inside the memo rather than beside it: a fresh literal on every render would make
-  // the memo below recompute every time, which is exactly what it exists to avoid.
   const queryTree = query.data;
   const tree = useMemo(() => queryTree ?? EMPTY_TREE, [queryTree]);
   const rows = useMemo(() => flattenCategoryTree(tree), [tree]);
@@ -119,7 +101,6 @@ export function CategoriesScreen({ initialTree }: CategoriesScreenProps) {
           categoryIds: nextOrder,
         });
       } catch (error: unknown) {
-        // D-18: the optimistic move has already been rolled back by the hook; say why.
         toast.error(errorCopy.message(error));
       }
     },
@@ -198,7 +179,6 @@ export function CategoriesScreen({ initialTree }: CategoriesScreenProps) {
   const header = (
     <AdminPageHeader
       title={t('title')}
-      description={t('description')}
       actions={
         <Button
           size="sm"
@@ -208,26 +188,8 @@ export function CategoriesScreen({ initialTree }: CategoriesScreenProps) {
           {t('addCategory')}
         </Button>
       }
-      /*
-        Not a native `<label>`: Radix renders `Checkbox` as `<button role="checkbox">`, and a
-        button is not a labelable element — the wrapper supplied no accessible name and clicking
-        the text did not toggle anything. `aria-label` names the control; the `<span>` is the
-        visible echo of the same words.
-      */
-      meta={
-        <span className="inline-flex min-h-11 items-center gap-2">
-          <Checkbox
-            checked={showArchived}
-            onCheckedChange={(checked) => setShowArchived(checked === true)}
-            aria-label={t('showArchived')}
-          />
-          <span aria-hidden="true">{t('showArchived')}</span>
-        </span>
-      }
     />
   );
-
-  /* ---------------------------------------------------------------- D-5 states */
 
   if (query.isPending) {
     return (
@@ -247,7 +209,6 @@ export function CategoriesScreen({ initialTree }: CategoriesScreenProps) {
     return (
       <AdminPage>
         {header}
-        {/* A session that ended is not an authorisation refusal — it has its own screen. */}
         {isSignedOut(query.error) ? (
           <SignedOutState />
         ) : isPermissionDenied(query.error) ? (
@@ -298,10 +259,6 @@ export function CategoriesScreen({ initialTree }: CategoriesScreenProps) {
     <AdminPage>
       {header}
 
-      <Callout tone="info" title={t('reorderHelpTitle')}>
-        {t('reorderHelpBody')}
-      </Callout>
-
       <Table caption={t('tableCaption')}>
         <TableHeader>
           <TableRow>
@@ -341,8 +298,6 @@ export function CategoriesScreen({ initialTree }: CategoriesScreenProps) {
                   if (dragId === null) return;
                   const sourceIndex = row.siblingIds.indexOf(dragId);
                   setDragId(null);
-                  // Dropping onto a row in another sibling set is a re-parent, which is an edit,
-                  // not a drag: ignore it rather than guessing.
                   if (sourceIndex === -1) return;
                   void applyOrder({ ...row, indexInSiblings: sourceIndex }, row.indexInSiblings);
                 }}
@@ -405,15 +360,7 @@ export function CategoriesScreen({ initialTree }: CategoriesScreenProps) {
                 </TableCell>
 
                 <TableCell>
-                  {/* D-10 holds per control and has to hold for the cluster too. Each button is
-                      32px of paint with a 44px hit area centred on it, so at `gap-0.5` the
-                      centres sat 34px apart and every pair of hit areas overlapped by 10px —
-                      six controls, five collisions, and only the last of each pair reachable.
-                      `gap-3` is 12px, the exact width at which 32 + gap = 44 and the hit areas
-                      meet without overlapping. The buttons stay 32px: the admin density is in
-                      the control, not in the space between two things you have to hit. */}
                   <div className="flex items-center justify-end gap-3">
-                    {/* The keyboard route to reordering. Same mutation as the drag (D-19, D-20). */}
                     <IconButton
                       size="sm"
                       label={t('actions.moveUp', { name: category.name })}

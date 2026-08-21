@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 
-import { MoreVertical, Search } from 'lucide-react';
+import { MoreVertical, Search, SlidersHorizontal } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import {
@@ -26,8 +26,10 @@ import {
   ErrorState,
   IconButton,
   Input,
-  Kbd,
   Pagination,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
   PermissionDeniedState,
   Select,
   SelectContent,
@@ -63,6 +65,7 @@ import {
 import {
   CONSUMER_PAGE_SIZE,
   CONSUMER_SORT_PRESETS,
+  DEFAULT_LIST_STATE,
   isUnfiltered,
   listStateKey,
   parseListState,
@@ -229,96 +232,128 @@ export function ConsumerListScreen({
     (suspend.isPending ? suspend.variables?.userId : undefined) ??
     null;
 
-  const header = (
-    <AdminPageHeader
-      title={t('title')}
-      description={t('description')}
-      meta={
-        meta ? (
-          <span>
-            {t('resultCount', { total: meta.total, page: meta.page, pages: meta.totalPages })}
-          </span>
-        ) : null
-      }
-    />
-  );
+  const header = <AdminPageHeader title={t('title')} />;
+
+  const appliedFilterCount =
+    (state.status === null ? 0 : 1) +
+    (state.hasEnquiries ? 1 : 0) +
+    (state.sort === DEFAULT_LIST_STATE.sort ? 0 : 1);
 
   const filters = (
-    <div className="flex flex-wrap items-end gap-2">
-      <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <label htmlFor="consumer-search" className="text-xs font-medium text-ink-muted">
-          {t('filters.searchLabel')}
-        </label>
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            update({ search: searchDraft.trim() });
-          }}
-        >
-          <Input
-            id="consumer-search"
-            ref={searchRef}
-            value={searchDraft}
-            onChange={(event) => setSearchDraft(event.target.value)}
-            placeholder={t('filters.searchPlaceholder')}
-            startAdornment={<Search aria-hidden="true" className="size-4" />}
-            type="search"
-          />
-        </form>
-      </div>
-
-      <div className="flex flex-col gap-1">
-        <label htmlFor="consumer-status" className="text-xs font-medium text-ink-muted">
-          {t('filters.status')}
-        </label>
-        <Select
-          value={state.status ?? ANY_OPTION}
-          onValueChange={(value) =>
-            update({ status: value === ANY_OPTION ? null : (value as UserStatus) })
-          }
-        >
-          <SelectTrigger id="consumer-status" size="sm" className="min-w-36">
-            <SelectValue placeholder={t('filters.anyStatus')} />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ANY_OPTION}>{t('filters.anyStatus')}</SelectItem>
-            {USER_STATUSES.map((status) => (
-              <SelectItem key={status} value={status}>
-                {t(`status.${status}`)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="flex flex-col gap-1">
-        <label htmlFor="consumer-sort" className="text-xs font-medium text-ink-muted">
-          {t('filters.sort')}
-        </label>
-        <Select
-          value={state.sort}
-          onValueChange={(value) => update({ sort: value as ConsumerListState['sort'] })}
-        >
-          <SelectTrigger id="consumer-sort" size="sm" className="min-w-44">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {CONSUMER_SORT_PRESETS.map((preset) => (
-              <SelectItem key={preset} value={preset}>
-                {t(`sort.${preset}`)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      <label className="flex min-h-9 items-center gap-2 text-xs font-medium text-ink-muted">
-        <Checkbox
-          checked={state.hasEnquiries}
-          onCheckedChange={(checked) => update({ hasEnquiries: checked === true })}
+    <div className="flex flex-wrap items-center justify-end gap-2">
+      <form
+        className="w-full min-w-0 sm:w-1/4 sm:min-w-64"
+        onSubmit={(event) => {
+          event.preventDefault();
+          update({ search: searchDraft.trim() });
+        }}
+      >
+        <Input
+          id="consumer-search"
+          ref={searchRef}
+          value={searchDraft}
+          onChange={(event) => setSearchDraft(event.target.value)}
+          placeholder={t('filters.searchPlaceholder')}
+          aria-label={t('filters.searchLabel')}
+          startAdornment={<Search aria-hidden="true" className="size-4" />}
+          type="search"
         />
-        {t('filters.hasEnquiries')}
-      </label>
+      </form>
+
+      <Popover>
+        <span className="relative inline-flex">
+          <PopoverTrigger asChild>
+            <IconButton
+              variant="secondary"
+              label={t('filters.open', { count: appliedFilterCount })}
+              icon={<SlidersHorizontal aria-hidden="true" />}
+            />
+          </PopoverTrigger>
+          {appliedFilterCount === 0 ? null : (
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute -top-1 -end-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-brand px-1 text-xs font-semibold text-brand-fg"
+            >
+              {appliedFilterCount}
+            </span>
+          )}
+        </span>
+
+        <PopoverContent align="end" className="panel-scroll w-80">
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1">
+              <label htmlFor="consumer-status" className="text-xs font-medium text-ink-muted">
+                {t('filters.status')}
+              </label>
+              <Select
+                value={state.status ?? ANY_OPTION}
+                onValueChange={(value) =>
+                  update({ status: value === ANY_OPTION ? null : (value as UserStatus) })
+                }
+              >
+                <SelectTrigger id="consumer-status" size="sm">
+                  <SelectValue placeholder={t('filters.anyStatus')} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ANY_OPTION}>{t('filters.anyStatus')}</SelectItem>
+                  {USER_STATUSES.map((status) => (
+                    <SelectItem key={status} value={status}>
+                      {t(`status.${status}`)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label htmlFor="consumer-sort" className="text-xs font-medium text-ink-muted">
+                {t('filters.sort')}
+              </label>
+              <Select
+                value={state.sort}
+                onValueChange={(value) => update({ sort: value as ConsumerListState['sort'] })}
+              >
+                <SelectTrigger id="consumer-sort" size="sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {CONSUMER_SORT_PRESETS.map((preset) => (
+                    <SelectItem key={preset} value={preset}>
+                      {t(`sort.${preset}`)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <label className="flex min-h-9 items-center gap-2 text-xs font-medium text-ink-muted">
+              <Checkbox
+                checked={state.hasEnquiries}
+                onCheckedChange={(checked) => update({ hasEnquiries: checked === true })}
+              />
+              {t('filters.hasEnquiries')}
+            </label>
+
+            {appliedFilterCount === 0 ? null : (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() =>
+                  push({
+                    ...state,
+                    status: null,
+                    hasEnquiries: false,
+                    sort: DEFAULT_LIST_STATE.sort,
+                    page: 1,
+                  })
+                }
+              >
+                {t('filters.clear')}
+              </Button>
+            )}
+          </div>
+        </PopoverContent>
+      </Popover>
     </div>
   );
 
@@ -341,7 +376,6 @@ export function ConsumerListScreen({
     return (
       <AdminPage>
         {header}
-        {}
         {isSignedOut(query.error) ? (
           <SignedOutState />
         ) : isPermissionDenied(query.error) ? (
@@ -405,17 +439,6 @@ export function ConsumerListScreen({
     <AdminPage>
       {header}
       {filters}
-
-      <p className="flex flex-wrap items-center gap-2 text-xs text-ink-subtle">
-        <span>{t('shortcuts.intro')}</span>
-        <Kbd>j</Kbd>
-        <Kbd>k</Kbd>
-        <span>{t('shortcuts.move')}</span>
-        <Kbd>Enter</Kbd>
-        <span>{t('shortcuts.open')}</span>
-        <Kbd>/</Kbd>
-        <span>{t('shortcuts.search')}</span>
-      </p>
 
       <Table caption={t('tableCaption')}>
         <TableHeader>
