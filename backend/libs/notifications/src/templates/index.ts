@@ -5,6 +5,7 @@ export * from './shared/template-context';
 export * from './template-registry';
 
 export * from './account-deletion-confirmed.template';
+export * from './account-approved.template';
 export * from './account-suspended.template';
 export * from './admin-invite.template';
 export * from './budget-exhausted-admin.template';

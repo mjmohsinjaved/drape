@@ -17,28 +17,6 @@ import { isE164, looksLikeEmail, meetsPasswordPolicy } from '@/features/auth/lib
 import { apiLocale, type Locale } from '@/i18n/config';
 import { routes } from '@/lib/routes';
 
-/**
- * The C-2 signup form. Name, email, password, phone — and nothing else.
- *
- * **Event date, event type and budget band are deliberately absent.** C-2 says they are
- * optional and prompted later, in context; they live on the account profile screen and on the
- * enquiry flow, where the question makes sense to the person answering it. Adding them here
- * would turn a one-minute signup into a form about a wedding.
- *
- * The password rules are on screen from the first keystroke, not reported after a rejection.
- *
- * S-4: this route creates a Consumer account and only a Consumer account. There is no role
- * field on this form, and a role in the payload would be stripped and audit-logged by the API
- * rather than honoured.
- *
- * ### The six D-5 states
- * - **default** — the four fields.
- * - **loading** — the busy submit button, plus the segment's `loading.tsx`.
- * - **empty** — not applicable.
- * - **error** — `FormErrorFeedback`; `EMAIL_ALREADY_EXISTS` points at signing in instead.
- * - **permission denied** — a deletion already in progress renders the S-9 shell.
- * - **success** — `FormSuccessFeedback`, naming the next step rather than just confirming.
- */
 export interface SignupFormProps {
   locale: Locale;
 }
@@ -92,6 +70,24 @@ export function SignupForm({ locale }: SignupFormProps) {
     });
   }
 
+  if (created?.status === 'PENDING_APPROVAL') {
+    return (
+      <FormSuccessFeedback
+        title={t('pendingTitle')}
+        description={t('pendingBody')}
+        action={
+          <Button asChild variant="primary">
+            <Link href={routes.browse(locale)}>{t('pendingAction')}</Link>
+          </Button>
+        }
+      >
+        <Callout tone="info" title={t('pendingNextTitle')}>
+          {t('pendingNextBody')}
+        </Callout>
+      </FormSuccessFeedback>
+    );
+  }
+
   if (created) {
     return (
       <FormSuccessFeedback
@@ -139,7 +135,7 @@ export function SignupForm({ locale }: SignupFormProps) {
           }
           deniedAction={
             <Button asChild variant="secondary">
-              <Link href={routes.home(locale)}>{tc('backToFittingRoom')}</Link>
+              <Link href={routes.home(locale)}>{tc('backToDrape')}</Link>
             </Button>
           }
         />

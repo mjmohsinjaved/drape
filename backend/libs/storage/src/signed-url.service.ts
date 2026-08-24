@@ -1,25 +1,3 @@
-/**
- * ARCHITECTURE.md §3.4 (signed download URLs) and §3.5 (upload tickets).
- *
- * ```
- * token   = base64url(payload) + "." + base64url(HMAC-SHA256(base64url(payload), STORAGE_URL_SECRET)[0..15])
- * payload = JSON.stringify({ key, exp, sub? })        // compact, keys in this order
- * ```
- *
- * The MAC is truncated to its first 128 bits — a deliberate §3.4 deviation (2026-08-12). The full
- * person-photo token was 262 characters, and Windows http.sys rejects any URL segment over 260 by
- * default (`UrlSegmentMaxLength`), killing the request before it reaches any application code.
- * Truncation to 128 bits is the standard remedy (RFC 2104 §5 explicitly permits truncation to no
- * less than half the digest); forging a link still takes 2^128 work, and every token now fits any
- * host's default limits with room to spare. Deploying this invalidates outstanding URLs — which
- * expire within minutes anyway and is the documented STORAGE_URL_SECRET rotation behaviour.
- *
- * The token is opaque to the frontend. A storage key must never cross the network boundary, so the
- * only thing a response DTO ever carries is the finished URL.
- *
- * Upload tickets use the same construction with a `"upload:"` domain separator prefixed to the
- * signed string, so a download token can never be replayed as an upload token and vice versa.
- */
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
 import { Inject, Injectable } from '@nestjs/common';
@@ -34,37 +12,15 @@ import {
 import { assertValidStorageKey, isValidStorageKey, keyPrefixSegment } from './storage-key.builder';
 import { STORAGE_CONFIG, URL_EXPIRY_BUCKET_SECONDS, type StorageConfig } from './storage.config';
 
-// Re-exported from where it is asserted. The value belongs beside the TTLs it constrains
-// (`assertTtlsOutliveTheExpiryBucket`); the name stays importable from here because that is
-// where every caller and the barrel already look for it.
 export { URL_EXPIRY_BUCKET_SECONDS };
 
 export interface SignedUrlPayload {
-  /** storage key */
   key: string;
-  /** Unix seconds */
   exp: number;
-  /** owning userId — present for every private object */
   sub?: string;
-  /**
-   * The **credential** this token is bound to, as `<scheme>:<id>` — currently only
-   * `share-link:<uuid>`.
-   *
-   * `sub` binds a token to a session. Some objects are handed to somebody who has no
-   * session and never will: a share-page thumbnail (C-33) is read by a recipient whose
-   * only authorisation is the link itself. `aud` is the equivalent for them — the token
-   * is valid only while the credential that produced it is still live, so revoking the
-   * link (C-34, "revocable at any time") invalidates every URL it ever minted rather
-   * than only the next one.
-   *
-   * Liveness is decided by whoever owns the credential, through
-   * {@link SignedUrlAudienceRegistry}; this service only carries the claim and proves it
-   * was not tampered with.
-   */
   aud?: string;
 }
 
-/** §3.5 — the upload ticket payload, signed under the `"upload:"` domain. */
 export interface UploadTicketPayload {
   key: string;
   exp: number;
@@ -74,33 +30,22 @@ export interface UploadTicketPayload {
 }
 
 export interface IssueOptions {
-  /** The userId the token is scoped to. Required for private object classes (§3.4). */
   subject?: string;
-  /**
-   * The credential the token is bound to, as `<scheme>:<id>`. See
-   * {@link SignedUrlPayload.aud}. Used where the reader has no session to be a `sub`.
-   */
   audience?: string;
-  /** Overrides the class TTL from the §3.4 table. */
   ttlSeconds?: number;
-  /** Injectable clock, for tests. */
   now?: Date;
 }
 
 export interface VerifyOptions {
-  /** The requesting user's id. Compared with `sub` when the token carries one. */
   subject?: string;
-  /** Injectable clock, for tests. */
   now?: Date;
 }
 export const UPLOAD_TICKET_HEADER = 'X-Upload-Ticket';
 
-/** Prefixes whose objects are private to one account (§3.4 issuing rules). */
 const BLURRED_MODERATION_PREFIX = 'thumbnails/person-blurred/';
 
 const UPLOAD_DOMAIN_SEPARATOR = 'upload:';
 
-/** 128 bits. See the file header for why the MAC is truncated and why that is sound. */
 const TRUNCATED_MAC_BYTES = 16;
 
 const SUBJECT_REQUIRED_SEGMENTS: ReadonlySet<string> = new Set([
@@ -120,7 +65,6 @@ export class SignedUrlService {
     return SUBJECT_REQUIRED_SEGMENTS.has(keyPrefixSegment(key));
   }
 
-  /** The §3.4 TTL for the object class this key belongs to. */
   ttlSecondsForKey(key: string): number {
     if (key.startsWith(BLURRED_MODERATION_PREFIX)) {
       return this.config.photoUrlTtlSeconds;
@@ -136,18 +80,6 @@ export class SignedUrlService {
     }
   }
 
-  /* ---------------------------------------------------------------------------------------------
-   * Download tokens
-   * ------------------------------------------------------------------------------------------ */
-
-  /**
-   * Signs a token for `key`. Throws `FILE_TOKEN_SUBJECT_MISMATCH` when the class requires a subject
-   * and none was given — issuing a subject-less token for a private object would hand out a
-   * bearer URL for someone's photo.
-   *
-   * Two calls for the same key and subject inside one {@link URL_EXPIRY_BUCKET_SECONDS} window
-   * return the **same** token, so the URL is a stable cache key. See the constant for why.
-   */
   issue(key: string, options: IssueOptions = {}): string {
     assertValidStorageKey(key);
     if (options.subject !== undefined && options.subject === '') {
@@ -169,7 +101,6 @@ export class SignedUrlService {
     });
   }
 
-  /** The ready-to-use URL a response DTO carries: `{APP_API_URL}/api/v1/files/{token}`. */
   issueUrl(key: string, options: IssueOptions = {}): string {
     return this.buildDownloadUrl(this.issue(key, options));
   }
@@ -178,7 +109,6 @@ export class SignedUrlService {
     return `${this.config.apiBaseUrl}/api/v1/files/${token}`;
   }
 
-  /** Signs an already-built payload. Exposed for tests and for re-signing a copied render. */
   sign(payload: SignedUrlPayload): string {
     const encoded = encodePayload({
       key: payload.key,
@@ -213,14 +143,9 @@ export class SignedUrlService {
     return payload;
   }
 
-  /** Seconds left on the token — §3.4 step 6 uses it for `Cache-Control: private, max-age=…`. */
   remainingTtlSeconds(payload: SignedUrlPayload, now: Date = new Date()): number {
     return Math.max(0, payload.exp - Math.floor(now.getTime() / 1000));
   }
-
-  /* ---------------------------------------------------------------------------------------------
-   * Upload tickets (§3.5)
-   * ------------------------------------------------------------------------------------------ */
 
   issueUploadTicket(
     key: string,
@@ -248,7 +173,6 @@ export class SignedUrlService {
     const encoded = encodePayload(payload);
     return { token: `${encoded}.${this.hmac(UPLOAD_DOMAIN_SEPARATOR + encoded)}`, payload };
   }
-
 
   buildUploadUrl(): string {
     return `${this.config.apiBaseUrl}/api/v1/files/upload`;
@@ -278,10 +202,6 @@ export class SignedUrlService {
     return payload;
   }
 
-  /* ---------------------------------------------------------------------------------------------
-   * Internals
-   * ------------------------------------------------------------------------------------------ */
-
   private hmac(signedString: string): string {
     return createHmac('sha256', this.config.urlSecret)
       .update(signedString)
@@ -290,17 +210,12 @@ export class SignedUrlService {
       .toString('base64url');
   }
 
-  /** Constant-time comparison. Length is compared first because `timingSafeEqual` throws otherwise. */
   private signatureMatches(signedString: string, providedSignature: string): boolean {
     const expected = Buffer.from(this.hmac(signedString), 'utf8');
     const provided = Buffer.from(providedSignature, 'utf8');
     return expected.length === provided.length && timingSafeEqual(expected, provided);
   }
 }
-
-/* -------------------------------------------------------------------------------------------------
- * Pure helpers
- * ---------------------------------------------------------------------------------------------- */
 
 function encodePayload(payload: object): string {
   return Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
@@ -344,16 +259,12 @@ function decodeDownloadPayload(encodedPayload: string): SignedUrlPayload {
   if (typeof key !== 'string' || typeof exp !== 'number' || !Number.isFinite(exp)) {
     throw fileTokenInvalid();
   }
-  // `''` is rejected as well as a non-string: a token carrying an empty `sub` would be
-  // "scoped" to a subject no session can ever match, and `issue` refuses to mint one.
   if (sub !== undefined && (typeof sub !== 'string' || sub === '')) {
     throw fileTokenInvalid();
   }
   if (aud !== undefined && (typeof aud !== 'string' || aud === '')) {
     throw fileTokenInvalid();
   }
-  // A token whose HMAC is valid but whose key is not is only reachable if the secret leaked; reject
-  // it here so `assertInsideRoot` is never the last line of defence.
   if (!isValidStorageKey(key)) {
     throw fileTokenInvalid();
   }
