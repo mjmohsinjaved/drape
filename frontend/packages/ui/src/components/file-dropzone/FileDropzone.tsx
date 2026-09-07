@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { RotateCw, Upload, X } from 'lucide-react';
+import { Check, RotateCw, Upload, X } from 'lucide-react';
 
 import { cn } from '../../lib/cn';
 import { IconButton } from '../icon-button/IconButton';
@@ -12,56 +12,34 @@ import { VisuallyHidden } from '../visually-hidden/VisuallyHidden';
 export type UploadStatus = 'queued' | 'uploading' | 'done' | 'error';
 
 export interface UploadFile {
-  /** Client-side id. Stable across re-renders. */
   id: string;
   name: string;
-  /** Bytes. Format it with `formatBytes` from `@repo/utils` before display. */
   size?: number;
-  /** 0–100. */
   progress?: number;
   status: UploadStatus;
-  /** What went wrong and what to do next (D-7). "The file is larger than 8 MB. Try a smaller export." */
   error?: string;
-  /** Thumbnail URL, if one is available. */
   previewUrl?: string;
-  /** Extra controls for this row — the "try-on source" designation lives here (A-9). */
   meta?: React.ReactNode;
 }
 
 export interface FileDropzoneProps extends Omit<React.ComponentPropsWithoutRef<'div'>, 'onDrop'> {
-  /** Accepted MIME types / extensions, forwarded to the input. */
   accept?: string;
   multiple?: boolean;
   disabled?: boolean;
-  /** Called with the picked files, whether dropped or browsed. */
   onFilesSelected: (files: File[]) => void;
-  /** The rows below the zone. Own the state in the feature; this component only draws it. */
   files?: readonly UploadFile[];
   onRemoveFile?: (id: string) => void;
   onRetryFile?: (id: string) => void;
-  /** Main instruction. Name the action: "Add photos of this garment". */
   label: string;
-  /** Constraint line: types and size limit, stated up front rather than as a failure later. */
   hint?: React.ReactNode;
   browseLabel?: string;
   removeLabel?: string;
   retryLabel?: string;
-  /** Accessible name for the whole list of files. */
+  doneLabel?: string;
   filesLabel?: string;
-  /** Formats a size for display. Wire `formatBytes` from `@repo/utils`. */
   formatSize?: (bytes: number) => string;
 }
 
-/**
- * Drag-and-drop upload with per-file progress rows (A-9).
- *
- * Keyboard operable by construction: the zone is a real `<button>` wrapping a hidden file input,
- * so Space and Enter open the picker and the browser's own dialog does the rest. A div with a
- * drop handler and no focusable control is not an upload control, it is a mouse trap.
- *
- * Progress is per file, and a failed file keeps its own message and its own retry — never one
- * opaque result for the batch (D-16).
- */
 export const FileDropzone = React.forwardRef<HTMLDivElement, FileDropzoneProps>(
   function FileDropzone(
     {
@@ -78,6 +56,7 @@ export const FileDropzone = React.forwardRef<HTMLDivElement, FileDropzoneProps>(
       browseLabel = 'Choose files',
       removeLabel = 'Remove',
       retryLabel = 'Try this upload again',
+      doneLabel = 'Uploaded',
       filesLabel = 'Selected files',
       formatSize,
       ...props
@@ -132,7 +111,6 @@ export const FileDropzone = React.forwardRef<HTMLDivElement, FileDropzoneProps>(
           className="hidden"
           onChange={(event) => {
             emit(event.target.files);
-            // Reset so picking the same file twice still fires a change.
             event.target.value = '';
           }}
         />
@@ -165,7 +143,12 @@ export const FileDropzone = React.forwardRef<HTMLDivElement, FileDropzoneProps>(
                     ) : null}
                   </div>
 
-                  {file.status === 'uploading' || file.status === 'queued' ? (
+                  {file.status === 'done' ? (
+                    <div className="flex items-center gap-1.5">
+                      <ProgressBar size="sm" tone="success" value={100} label={`${file.name}: ${doneLabel}`} />
+                      <Check aria-hidden="true" className="size-3.5 shrink-0 text-success" />
+                    </div>
+                  ) : file.status === 'uploading' || file.status === 'queued' ? (
                     <ProgressBar
                       size="sm"
                       value={file.status === 'queued' ? null : (file.progress ?? 0)}
@@ -204,8 +187,6 @@ export const FileDropzone = React.forwardRef<HTMLDivElement, FileDropzoneProps>(
           </ul>
         ) : null}
 
-        {/* One polite region for the whole list, so a batch of eight uploads does not produce
-            eight competing announcements. */}
         <VisuallyHidden aria-live="polite">
           {files.filter((file) => file.status === 'done').length > 0
             ? `${String(files.filter((file) => file.status === 'done').length)} of ${String(files.length)} uploaded`

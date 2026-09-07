@@ -2439,6 +2439,10 @@ Warm ivory ground, lac-red brand, antique gold accent. Hex is the normative form
 | `--color-focus` | `#71202F` | `#D6AC63` | 2 px focus ring + 2 px offset, never removed (D-10, D-20) |
 | `--color-overlay` | `rgb(31 26 22 / 0.55)` | `rgb(8 6 5 / 0.68)` | Modal scrim |
 | `--color-skeleton` | `#EFE7DB` | `#241E19` | |
+| `--color-stage` | `#14100D` | `#14100D` | Image-editing ground (the crop viewport). Dark in **both** modes on purpose: a photograph is judged against a neutral dark, not against the page |
+| `--color-stage-ink` | `#F4EDE4` | `#F4EDE4` | Text and icons set on `--color-stage` — 14.6 : 1 |
+| `--color-stage-scrim` | `rgb(20 16 13 / 0.72)` | `rgb(20 16 13 / 0.72)` | Pills and toolbars floating over a photograph |
+| `--color-stage-line` | `rgb(244 237 228 / 0.30)` | `rgb(244 237 228 / 0.30)` | Crop frame and rule-of-thirds grid over a photograph |
 
 Rules:
 - Text colour is only ever `--color-ink`, `--color-ink-muted`, `--color-ink-subtle`,

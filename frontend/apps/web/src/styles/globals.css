@@ -1,93 +1,44 @@
-/*
- * Drape — global stylesheet.
- *
- * Tailwind v4 is CSS-first: there is no `tailwind.config.ts` in this app and no JS preset to
- * import. `@repo/ui/styles/globals.css` is the single entry point — it pulls in `tokens.css`
- * (the one place a raw value may appear, D-1), then `@repo/config-tailwind`, which itself
- * imports `tailwindcss` and maps the §6.1 tokens onto the theme. Order is load-bearing and is
- * owned there, so nothing below may re-import Tailwind or the tokens.
- *
- * This file adds only what is specific to `apps/web`: the document rules the design system
- * cannot know about, and the handful of app-level utilities.
- *
- * No screen — including this one — contains a raw hex value or a font stack
- * (D-1, ARCHITECTURE §6.1).
- */
 
 @import '@repo/ui/styles/globals.css';
 
-/* The design-system atoms are consumed from source, so Tailwind has to scan them. */
 @source '../../../../packages/ui/src';
 
 @layer base {
   html {
-    /* Keep the anchor targets clear of the sticky bars in both shells. */
     scroll-padding-block-start: var(--space-20);
   }
 
   body {
-    /* Never below 360 px (D-9): content reflows, it does not scroll sideways. */
     min-inline-size: 100%;
     overflow-x: hidden;
     text-rendering: optimizeLegibility;
   }
-
-  /*
-   * Nastaliq's vertical room is handled entirely in the token layer (§6.1/§6.7): under
-   * `[lang='ur']`, `--leading-multiplier` becomes 1.85 and every `--leading-*` token is
-   * `calc(<latin value> * var(--leading-multiplier))`. `body` already sets
-   * `line-height: var(--leading-base)` in `@repo/ui/styles/globals.css`, so Urdu leading
-   * follows automatically.
-   *
-   * There used to be a `[lang='ur'] body { line-height: calc(var(--leading-multiplier, 1.85)) }`
-   * rule here. It applied the multiplier a *second* time — as a bare unitless ratio of 1.85,
-   * which is a smaller value than the token it overrode — so Urdu paragraphs rendered at two
-   * different leadings depending on whether they carried an explicit `text-*` utility (which
-   * brings its own `--leading-*`) or inherited from `body` (which this rule had captured).
-   * One source of truth is the token layer; this block no longer competes with it.
-   */
 }
 
-/*
- * App-level utilities, written as `@utility` so they compose with variants the way every
- * utility from the preset does. Anything shared with the design system belongs in
- * `@repo/config-tailwind/utilities.css` instead — `touch-target`, `touch-target-pseudo`,
- * `w-sidenav`, `h-topbar-admin`, `h-tabbar` and the `max-w-consumer` / `max-w-admin`
- * containers all come from there and are deliberately not restated here.
- */
-
-/*
- * The consumer card ratio (§6.2). A named utility rather than an arbitrary Tailwind value,
- * because arbitrary values are banned in `apps/web` by the D-1 lint rule.
- */
 @utility aspect-card {
   aspect-ratio: 3 / 4;
 }
 
-/* The render viewer: square-ish frame that never visibly crops a result. */
+@utility aspect-frame {
+  aspect-ratio: 2 / 3;
+}
+
 @utility aspect-render {
   aspect-ratio: 4 / 5;
 }
 
-/* Keeps the consumer tab bar clear of the iOS home indicator. */
 @utility safe-bottom {
   padding-block-end: env(safe-area-inset-bottom, 0px);
 }
 
-/* Reserves room for the fixed tab bar so the last card is never trapped underneath it. */
 @utility pb-tabbar {
   padding-block-end: calc(var(--tabbar-height) + env(safe-area-inset-bottom, 0px));
 }
 
-/* Fills the viewport below the admin top bar without an arbitrary Tailwind value. */
 @utility h-below-topbar {
   block-size: calc(100dvh - var(--topbar-height-admin));
 }
 
-/*
- * An anchored panel (the browse filter dropdown, the try-on photo panel) never outgrows the
- * viewport: Radix reports the room left beside the trigger, and the panel scrolls inside it.
- */
 @utility panel-scroll {
   max-block-size: var(--radix-popover-content-available-height);
   overflow-y: auto;

@@ -10,6 +10,7 @@ import {
   Callout,
   FileDropzone,
   IconButton,
+  ImageCropperDialog,
   Input,
   Skeleton,
   StatusPill,
@@ -34,45 +35,37 @@ import {
 import { useGarmentImageUploader } from '@/features/catalog/hooks/use-image-uploader';
 import {
   ACCEPTED_IMAGE_MIME_TYPES,
-  MAX_GALLERY_IMAGES,
+  MAX_GARMENT_IMAGES,
   MAX_GARMENT_IMAGE_BYTES,
   type AdminGarmentImage,
   type ImageQualityReport,
 } from '@/features/catalog/types/admin-catalog';
 import { moveWithin } from '@/features/categories/types/admin-categories';
+import {
+  GARMENT_ASPECT,
+  GARMENT_IMAGE_MAX_EDGE,
+  GARMENT_IMAGE_MIN_LONG_EDGE,
+  GARMENT_IMAGE_OUTPUT_TYPE,
+  GARMENT_IMAGE_QUALITY,
+  GARMENT_RATIO_LABEL,
+} from '@/lib/image-frame';
 
 import type { Uuid } from '@repo/api-client';
+
+interface CropQueue {
+  files: File[];
+  index: number;
+  framed: File[];
+}
 
 export interface GarmentImagesPanelProps {
   garmentId: Uuid;
   garmentTitle: string;
-  /** True when the garment is live — deleting its try-on source is refused while it is. */
   isPublished: boolean;
   initialImages?: AdminGarmentImage[];
-  /** Bubbles the A-10 verdict up so the editor can show the report without a second fetch. */
   onQualityReport?: (report: ImageQualityReport) => void;
 }
 
-/**
- * A-9 — the gallery.
- *
- * > "Drag-and-drop, multiple files, per-file progress. One image is designated the try-on source;
- * > the rest are the gallery. Reorder and delete."
- *
- * **Per-file progress** comes from the uploader hook running the three §3.5 steps once per file;
- * `FileDropzone` draws a row and a bar for each, and a failed file keeps its own message and its
- * own retry (D-16).
- *
- * **Reorder is not mouse-only.** Cards are draggable for a pointer, and every card also carries
- * Move earlier / Move later buttons that perform the same mutation. Both send the complete
- * ordering, which is what the API expects.
- *
- * **Designating a try-on source has a consequence**, and the panel says so before it happens: it
- * resets the test render to none, because the approval described the old file. That no longer
- * stops the piece being published — A-11 is advice rather than a gate — but it does mean a
- * published piece can go on being browsed and tried on with a source nobody has ever seen
- * rendered.
- */
 export function GarmentImagesPanel({
   garmentId,
   garmentTitle,
@@ -97,10 +90,35 @@ export function GarmentImagesPanel({
     hasTryOnSource,
     onQualityReport,
   });
+  const [cropQueue, setCropQueue] = useState<CropQueue | null>(null);
 
   const [dragId, setDragId] = useState<Uuid | null>(null);
   const [altDrafts, setAltDrafts] = useState<Record<string, string>>({});
   const [pendingDelete, setPendingDelete] = useState<AdminGarmentImage | null>(null);
+
+  const startCropping = useCallback((files: File[]): void => {
+    const first = files[0];
+    if (!first) return;
+    setCropQueue({ files: [first], index: 0, framed: [] });
+  }, []);
+
+  const advanceQueue = useCallback(
+    (framed: File | null): void => {
+      if (cropQueue === null) return;
+
+      const kept = framed === null ? cropQueue.framed : [...cropQueue.framed, framed];
+      const index = cropQueue.index + 1;
+
+      if (index < cropQueue.files.length) {
+        setCropQueue({ files: cropQueue.files, index, framed: kept });
+        return;
+      }
+
+      setCropQueue(null);
+      if (kept.length > 0) uploader.addFiles(kept);
+    },
+    [cropQueue, uploader],
+  );
 
   const applyOrder = useCallback(
     async (from: number, to: number): Promise<void> => {
@@ -111,7 +129,6 @@ export function GarmentImagesPanel({
       try {
         await reorder.mutateAsync({ garmentId, imageIds: next });
       } catch (error: unknown) {
-        // The optimistic move has already been rolled back by the hook (D-18).
         toast.error(errorCopy.message(error));
       }
     },
@@ -160,7 +177,6 @@ export function GarmentImagesPanel({
     }
   }, [errorCopy, garmentId, pendingDelete, removeImage, t]);
 
-  /** The uploader's rows, in the shape `FileDropzone` draws. */
   const dropzoneFiles: UploadFile[] = uploader.rows.map((row) => ({
     id: row.id,
     name: row.name,
@@ -186,7 +202,8 @@ export function GarmentImagesPanel({
       ) : undefined,
   }));
 
-  const atCapacity = images.length >= MAX_GALLERY_IMAGES;
+  const atCapacity = images.length >= MAX_GARMENT_IMAGES;
+  const isGallery = images.length > 1;
 
   return (
     <AdminSection
@@ -202,27 +219,70 @@ export function GarmentImagesPanel({
     >
       <FileDropzone
         accept={ACCEPTED_IMAGE_MIME_TYPES.join(',')}
-        multiple
+        multiple={false}
         disabled={atCapacity}
         label={t('dropzoneLabel')}
         browseLabel={t('dropzoneBrowse')}
-        hint={t('dropzoneHint', {
-          size: formatBytes(MAX_GARMENT_IMAGE_BYTES),
-          max: MAX_GALLERY_IMAGES,
-        })}
+        hint={t('dropzoneHint', { size: formatBytes(MAX_GARMENT_IMAGE_BYTES) })}
         filesLabel={t('uploadsLabel')}
         removeLabel={t('removeUpload')}
         retryLabel={t('retryUpload')}
+        doneLabel={t('uploadDone')}
         formatSize={(bytes) => formatBytes(bytes)}
         files={dropzoneFiles}
-        onFilesSelected={uploader.addFiles}
+        onFilesSelected={startCropping}
         onRemoveFile={uploader.removeRow}
         onRetryFile={uploader.retryRow}
+      />
+      <ImageCropperDialog
+        open={cropQueue !== null}
+        onOpenChange={(next) => {
+          if (!next) advanceQueue(null);
+        }}
+        file={cropQueue === null ? null : (cropQueue.files[cropQueue.index] ?? null)}
+        aspect={GARMENT_ASPECT}
+        maxEdge={GARMENT_IMAGE_MAX_EDGE}
+        recommendedMinEdge={GARMENT_IMAGE_MIN_LONG_EDGE}
+        outputType={GARMENT_IMAGE_OUTPUT_TYPE}
+        outputQuality={GARMENT_IMAGE_QUALITY}
+        outputBaseName={`${garmentTitle.slice(0, 40)}-${String((cropQueue?.index ?? 0) + 1)}`}
+        onConfirm={(result) => {
+          advanceQueue(result.file);
+        }}
+        title={t('crop.title')}
+        description={t('crop.description')}
+        stepLabel={
+          cropQueue === null || cropQueue.files.length < 2
+            ? undefined
+            : t('crop.step', { position: cropQueue.index + 1, total: cropQueue.files.length })
+        }
+        aspectLabel={t('crop.aspect', { ratio: GARMENT_RATIO_LABEL })}
+        confirmLabel={t('crop.confirm')}
+        cancelLabel={
+          cropQueue !== null && cropQueue.files.length > 1 ? t('crop.skip') : t('crop.cancel')
+        }
+        stageLabel={t('crop.stage')}
+        zoomLabel={t('crop.zoom')}
+        zoomInLabel={t('crop.zoomIn')}
+        zoomOutLabel={t('crop.zoomOut')}
+        rotateLeftLabel={t('crop.rotateLeft')}
+        rotateRightLabel={t('crop.rotateRight')}
+        resetLabel={t('crop.reset')}
+        hint={t('crop.hint')}
+        loadingLabel={t('crop.loading')}
+        workingLabel={t('crop.working')}
+        formatOutput={(width, height) => t('crop.output', { width, height })}
+        belowMinTitle={t('crop.belowMinTitle')}
+        belowMinBody={(longEdge, minimum) => t('crop.belowMinBody', { longEdge, minimum })}
+        tooSmallTitle={t('crop.tooSmallTitle')}
+        tooSmallBody={(longEdge, minimum) => t('crop.tooSmallBody', { longEdge, minimum })}
+        decodeFailedTitle={t('crop.decodeFailedTitle')}
+        decodeFailedBody={t('crop.decodeFailedBody')}
       />
 
       {atCapacity ? (
         <Callout tone="info" title={t('atCapacityTitle')}>
-          {t('atCapacityBody', { max: MAX_GALLERY_IMAGES })}
+          {t('atCapacityBody')}
         </Callout>
       ) : null}
 
@@ -233,22 +293,18 @@ export function GarmentImagesPanel({
       ) : null}
 
       {query.isPending ? (
-        // Aspect-matched to the cards below, so nothing jumps when the gallery lands (D-8).
         <div
           role="status"
           aria-live="polite"
           aria-busy="true"
-          className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
+          className="grid gap-3 sm:max-w-sm"
         >
           <VisuallyHidden>{t('loading')}</VisuallyHidden>
-          {Array.from({ length: 3 }, (_, index) => (
-            <Skeleton key={index} ratio="garment" className="w-full rounded-md" />
-          ))}
+          <Skeleton ratio="garment" className="w-full rounded-md" />
         </div>
       ) : null}
 
       {!query.isPending && images.length === 0 ? (
-        // The panel's own empty state: it names the next action rather than the absence (D-6).
         <p className="rounded-md border border-dashed border-line-strong p-4 text-sm text-ink-muted">
           {t('empty')}
         </p>
@@ -261,11 +317,11 @@ export function GarmentImagesPanel({
       ) : null}
 
       {images.length > 0 ? (
-        <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <ul className={cn('grid gap-3', isGallery ? 'sm:grid-cols-2 lg:grid-cols-3' : 'sm:max-w-sm')}>
           {images.map((image, index) => (
             <li
               key={image.id}
-              draggable
+              draggable={isGallery}
               onDragStart={() => setDragId(image.id)}
               onDragEnd={() => setDragId(null)}
               onDragOver={(event) => {
@@ -324,20 +380,24 @@ export function GarmentImagesPanel({
               </label>
 
               <div className="flex flex-wrap items-center gap-1">
-                <IconButton
-                  size="sm"
-                  label={t('actions.moveEarlier', { position: index + 1 })}
-                  icon={<ChevronLeft />}
-                  disabled={index === 0 || reorder.isPending}
-                  onClick={() => void applyOrder(index, index - 1)}
-                />
-                <IconButton
-                  size="sm"
-                  label={t('actions.moveLater', { position: index + 1 })}
-                  icon={<ChevronRight />}
-                  disabled={index === images.length - 1 || reorder.isPending}
-                  onClick={() => void applyOrder(index, index + 1)}
-                />
+                {isGallery ? (
+                  <>
+                    <IconButton
+                      size="sm"
+                      label={t('actions.moveEarlier', { position: index + 1 })}
+                      icon={<ChevronLeft />}
+                      disabled={index === 0 || reorder.isPending}
+                      onClick={() => void applyOrder(index, index - 1)}
+                    />
+                    <IconButton
+                      size="sm"
+                      label={t('actions.moveLater', { position: index + 1 })}
+                      icon={<ChevronRight />}
+                      disabled={index === images.length - 1 || reorder.isPending}
+                      onClick={() => void applyOrder(index, index + 1)}
+                    />
+                  </>
+                ) : null}
                 {!image.isTryOnSource ? (
                   <Button
                     variant="ghost"

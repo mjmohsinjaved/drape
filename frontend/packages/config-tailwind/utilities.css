@@ -1,17 +1,4 @@
-/*
- * @repo/config-tailwind — utilities
- * ------------------------------------------------------------------
- * Everything Tailwind v4 has no theme namespace for: motion durations, the
- * density scale, the two gutter rhythms, the focus ring and the 44px target
- * floor. All of them are written with logical properties only (§6.7) — a
- * physical `left`/`right`/`margin-left` must never appear here or in a
- * component, because there are no `[dir='rtl']` overrides anywhere in the
- * codebase to repair them.
- */
 
-/* ---------------------------------------------------------------- *
- * Motion (D-11) — §6.1
- * ---------------------------------------------------------------- */
 @utility duration-instant {
   transition-duration: var(--duration-instant);
   animation-duration: var(--duration-instant);
@@ -29,9 +16,6 @@
   animation-duration: var(--duration-slow);
 }
 
-/* ---------------------------------------------------------------- *
- * Focus (D-10, D-20) — the ring is never removed, only re-drawn.
- * ---------------------------------------------------------------- */
 @utility focus-ring {
   &:focus-visible {
     outline: none;
@@ -39,8 +23,6 @@
   }
 }
 
-/* The same ring for a control whose child receives focus (inputs inside a
-   composed field, table cells, dropzones). */
 @utility focus-ring-within {
   &:has(:focus-visible) {
     outline: none;
@@ -48,16 +30,11 @@
   }
 }
 
-/* ---------------------------------------------------------------- *
- * Touch targets (D-10) — 44 x 44 minimum, regardless of visual size.
- * ---------------------------------------------------------------- */
 @utility touch-target {
   min-inline-size: 44px;
   min-block-size: 44px;
 }
 
-/* Visual box stays small, hit area does not. Used by icon buttons and the
-   compact admin controls. */
 @utility touch-target-pseudo {
   position: relative;
 
@@ -74,9 +51,6 @@
   }
 }
 
-/* ---------------------------------------------------------------- *
- * Admin density scale (D-4) — §6.1/§6.2
- * ---------------------------------------------------------------- */
 @utility h-row {
   block-size: var(--density-row-height);
 }
@@ -109,10 +83,6 @@
   gap: var(--density-section-gap);
 }
 
-/* ---------------------------------------------------------------- *
- * Gutters — the two layout languages (D-4).  §6.2
- * Consumer gutters grow with the viewport; admin gutters are fixed.
- * ---------------------------------------------------------------- */
 @utility gutter-consumer {
   padding-inline: var(--space-5);
 
@@ -129,9 +99,6 @@
   padding-inline: var(--space-4);
 }
 
-/* ---------------------------------------------------------------- *
- * Shell metrics — §6.2
- * ---------------------------------------------------------------- */
 @utility w-sidenav {
   inline-size: var(--sidenav-width);
 }
@@ -148,16 +115,6 @@
   block-size: var(--tabbar-height);
 }
 
-/* ---------------------------------------------------------------- *
- * Skeleton shimmer (D-8). Sits still under prefers-reduced-motion —
- * globals.css clamps every animation to 1ms.
- * ---------------------------------------------------------------- */
-/* The highlight is symmetric — transparent, light, transparent — so the gradient carries no
-   direction of its own and the sweep reads identically in `ltr` and `rtl`. It used to be angled
-   with `to var(--sheen-direction, right)`, but `--sheen-direction` was never declared anywhere,
-   so the fallback was the only value it ever had: a hard-coded physical side dressed up as a
-   token. `to inline-end` is not valid in `linear-gradient()`, and §6.7 rules out repairing it
-   with a `[dir='rtl']` override, so the honest fix is a gradient that does not need mirroring. */
 @utility skeleton-sheen {
   background-color: var(--color-skeleton);
   background-image: linear-gradient(
@@ -180,24 +137,6 @@
   }
 }
 
-/* ---------------------------------------------------------------- *
- * Navigation progress (D-8, D-11, §6.7)
- *
- * The fill of the app-wide route-transition bar. It grows with
- * `inline-size` from the container's reading-start edge — a block child
- * with a percentage inline-size is placed at the inline start, so the bar
- * fills left-to-right in `en` and right-to-left in `ur` with no mirrored
- * transform and no [dir='rtl'] selector.
- *
- * The curve decelerates and stops short of 100%: a route transition has no
- * knowable duration, so the bar must never claim to be finished while it is
- * still waiting. Completion is a fade-out, not a snap to full.
- *
- * Under prefers-reduced-motion globals.css clamps the duration to 1ms, so
- * this settles instantly on the final frame — a static bar, no sliding.
- * `NavigationProgress` also branches on the preference in JS, so the two
- * agree rather than one repairing the other.
- * ---------------------------------------------------------------- */
 @utility nav-progress-fill {
   animation: drape-nav-progress 10s var(--ease-out) forwards;
 }
@@ -220,18 +159,13 @@
   }
 }
 
-/* ---------------------------------------------------------------- *
- * Pending navigation (D-13)
- *
- * A control whose own navigation is in flight dims while it waits, so the
- * thing that was clicked answers as well as the top of the page. The state
- * is published by the pending indicator *inside* the link — `useLinkStatus`
- * can only be read from there — so the ancestor reads it with `:has()`
- * rather than through a prop it has no way to receive.
- * ---------------------------------------------------------------- */
 @utility pending-dim {
   &:has([data-nav-pending]) {
     opacity: 0.65;
     cursor: progress;
   }
+}
+
+@utility h-crop-stage {
+  block-size: clamp(14rem, 44svh, 26rem);
 }

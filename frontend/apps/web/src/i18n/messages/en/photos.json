@@ -78,7 +78,7 @@
   "upload": {
     "title": "Add a photo",
     "choose": "Choose a photo",
-    "chooseHint": "JPEG, PNG, WebP or HEIC.",
+    "chooseHint": "JPEG, PNG, WebP or HEIC. You will frame it on the next screen.",
     "dropzoneLabel": "Choose a photo of yourself",
     "checking": "Checking your photo",
     "preparing": "Preparing your photo",
@@ -101,7 +101,8 @@
       "description": "It's ready to use. Pick a piece and try it on.",
       "browse": "Browse the collection",
       "photos": "Your photos"
-    }
+    },
+    "recrop": "Adjust the frame"
   },
   "checks": {
     "DECODE": {
@@ -165,5 +166,29 @@
     "REQUEST_TIMEOUT": "That took too long. Try again.",
     "SERVICE_UNAVAILABLE": "We're briefly unavailable. Try again shortly.",
     "INTERNAL_ERROR": "The photo didn't save. Try again — we've been notified."
+  },
+  "crop": {
+    "title": "Frame your photo",
+    "description": "Move and zoom until you are head to toe inside the frame. What is inside it is what we work from.",
+    "aspect": "{ratio} portrait",
+    "confirm": "Use this framing",
+    "cancel": "Cancel",
+    "stage": "Your photo. Drag to move it, arrow keys to nudge it.",
+    "zoom": "Zoom",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "rotateLeft": "Turn a quarter to the left",
+    "rotateRight": "Turn a quarter to the right",
+    "reset": "Start the framing again",
+    "hint": "Drag to move · pinch or scroll to zoom · arrow keys to nudge",
+    "loading": "Opening your photo",
+    "working": "Framing",
+    "output": "{width} × {height} px",
+    "belowMinTitle": "Zoomed in quite far",
+    "belowMinBody": "This framing keeps only {longEdge}px of height. Zoom back out towards {minimum}px if you can — a smaller photo gives the fitting room less to work with.",
+    "tooSmallTitle": "This photo is small",
+    "tooSmallBody": "At its best this photo gives {longEdge}px of height, and {minimum}px is where results start to hold up. It will still go through. A larger photo would give the fitting room more to work with.",
+    "decodeFailedTitle": "This browser can't open that file",
+    "decodeFailedBody": "HEIC photos open on iPhone and Safari but not in most other browsers. Save or export it as JPEG and choose it again."
   }
 }

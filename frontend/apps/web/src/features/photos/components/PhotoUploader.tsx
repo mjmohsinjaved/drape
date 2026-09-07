@@ -4,35 +4,40 @@ import { useCallback, useId, useRef, useState } from 'react';
 
 import Link from 'next/link';
 
-import { AlertTriangle, Camera, Check } from 'lucide-react';
+import { AlertTriangle, Camera, Check, Crop } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
-import { Button, Callout, Checkbox, Input, Label, ProgressBar, SuccessState } from '@repo/ui';
+import {
+  Button,
+  Callout,
+  Checkbox,
+  ImageCropperDialog,
+  Input,
+  Label,
+  ProgressBar,
+  SuccessState,
+} from '@repo/ui';
 
 import { usePhotoUpload } from '@/features/photos/hooks/use-photo-upload';
 import { ACCEPTED_MIME_TYPES ,type  PhotoCheckResult } from '@/features/photos/lib/validate-photo';
 import { useErrorMessage } from '@/features/tryon/hooks/use-error-message';
+import {
+  PERSON_ASPECT,
+  PERSON_PHOTO_MAX_EDGE,
+  PERSON_PHOTO_MIN_LONG_EDGE,
+  PERSON_PHOTO_OUTPUT_TYPE,
+  PERSON_RATIO_LABEL,
+} from '@/lib/image-frame';
 import { routes } from '@/lib/routes';
 
 import type { Locale } from '@/i18n/config';
 
 export interface PhotoUploaderProps {
   locale: Locale;
-  /** True when this is her first photo — it becomes the active one by default (C-16). */
   isFirstPhoto: boolean;
-  /** Where to send her after saving, when she arrived mid-flow from a garment. */
   returnTo?: string;
 }
 
-/**
- * The picker, the C-14 review and the C-15 upload — the client island of `/photos/new`.
- *
- * Nothing here uploads before she has seen the verdict on her own photo. That is the whole
- * shape of the screen: choose, read what passed and what did not, then either fix it or send it.
- *
- * `capture` is deliberately absent from the input: on a phone, omitting it offers both the
- * camera and the gallery, and most people already have a photo they like.
- */
 export function PhotoUploader({ locale, isFirstPhoto, returnTo }: PhotoUploaderProps) {
   const t = useTranslations('photos');
   const messageFor = useErrorMessage('photos');
@@ -44,6 +49,8 @@ export function PhotoUploader({ locale, isFirstPhoto, returnTo }: PhotoUploaderP
 
   const [label, setLabel] = useState('');
   const [activate, setActivate] = useState(true);
+  const [sourceFile, setSourceFile] = useState<File | null>(null);
+  const [cropping, setCropping] = useState(false);
 
   const choose = useCallback((): void => {
     inputRef.current?.click();
@@ -52,12 +59,30 @@ export function PhotoUploader({ locale, isFirstPhoto, returnTo }: PhotoUploaderP
   const onFileChange = useCallback(
     (event: React.ChangeEvent<HTMLInputElement>): void => {
       const file = event.target.files?.[0];
-      // Clearing the value means picking the same file twice still fires a change event.
       event.target.value = '';
-      if (file) upload.select(file);
+      if (!file) return;
+      setSourceFile(file);
+      setCropping(true);
+    },
+    [],
+  );
+
+  const onCropConfirmed = useCallback(
+    (result: { file: File }): void => {
+      setCropping(false);
+      upload.select(result.file);
     },
     [upload],
   );
+
+  const onCropDismissed = useCallback((): void => {
+    setCropping(false);
+    if (upload.previewUrl === null) setSourceFile(null);
+  }, [upload.previewUrl]);
+
+  const recrop = useCallback((): void => {
+    if (sourceFile !== null) setCropping(true);
+  }, [sourceFile]);
 
   if (upload.phase === 'saved' && upload.saved !== null) {
     return (
@@ -86,14 +111,39 @@ export function PhotoUploader({ locale, isFirstPhoto, returnTo }: PhotoUploaderP
   return (
     <section className="flex flex-col gap-6">
       <h2 className="font-display text-2xl text-balance">{t('upload.title')}</h2>
-
-      {/*
-        The file input is driven entirely by the visible "Choose a photo" button below, which is
-        the control a user sees and the one that carries the name. `sr-only` hides it visually
-        but leaves it in the tab order, so a keyboard user met an invisible first tab stop and
-        then a second, visible one for the same action. `tabIndex={-1}` plus `aria-hidden` leaves
-        exactly one control per action (D-20).
-      */}
+      <ImageCropperDialog
+        open={cropping}
+        onOpenChange={onCropDismissed}
+        file={sourceFile}
+        aspect={PERSON_ASPECT}
+        maxEdge={PERSON_PHOTO_MAX_EDGE}
+        recommendedMinEdge={PERSON_PHOTO_MIN_LONG_EDGE}
+        outputType={PERSON_PHOTO_OUTPUT_TYPE}
+        outputBaseName="photo"
+        onConfirm={onCropConfirmed}
+        title={t('crop.title')}
+        description={t('crop.description')}
+        aspectLabel={t('crop.aspect', { ratio: PERSON_RATIO_LABEL })}
+        confirmLabel={t('crop.confirm')}
+        cancelLabel={t('crop.cancel')}
+        stageLabel={t('crop.stage')}
+        zoomLabel={t('crop.zoom')}
+        zoomInLabel={t('crop.zoomIn')}
+        zoomOutLabel={t('crop.zoomOut')}
+        rotateLeftLabel={t('crop.rotateLeft')}
+        rotateRightLabel={t('crop.rotateRight')}
+        resetLabel={t('crop.reset')}
+        hint={t('crop.hint')}
+        loadingLabel={t('crop.loading')}
+        workingLabel={t('crop.working')}
+        formatOutput={(width, height) => t('crop.output', { width, height })}
+        belowMinTitle={t('crop.belowMinTitle')}
+        belowMinBody={(longEdge, minimum) => t('crop.belowMinBody', { longEdge, minimum })}
+        tooSmallTitle={t('crop.tooSmallTitle')}
+        tooSmallBody={(longEdge, minimum) => t('crop.tooSmallBody', { longEdge, minimum })}
+        decodeFailedTitle={t('crop.decodeFailedTitle')}
+        decodeFailedBody={t('crop.decodeFailedBody')}
+      />
       <input
         ref={inputRef}
         type="file"
@@ -121,19 +171,26 @@ export function PhotoUploader({ locale, isFirstPhoto, returnTo }: PhotoUploaderP
       ) : (
         <div className="grid gap-6 md:grid-cols-[minmax(0,18rem)_1fr]">
           <div className="flex flex-col gap-3">
-            {/*
-              A local object URL, not a remote asset: `next/image` cannot optimise a blob and
-              would only add a proxy hop, so this is a plain <img> in a fixed 3:4 box. The box is
-              what keeps the layout from shifting when the bitmap decodes (D-8).
-            */}
-            <div className="aspect-card w-full overflow-hidden rounded-xl bg-surface-sunken">
-              {/* eslint-disable-next-line @next/next/no-img-element -- a blob: URL cannot go through next/image. */}
+            <div className="aspect-frame w-full overflow-hidden rounded-xl bg-surface-sunken">
+              {/* eslint-disable-next-line @next/next/no-img-element -- local blob: or short-lived signed URL; the optimiser must not touch it. */}
               <img
                 src={upload.previewUrl}
                 alt={t('upload.previewAlt')}
                 className="size-full object-cover"
               />
             </div>
+
+            {sourceFile === null || busy ? null : (
+              <Button
+                type="button"
+                variant="secondary"
+                fullWidth
+                startIcon={<Crop aria-hidden="true" />}
+                onClick={recrop}
+              >
+                {t('upload.recrop')}
+              </Button>
+            )}
           </div>
 
           <div className="flex flex-col gap-6">
@@ -230,12 +287,6 @@ export function PhotoUploader({ locale, isFirstPhoto, returnTo }: PhotoUploaderP
   );
 }
 
-/**
- * The verdict on her photo — C-14's "rejections are specific and actionable".
- *
- * Failures first, each with the instruction that fixes it. Passes are listed too, quietly: seeing
- * that five of six checks are fine is what makes the sixth feel fixable rather than arbitrary.
- */
 function ValidationReport({
   results,
   passed,
