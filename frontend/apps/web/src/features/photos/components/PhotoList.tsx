@@ -29,22 +29,6 @@ export interface PhotoListProps {
 
 type Busy = { id: string; action: 'activate' | 'rename' | 'delete' } | null;
 
-/**
- * Her saved photos — C-16.
- *
- * > "She may hold multiple saved photos and choose which is active."
- *
- * Which is the whole model: one active photo, any number of saved ones, and switching is one
- * tap. The copy says what switching *does* — the next try-on uses it — rather than describing a
- * flag.
- *
- * Deletion says the true thing and only the true thing (C-16, C-28): the photo and its file go
- * immediately, and **her renders stay**. A confirmation that implied otherwise would be the
- * worst kind of wrong here, because she would decline a deletion she actually wanted.
- *
- * `router.refresh()` after each mutation, because the list is server-rendered from a signed,
- * five-minute URL — refetching through the server is what keeps the image links live.
- */
 export function PhotoList({ photos }: PhotoListProps) {
   const t = useTranslations('photos.list');
   const messageFor = useErrorMessage('photos');
@@ -87,12 +71,8 @@ export function PhotoList({ photos }: PhotoListProps) {
 
           return (
             <li key={photo.id} className="flex flex-col gap-3">
-              <div className="relative aspect-card w-full overflow-hidden rounded-xl bg-surface-sunken">
-                {/*
-                  A signed, 300-second, owner-scoped URL (§3.4). Deliberately a plain <img>: the
-                  optimiser would cache a URL that expires, and a stale entry would 403.
-                */}
-                {/* eslint-disable-next-line @next/next/no-img-element -- short-lived signed URL, must not be cached by the image optimiser. */}
+              <div className="relative aspect-frame w-full overflow-hidden rounded-xl bg-surface-sunken">
+                {/* eslint-disable-next-line @next/next/no-img-element -- short-lived signed URL; the optimiser would cache a URL that expires. */}
                 <img
                   src={photo.url}
                   alt={t('photoAlt', { label: name })}
@@ -161,9 +141,6 @@ export function PhotoList({ photos }: PhotoListProps) {
                     date: format.dateTime(new Date(photo.purgeAfter), 'short'),
                   })}
                 </p>
-
-                {/* Only a blocked photo warrants a notice — the pending check is invisible
-                    on purpose (2026-08): it neither blocks a try-on nor needs her attention. */}
                 {photo.moderationState === 'BLOCKED' ? (
                   <Callout tone="warning">{t('moderation.BLOCKEDHint')}</Callout>
                 ) : null}

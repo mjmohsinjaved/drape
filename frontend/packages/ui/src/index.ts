@@ -84,6 +84,7 @@ export * from './components/switch';
 export * from './components/slider';
 export * from './components/date-picker';
 export * from './components/file-dropzone';
+export * from './components/image-cropper';
 export * from './components/otp-input';
 export * from './components/password-input';
 export * from './components/color-swatch-picker';

@@ -17,7 +17,6 @@
     "next1": "Drawn guidance illustrations — never photographs of a person.",
     "next2": "The client-side validator and the upload, with per-file progress."
   },
-
   "profile": {
     "title": "Profile",
     "description": "Your name, phone number and the language you prefer.",
@@ -32,7 +31,6 @@
     "loadErrorTitle": "Your account didn't load",
     "loadErrorBody": "The connection dropped or the server didn't answer. Reload the page to try again."
   },
-
   "profileForm": {
     "nameLabel": "Name",
     "phoneLabel": "Phone number",
@@ -46,7 +44,6 @@
     "savedTitle": "Changes saved",
     "savedBody": "Your details are up to date."
   },
-
   "eventDetails": {
     "dateLabel": "Event date",
     "dateHint": "Roughly is fine. It helps us know what's worth suggesting.",
@@ -75,7 +72,6 @@
       "ABOVE_1M": "Above 1,000,000"
     }
   },
-
   "phone": {
     "noNumberTitle": "Add a number to confirm it",
     "noNumberBody": "We send a six-digit code by text. You'll need a confirmed number before your first enquiry.",
@@ -89,7 +85,6 @@
     "codeHint": "It arrives by text and lasts a few minutes.",
     "confirmAction": "Confirm my number"
   },
-
   "security": {
     "title": "Sign-in and security",
     "description": "Your password, two-factor authentication, and where you're signed in.",
@@ -106,7 +101,6 @@
     "loadErrorTitle": "This screen didn't load",
     "loadErrorBody": "The connection dropped or the server didn't answer. Reload the page to try again."
   },
-
   "password": {
     "noticeTitle": "This signs out your other devices",
     "noticeBody": "You'll stay signed in here. Anywhere else you're signed in will need the new password.",
@@ -117,7 +111,6 @@
     "savedBody": "Your other devices have been signed out.",
     "changeAgain": "Change it again"
   },
-
   "twoFactor": {
     "optionalBody": "Add a second step to sign-in: a six-digit code from an app on your phone.",
     "startAction": "Set up two-factor authentication",
@@ -148,7 +141,6 @@
     "disabledBody": "You now sign in with your password alone. Turn it back on whenever you like.",
     "turnOnAgain": "Turn it back on"
   },
-
   "sessions": {
     "emptyTitle": "Sign in on another device to see it here",
     "emptyBody": "This list shows every device with a live session.",
@@ -160,7 +152,6 @@
     "revokeOthersAction": "Sign out every other device",
     "revoking": "Signing out"
   },
-
   "notifications": {
     "title": "Notifications",
     "description": "Choose what we email or text you about.",
@@ -169,7 +160,6 @@
     "loadErrorTitle": "Your preferences didn't load",
     "loadErrorBody": "The connection dropped or the server didn't answer. Reload the page to try again."
   },
-
   "notificationPrefs": {
     "saved": "Saved",
     "emailOnResultReady": {
@@ -189,7 +179,6 @@
       "description": "Occasional notes about pieces added to the collection. Off unless you turn it on."
     }
   },
-
   "sections": {
     "label": "Account settings",
     "security": {
@@ -205,21 +194,16 @@
       "description": "Everything stored about you, a copy to download, and deletion."
     }
   },
-
   "data": {
     "title": "Your data",
     "description": "Everything stored about you, an export you can download, and deletion.",
     "next1": "The full picture: profile, photos, try-ons, shortlist, enquiries and consent date.",
     "next2": "Export and delete, with deletion confirmed by typing, and finished within a day."
   },
-
   "dashboard": {
     "consumer": {
       "title": "Welcome back, {name}",
       "description": "Try pieces on to shortlist them, then send the studio what you love.",
-      "confirmEmailTitle": "Confirm your email to start trying pieces on",
-      "confirmEmailBody": "We've sent a link to the address on your account.",
-      "confirmEmailAction": "Send it again",
       "steps": {
         "browse": {
           "title": "Browse the collection",

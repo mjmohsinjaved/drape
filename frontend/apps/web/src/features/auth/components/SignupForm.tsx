@@ -104,13 +104,7 @@ export function SignupForm({ locale }: SignupFormProps) {
             {t('successAction')}
           </Button>
         }
-      >
-        {created.emailVerifiedAt === null ? (
-          <Callout tone="info" title={t('confirmEmailTitle')}>
-            {t('confirmEmailBody')}
-          </Callout>
-        ) : null}
-      </FormSuccessFeedback>
+      />
     );
   }
 

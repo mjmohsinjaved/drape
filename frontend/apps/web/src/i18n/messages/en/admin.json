@@ -332,24 +332,32 @@
       },
       "removeTag": "Remove {tag}",
       "depositNoticeTitle": "No deposit on a sale",
-      "depositNoticeBody": "Deposits only apply to rentals, so this piece won't carry one. Switch it to a rental and the deposit field comes back."
+      "depositNoticeBody": "Deposits only apply to rentals, so this piece won't carry one. Switch it to a rental and the deposit field comes back.",
+      "outstandingIntro": "Still needed before this can go live: {items}.",
+      "outstanding": {
+        "title": "a title",
+        "sku": "an SKU",
+        "categoryId": "a category",
+        "price": "a price",
+        "deposit": "a deposit"
+      }
     },
     "images": {
       "sectionTitle": "Photographs",
-      "sectionDescription": "One photograph is the try-on source. The rest are the gallery customers scroll.",
-      "dropzoneLabel": "Add photographs of this piece",
+      "sectionDescription": "One photograph per piece. It is the image the try-on model works from.",
+      "dropzoneLabel": "Add the photograph of this piece",
       "dropzoneBrowse": "Drop them here, or choose files",
-      "dropzoneHint": "JPEG, PNG, WebP or HEIC, up to {size} each, {max} in total.",
+      "dropzoneHint": "JPEG, PNG, WebP or HEIC, up to {size}. It is framed to 3:4 before it is stored.",
       "uploadsLabel": "Photographs being uploaded",
       "removeUpload": "Remove from the queue",
       "retryUpload": "Try this upload again",
       "finalising": "Filing it against the piece…",
       "uploadedQuality": "Photo quality {score} of 100",
       "clearFinished": "Clear the finished uploads",
-      "atCapacityTitle": "This gallery is full",
-      "atCapacityBody": "A piece holds up to {max} photographs. Remove one to add another.",
+      "atCapacityTitle": "This piece has its photograph",
+      "atCapacityBody": "A piece carries one. Remove this one to put a different photograph in its place.",
       "loadFailedTitle": "The photographs didn't load",
-      "empty": "No photographs yet. Drop the first one above — the piece can't go live without one.",
+      "empty": "No photograph yet. Add one above — the piece cannot be tried on without it.",
       "noSourceTitle": "No try-on source yet",
       "noSourceBody": "Mark one photograph as the try-on source. It is the image the model works from, and the piece can't go live without it.",
       "imageUnavailable": "This image is not available",
@@ -382,7 +390,34 @@
         "typePrompt": "To confirm, type {name}",
         "mismatch": "The title doesn't match yet. Type it exactly as shown above."
       },
-      "loading": "Loading the photographs"
+      "loading": "Loading the photographs",
+      "crop": {
+        "title": "Frame this photograph",
+        "description": "A 3:4 frame, the shape a browse card uses. The model reads the garment out of this photograph, so keep the whole piece in frame — hem and sleeve ends included.",
+        "step": "Photograph {position} of {total}",
+        "aspect": "{ratio} portrait",
+        "confirm": "Use this framing",
+        "cancel": "Cancel",
+        "skip": "Skip this one",
+        "stage": "The photograph. Drag to move it, arrow keys to nudge it.",
+        "zoom": "Zoom",
+        "zoomIn": "Zoom in",
+        "zoomOut": "Zoom out",
+        "rotateLeft": "Turn a quarter to the left",
+        "rotateRight": "Turn a quarter to the right",
+        "reset": "Start the framing again",
+        "hint": "Drag to move · pinch or scroll to zoom · arrow keys to nudge",
+        "loading": "Opening the photograph",
+        "working": "Framing",
+        "output": "{width} × {height} px",
+        "belowMinTitle": "Below the A-10 resolution mark",
+        "belowMinBody": "This framing keeps {longEdge}px on the long edge; A-10 wants {minimum}px. Zoom out to keep more of the original, or expect the piece to be marked \"Needs a better photo\".",
+        "tooSmallTitle": "This file cannot reach 2000px",
+        "tooSmallBody": "At its widest framing this photograph gives {longEdge}px on the long edge, against A-10’s {minimum}px. It can still be uploaded — publishing the piece will need an override, which is logged.",
+        "decodeFailedTitle": "This browser can't open that file",
+        "decodeFailedBody": "HEIC files open in Safari but not in Chrome or Firefox. Export it as JPEG, or reopen the console in Safari, and choose it again."
+      },
+      "uploadDone": "Uploaded"
     },
     "publish": {
       "sectionTitle": "Publishing",
@@ -475,10 +510,25 @@
       },
       "toast": {
         "created": "Published {title}",
-        "createdHint": "It is live in the collection.",
-        "imagesFailed": "{count, plural, one {1 photograph} other {# photographs}} did not upload — retry from the gallery below."
+        "imageFailed": "The piece is live, but its photograph did not upload"
       },
-      "photosOnCreate": "Chosen photographs upload when you save. The first one is the try-on source."
+      "photosOnCreate": "One photograph, framed to {ratio}. It is the image the try-on model works from.",
+      "photo": {
+        "choose": "Add the photograph of this piece",
+        "replace": "Replace the photograph",
+        "reframe": "Reframe",
+        "remove": "Remove",
+        "hint": "JPEG, PNG, WebP or HEIC, up to {size}. You will frame it to {ratio} next.",
+        "belowMin": "Under {minimum}px on the long edge. It will go live, marked \"Needs a better photo\".",
+        "phase": {
+          "creating": "Creating the piece",
+          "uploading": "Uploading the photograph",
+          "finalising": "Filing it against the piece"
+        }
+      },
+      "outstanding": {
+        "photo": "a photograph"
+      }
     },
     "testRender": {
       "metaTitle": "Test render",

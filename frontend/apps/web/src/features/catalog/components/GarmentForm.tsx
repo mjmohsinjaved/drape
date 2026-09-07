@@ -45,21 +45,13 @@ export interface GarmentFormProps {
   onSubmit: () => void | Promise<void>;
   submitLabel: string;
   saving: boolean;
-  /** Field errors the API sent back, merged with the local ones. */
   serverErrors?: GarmentFormErrors;
   secondaryAction?: React.ReactNode;
+
+  beforeActions?: React.ReactNode;
+  extraRequirements?: ReadonlyArray<{ met: boolean; label: string }>;
 }
 
-/**
- * A-8 — every field the requirement names, in three groups an admin fills in one pass.
- *
- * The **deposit** is the only field with a conditional life. A-8 says "deposit if rental", so:
- * the price group asks whether the piece is a sale or a rental as two described cards; the
- * deposit field appears only under the rental card; and choosing sale states plainly that the
- * deposit will be cleared. Nothing here waits for the API to say no — §4.13 refuses a deposit on
- * a sale outright, and an interface that lets an admin type one into a form that will be
- * rejected has already wasted their time.
- */
 export function GarmentForm({
   values,
   onChange,
@@ -69,9 +61,12 @@ export function GarmentForm({
   saving,
   serverErrors,
   secondaryAction,
+  beforeActions,
+  extraRequirements,
 }: GarmentFormProps) {
   const t = useTranslations('admin.catalog.form');
   const [touched, setTouched] = useState(false);
+  const [blurred, setBlurred] = useState<ReadonlySet<string>>(() => new Set());
 
   const localErrors = validateGarmentForm(values, {
     skuRequired: t('errors.skuRequired'),
@@ -83,14 +78,31 @@ export function GarmentForm({
     depositInvalid: t('errors.depositInvalid'),
   });
 
-  const errors: GarmentFormErrors = { ...(touched ? localErrors : {}), ...serverErrors };
+  const visibleLocal: GarmentFormErrors = touched
+    ? localErrors
+    : Object.fromEntries(
+        Object.entries(localErrors).filter(([key]) => blurred.has(key)),
+      );
+
+  const errors: GarmentFormErrors = { ...visibleLocal, ...serverErrors };
+
   const set = <K extends keyof GarmentFormValues>(key: K, value: GarmentFormValues[K]): void => {
     onChange({ ...values, [key]: value });
   };
 
+  const markBlurred = (key: keyof GarmentFormValues): void => {
+    setBlurred((current) => (current.has(key) ? current : new Set(current).add(key)));
+  };
+
+  const outstanding: string[] = [
+    ...(Object.keys(localErrors) as Array<keyof GarmentFormErrors>).map((key) =>
+      t(`outstanding.${key}`),
+    ),
+    ...(extraRequirements ?? []).filter((rule) => !rule.met).map((rule) => rule.label),
+  ];
+  const blocked = outstanding.length > 0;
+
   const handleModeChange = (mode: GarmentMode): void => {
-    // Clearing the deposit here rather than on save is what makes the rule visible: the field
-    // disappears and its value goes with it, in the same gesture.
     onChange({ ...values, mode, deposit: mode === 'SALE' ? '' : values.deposit });
   };
 
@@ -116,6 +128,7 @@ export function GarmentForm({
                 value={values.title}
                 maxLength={GARMENT_LIMITS.title}
                 onChange={(event) => set('title', event.target.value)}
+                onBlur={() => markBlurred('title')}
                 placeholder={t('placeholders.title')}
               />
             </FormControl>
@@ -144,6 +157,7 @@ export function GarmentForm({
                 value={values.sku}
                 maxLength={GARMENT_LIMITS.sku}
                 onChange={(event) => set('sku', event.target.value)}
+                onBlur={() => markBlurred('sku')}
                 placeholder={t('placeholders.sku')}
                 className="font-mono"
               />
@@ -171,7 +185,10 @@ export function GarmentForm({
             <FormLabel>{t('fields.category')}</FormLabel>
             <Select
               value={values.categoryId === '' ? undefined : values.categoryId}
-              onValueChange={(value) => set('categoryId', value)}
+              onValueChange={(value) => {
+                markBlurred('categoryId');
+                set('categoryId', value);
+              }}
             >
               <FormControl>
                 <SelectTrigger>
@@ -323,6 +340,7 @@ export function GarmentForm({
                 value={values.price}
                 inputMode="decimal"
                 onChange={(event) => set('price', event.target.value)}
+                onBlur={() => markBlurred('price')}
                 placeholder="185000"
                 endAdornment={<span className="text-xs text-ink-subtle">{values.currency}</span>}
               />
@@ -339,6 +357,7 @@ export function GarmentForm({
                   value={values.deposit}
                   inputMode="decimal"
                   onChange={(event) => set('deposit', event.target.value)}
+                  onBlur={() => markBlurred('deposit')}
                   placeholder="45000"
                   endAdornment={<span className="text-xs text-ink-subtle">{values.currency}</span>}
                 />
@@ -360,11 +379,19 @@ export function GarmentForm({
         ) : null}
       </AdminSection>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <Button type="submit" loading={saving} loadingLabel={submitLabel}>
-          {submitLabel}
-        </Button>
-        {secondaryAction}
+      {beforeActions}
+
+      <div className="flex flex-col gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button type="submit" disabled={blocked} loading={saving} loadingLabel={submitLabel}>
+            {submitLabel}
+          </Button>
+          {secondaryAction}
+        </div>
+
+        <p aria-live="polite" className="text-sm text-ink-muted">
+          {blocked ? t('outstandingIntro', { items: outstanding.join(', ') }) : ''}
+        </p>
       </div>
     </form>
   );
